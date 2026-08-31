@@ -242,6 +242,18 @@ enum ResultStatus {
   @@map("result_status")
 }
 
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+
+  @@map("day_of_week")
+}
+
 // ---------------------------------------------------------------------------
 // Identity & access
 // ---------------------------------------------------------------------------
@@ -401,6 +413,7 @@ model Subject {
   teacherAssignments TeacherAssignment[]
   attendanceSheets   AttendanceSheet[]
   examPapers         ExamPaper[]
+  timetableSlots     TimetableSlot[]
 
   @@map("subjects")
 }
@@ -509,6 +522,7 @@ model Section {
   incharges          SectionIncharge[]
   attendanceSheets   AttendanceSheet[]
   examMarkSheets     ExamMarkSheet[]
+  timetableSlots     TimetableSlot[]
 
   @@unique([academicGroupId, name])
   @@unique([id, academicSessionId])
@@ -692,6 +706,7 @@ model Staff {
   documents          Document[]
   attendanceSheets   AttendanceSheet[]
   examMarkSheets     ExamMarkSheet[]
+  timetableSlots     TimetableSlot[]
 
   @@index([employmentStatus])
   @@index([fullName])
@@ -1267,4 +1282,71 @@ model Result {
   @@index([examId, academicGroupId, totalObtainedMarks(sort: Desc)])
   @@index([studentId, status])
   @@map("results")
+}
+
+// ---------------------------------------------------------------------------
+// Timetable
+// ---------------------------------------------------------------------------
+
+/// One lesson in the weekly master timetable: this section, this day, this
+/// period, taught by this teacher.
+///
+/// The clock times are deliberately NOT here. The college runs a fixed daily
+/// period grid, so the times belong to the grid, not to nine hundred rows that
+/// would all have to be rewritten when a bell moves. `period` is the index into
+/// `PERIODS` in src/server/timetable/periods.ts, and it is the same numbering
+/// `AttendanceSheet.period` records — a register for period 3 is the register
+/// for the lesson this table puts in period 3.
+model TimetableSlot {
+  id String @id @default(uuid(7)) @db.Uuid
+
+  sectionId         String @map("section_id") @db.Uuid
+  /// Denormalised so the composite foreign key below can prove this slot and
+  /// its section belong to the SAME academic session — the pattern used by
+  /// enrollments, teacher assignments and attendance sheets.
+  academicSessionId String @map("academic_session_id") @db.Uuid
+
+  subjectId String @map("subject_id") @db.Uuid
+  /// The teacher who takes this lesson. Recorded here rather than looked up
+  /// through their assignments at read time, so a teacher's own timetable stays
+  /// readable after an assignment is closed — the same reasoning as
+  /// `AttendanceSheet.markedByStaffId`.
+  staffId   String @map("staff_id") @db.Uuid
+
+  dayOfWeek DayOfWeek @map("day_of_week")
+  /// Which period of the day. See the note on the model.
+  period    Int       @db.SmallInt
+
+  /// Free text, as on `ExamPaper.room`: the college has no room table.
+  room String? @db.VarChar(50)
+
+  isActive Boolean @default(true) @map("is_active")
+
+  createdByUserId String?  @map("created_by_user_id") @db.Uuid
+  updatedByUserId String?  @map("updated_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  section Section @relation(fields: [sectionId, academicSessionId], references: [id, academicSessionId])
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  staff   Staff   @relation(fields: [staffId], references: [id])
+
+  // A section can only be doing one thing at a time, but that uniqueness
+  // applies to ACTIVE rows only (partial index in the Phase 10 migration, the
+  // same pattern as teacher_assignments): a lesson that was removed from a cell
+  // is history, and history must not stop the cell being filled again.
+  //
+  // The teacher's and the room's cells are constrained the same way, also in
+  // the migration: a teacher may take one lesson per period, and a room may
+  // hold one. Those two cross sections, so the service reads the whole
+  // session's period to produce a readable message -- but between that read and
+  // the write, a second administrator can pass the same check. The indexes are
+  // what settle a simultaneous save; the room's is a functional index over
+  // `lower(btrim(room))`, matching roomKey() in timetable-policy.ts.
+  @@index([sectionId, academicSessionId, dayOfWeek, period])
+  /// Reads a teacher's own week, and backs their partial unique index.
+  @@index([staffId, academicSessionId, dayOfWeek, period])
+  /// Backs the room lookup across every section in the session.
+  @@index([academicSessionId, dayOfWeek, period])
+  @@map("timetable_slots")
 }

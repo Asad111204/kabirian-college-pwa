@@ -2370,3 +2370,43 @@ The previous `StudentResultView` was deleted rather than left unused. Its phone-
 - *Card on a separate route* — the student would have to leave their result to see what will print.
 
 **Consequences.** What is on screen is what comes out of the printer. 27 UI tests cover the card, including that no control on it matches a mutating verb, that an absence shows `Absent` with its `0.00` and its `F`, and that an INCOMPLETE result shows three dashes and never `0%`.
+
+---
+
+## ADR-141 · The logo prints at document scale because its blank canvas is not painted
+
+**Status:** Accepted · 2026-08-31
+
+**Context.** The college asked for a result-card header where the logo is one of the strongest elements — roughly 55–75mm wide on A4 — without wasting vertical space.
+
+Measuring the supplied file explains why the first version looked small. `college logo.jpeg` is a 1280×960 canvas, but the artwork inside it — the shield, the **KABIRIAN** wordmark and the strapline — is only **572×155**, sitting dead centre:
+
+| | |
+|---|---|
+| Artwork | 572 × 155 px, a 3.69 : 1 horizontal lockup |
+| Share of the file | 44.7% of its width, 16.2% of its height |
+| Blank margin | 27.4% left, 27.9% right, 41.9% above, 42.0% below |
+| Centring | 49.7% / 49.9% — centred to within half a percent |
+
+So **83.8% of the file's height is empty white.** Painting the whole canvas wide enough for 66mm of artwork would need a block 148mm wide and **111mm tall**, of which about 93mm is nothing at all — a third of an A4 page given over to blank space.
+
+**Decision.** The image is rendered at the full width of a **6 : 1 box** with `object-fit: cover`, so the browser paints the middle band of the file and simply does not paint the blank margin around it.
+
+```
+w-full max-w-[148mm] aspect-[6/1] object-cover object-center
+```
+
+On A4 that is a 148mm × 24.7mm block carrying **66.1mm × 17.9mm of artwork** — 36% of the printable width, and 24.7mm of page height instead of 111mm.
+
+**The artwork itself is never touched.** The file is byte-identical to the one the college supplied; `cover` scales proportionally, so nothing is stretched; and the painted band is the middle **38.9%–61.1%** of the image while the artwork occupies **41.9%–57.9%**, leaving **3.3mm of clear space** above and below it. Only empty canvas goes unpainted. Nothing was cropped, redrawn, recoloured or regenerated, and the original at the repository root is untouched.
+
+The size is written in millimetres with **no breakpoint**, so the printed logo is the same 66mm whether or not the browser applies screen breakpoints to the page box — the one place where a responsive rule could have quietly shrunk the crest on paper.
+
+**Alternatives.**
+- *Save a trimmed copy of the logo* — that is cropping the file, which the college ruled out, and it would put a second version of the mark in the repository to drift from the first.
+- *Render the whole canvas* — a 111mm blank block, and the crest still reading small.
+- *`next/image`* — lazy by default, so a reader who presses Print quickly gets a card with a hole where the crest belongs.
+
+**Consequences.** The header is measured, not guessed: a harness drives the copy of Edge that ships with Windows over the DevTools protocol, sets print media at the exact A4 printable area (186 × 273mm) and asserts the artwork lands between 55mm and 75mm, that `object-fit` is still `cover`, that the file is still 1280×960, and that the painted band still contains the whole artwork. If anyone later changes the box ratio far enough to bite into the mark, that check fails.
+
+The colour beside it comes from the same file: `--color-college: #002850`, read off the logo's own navy. It is the only colour the card adds, and nothing else in the app uses it.

@@ -28,7 +28,7 @@
   /* The navy read straight off the official college logo (#002850). It is the
      college's own colour, so the result card uses it and nothing else does --
      the app keeps its teal. */
-  --color-college: oklch(0.288 0.078 253.4);
+  --color-college: #002850;
 
   /* Neutrals */
   --color-ink-50: oklch(0.985 0.002 247);

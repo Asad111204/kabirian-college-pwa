@@ -32,13 +32,13 @@ const TAGLINE = 'INSPIRING MINDS SHAPING FUTURE'
  * itself measures 572x155, sitting dead centre with roughly 27% blank canvas to
  * each side and 42% above and below. Rendering the whole canvas large enough
  * for the crest to read would have cost about 110mm of page height for 18mm of
- * ink, so the image is scaled up inside a 5.5:1 box and centred with
+ * ink, so the image is shown at full width inside a 6:1 box and centred with
  * `object-cover`.
  *
  * That paints the artwork at ~66mm wide on A4 while the blank canvas margin is
  * simply not painted. The file is untouched, the aspect ratio is preserved by
  * `object-cover`, and the artwork is never clipped: the visible band is the
- * middle 24.2% of the image (37.9%-62.1%) and the artwork occupies 41.9%-57.9%,
+ * middle 22.2% of the image (38.9%-61.1%) and the artwork occupies 41.9%-57.9%,
  * leaving clear space on both sides.
  */
 const LOGO_SRC = '/brand/college-logo.jpeg'

@@ -138,6 +138,10 @@ export type AuditAction =
   // results (Phase 8)
   | 'result.generated'
   | 'result.published'
+  // timetable (Phase 10)
+  | 'timetable_slot.created'
+  | 'timetable_slot.updated'
+  | 'timetable_slot.cleared'
   | 'result.corrected'
 
 export interface AuditInput {

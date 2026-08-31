@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | **Phase 8 complete, plus the official result card.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). The whole examination cycle now works: exam types, exams, papers and date sheets; teacher marks entry; result generation, review and publication; and the student and staff result portals. A printable official result card is now available to students from their own result page. PDF generation, exports and notifications are not built. Awaiting confirmation for the next phase. |
-| **Last updated** | 2026-08-31 (rev. 22 — the official result card and print view) |
+| **Status** | **Phase 8 complete, plus the official result card in its final form.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). The whole examination cycle now works: exam types, exams, papers and date sheets; teacher marks entry; result generation, review and publication; and the student and staff result portals. A printable official result card is now available to students from their own result page. PDF generation, exports and notifications are not built. Awaiting confirmation for the next phase. |
+| **Last updated** | 2026-08-31 (rev. 23 — the result card restyled as a college document) |
 | **Companion docs** | [DECISIONS.md](DECISIONS.md) · [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) · [README.md](README.md) |
 
 ---
@@ -738,7 +738,7 @@ Everything else in §20 will proceed on the stated defaults.
 
 ## 22. Progress tracker
 
-**Current phase:** 9 — the official result card is done. Awaiting confirmation for what comes next.
+**Current phase:** 9 — the official result card is done and styled. Awaiting confirmation for what comes next.
 
 | Phase | Status | Notes |
 |---|---|---|
@@ -1671,6 +1671,52 @@ A printable, official-looking Kabirian College result card. **Presentation only*
 **Production regression — 85 checks, all passing.** Every Admin, Staff and Student page, thirteen APIs, the logo asset, and Google Drive untouched and still `drive.file` only. Zero errors in the server log.
 
 **The college's database is untouched:** 0 exams, 0 marks, 0 results. No production data was created; the temporary verification accounts were removed.
+
+### 22.33 The result card, made to look like a college document (2026-08-31)
+
+A **visual refinement only.** No calculation, grading, ranking, publication, API, authorization, snapshot rule, database table or dependency was touched. The one component [result-card.tsx](src/features/results/result-card.tsx) was restyled and one colour token was added; nothing else in the app changed.
+
+**The header, which is where the complaint was.** The logo now prints **66mm wide** — a third of the page — instead of reading as an icon. It turned out the supplied file is a 1280×960 canvas holding only 572×155 of artwork, so 84% of its height was empty white; painting the whole canvas at that scale would have cost 111mm of page height for 18mm of ink. The image is instead shown at full width in a 6:1 box, which paints the artwork and leaves the blank margin unpainted. Nothing was cropped, redrawn or distorted, and there is 3.3mm of clear space above and below the mark (ADR-141).
+
+Below it, restrained type: **KABIRIAN COLLEGE** in the navy read off the logo itself, the strapline small and light in wide capitals, a hairline rule, **RESULT CARD** in spaced capitals, and a single heavier navy rule closing the header.
+
+**The rest of the document.** Examination, exam type and session in a compact three-up row. Student identity and placement in one bordered grid of small capital labels against plain values. The subject table keeps a thin outer border and hairline row rules with no vertical lines, compact rows and small-capital headers. The overall result is a six-cell grid — Total · Obtained · Percentage / Grade · **Result** · Position — with the outcome word set larger, in navy, always spelled out. Then three signature areas with room to actually sign, and the notice in the smallest type on the page.
+
+No gradients, no rounded panels, no shadows, no tiles, no icons, no second colour.
+
+**The measured result.** A card is **236.7mm of the 273mm** an A4 page allows at 12mm margins.
+
+| | Before | After |
+|---|---|---|
+| Printed logo artwork | ~15mm wide | **66.1mm** |
+| Header block | 26.9mm of mostly blank canvas | 24.7mm, nearly all artwork |
+| Subjects on one page | 5 | **8** (7 on an INCOMPLETE card, which carries an extra note) |
+| Card height, 4 subjects | 259.1mm | 236.7mm |
+
+Five subjects used to spill onto a second page. An intermediate programme is six to eight, so most real cards would have printed on two.
+
+**Values are never truncated any more.** The old grid clipped long names with an ellipsis, which on paper silently hides data; they wrap instead.
+
+**Tests: 3 new, 788 in total across 32 files**, all passing. The new ones hold the header to its promises: the logo is the official asset at `max-w-[148mm]` with **no breakpoint** able to shrink it on paper, it still declares the file's true 1280×960 with `object-cover` so it cannot be stretched, and the card itself contains no button, link, nav, aside or `print-hide` element.
+
+**Verified through the production build.** Against the throwaway PostgreSQL: **54 card checks**, unchanged and all passing. Then a new harness drives the copy of Edge that ships with Windows over the DevTools protocol — no dependency added — sets **print media at the exact A4 printable area** and measures the page: **13 checks × 3 cards (PASS, INCOMPLETE, FAIL-with-an-absence), all passing.**
+
+| Measured on the page | Result |
+|---|---|
+| The artwork prints 55–75mm wide | ✅ 66.1mm × 17.9mm |
+| A real presence, not an icon | ✅ 36% of the printable width |
+| The file is still 1280×960, still `object-cover` | ✅ never stretched |
+| The whole artwork is painted, only blank canvas is not | ✅ 3.3mm clear space |
+| The card fits one page | ✅ 236.7mm of 273.1mm |
+| A full subject list still fits | ✅ 8 subjects (7 when incomplete) |
+| No control, no `print-hide` inside the card | ✅ 0 |
+| Everything outside the card hidden on paper | ✅ 0 visible |
+
+**And looked at, not just measured.** The PASS, INCOMPLETE and FAIL-with-an-absence cards were rendered and inspected under print media at A4, on a 1280px desktop and on a 390px phone. INCOMPLETE shows dashes for percentage, grade and position and never a zero; an absence shows `0.00`, `F` and **Absent**, plainly distinct from a fail on 48.00. On a phone the card scales without horizontal overflow, the subjects become a readable stack and the logo stays large.
+
+**Production regression — 85 checks, all passing**, zero errors in the server log, no migration drift, Google Drive still `drive.file` only. Plus 13 checks that the real build serves the logo byte-identical to the college's file and compiles the print rules — `@page { size: A4 portrait; margin: 12mm }`, the visibility pair, `print-hide`, `print-color-adjust: exact`, the 148mm logo box and `--color-college: #002850`.
+
+**On the college's own data.** The database now holds **one exam, four marks and one published result** — created by the college itself on 2026-08-31, before this work began. Every row was fingerprinted before the regression and compared afterwards: **exams, papers, marks and results are identical**. The three temporary regression logins were created and removed; the college's five accounts are all that remain.
 
 ### 22.7 What Phase 4 delivered
 

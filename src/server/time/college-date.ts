@@ -93,4 +93,36 @@ export function isFutureCollegeDate(date: CollegeDate, now: Date = new Date()): 
 }
 
 /** The timezone these functions use, for display and health checks. */
+/**
+ * Which day of the week a college date falls on, as the `DayOfWeek` enum spells
+ * it.
+ *
+ * The timetable is a *weekly* thing, so "what is on today?" has to turn today's
+ * calendar date into a weekday. The date arrives here already resolved in the
+ * college's timezone by `todayInCollegeTimezone`, so it is read at UTC midnight
+ * — that keeps the weekday a property of the date itself and not of wherever
+ * the server happens to be running, which is the whole point of this file.
+ */
+const WEEKDAYS = [
+  'SUNDAY',
+  'MONDAY',
+  'TUESDAY',
+  'WEDNESDAY',
+  'THURSDAY',
+  'FRIDAY',
+  'SATURDAY',
+] as const
+
+export type CollegeWeekday = (typeof WEEKDAYS)[number]
+
+export function weekdayOfCollegeDate(date: CollegeDate): CollegeWeekday {
+  const day = new Date(`${date}T00:00:00Z`).getUTCDay()
+  return WEEKDAYS[day]!
+}
+
+/** The weekday it is at the college right now. */
+export function todaysCollegeWeekday(now: Date = new Date()): CollegeWeekday {
+  return weekdayOfCollegeDate(todayInCollegeTimezone(now))
+}
+
 export const collegeTimezone = env.APP_TIMEZONE

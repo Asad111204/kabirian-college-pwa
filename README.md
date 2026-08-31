@@ -2,7 +2,7 @@
 
 A Progressive Web App for running Kabirian College: students, staff, academics, attendance, exams, results, timetables, notices, documents and reports — with three portals (**Admin**, **Staff**, **Student**) sharing one database and one permission system.
 
-> **Current status: Phase 8 complete.** Working today: project setup, design system, database, authentication, roles, **Academic Management**, **User & Account Management**, the **Admin Dashboard**, **Student Management**, **Staff Management with the Staff Portal**, **document storage in Google Drive**, and **Attendance** for all three portals with reports. **Exams & Marks**: an administrator creates exams, sets their papers from the curriculum and publishes a date sheet; teachers enter and submit marks for the papers they teach; the office generates, reviews and publishes results; students and teachers read them in their own portals, and a student can print an official result card. Exports and notifications are next — see [PROJECT_PLAN.md](PROJECT_PLAN.md).
+> **Current status: Phase 8 complete.** Working today: project setup, design system, database, authentication, roles, **Academic Management**, **User & Account Management**, the **Admin Dashboard**, **Student Management**, **Staff Management with the Staff Portal**, **document storage in Google Drive**, and **Attendance** for all three portals with reports. **Exams & Marks**: an administrator creates exams, sets their papers from the curriculum and publishes a date sheet; teachers enter and submit marks for the papers they teach; the office generates, reviews and publishes results; students and teachers read them in their own portals, and a student can print an official result card that fits one A4 page. Exports and notifications are next — see [PROJECT_PLAN.md](PROJECT_PLAN.md).
 
 ---
 
@@ -473,7 +473,7 @@ npm run lint      # code style
 npm run typecheck # types
 ```
 
-There are **785 tests** covering the password policy, the permission model, academic validation, record-safety logic, user-account validation, the lock-out safeguards, the dashboard statistics, student enrollment, staff assignments, document access rules, file-type validation, secret encryption, the attendance rules and screens, the exam schema and result calculation, the exam scheduling rules, the marks workflow, result calculation, ranking and publication, the student and staff result portals, and the **official result card**. The schema tests apply every migration to a throwaway PostgreSQL and check what the database itself refuses. Integration tests against a test database and browser tests (Playwright) are added in Phase 16.
+There are **788 tests** covering the password policy, the permission model, academic validation, record-safety logic, user-account validation, the lock-out safeguards, the dashboard statistics, student enrollment, staff assignments, document access rules, file-type validation, secret encryption, the attendance rules and screens, the exam schema and result calculation, the exam scheduling rules, the marks workflow, result calculation, ranking and publication, the student and staff result portals, and the **official result card**. The schema tests apply every migration to a throwaway PostgreSQL and check what the database itself refuses. Integration tests against a test database and browser tests (Playwright) are added in Phase 16.
 
 ---
 

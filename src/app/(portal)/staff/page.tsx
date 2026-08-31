@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { BookOpen, ClipboardList, GraduationCap, Layers, ShieldCheck, Users } from 'lucide-react'
 import { requirePortalAccess } from '@/server/auth/context'
 import { getMySections, getStaffDashboard } from '@/server/services/staff-portal.service'
+import { getMyClassesToday } from '@/server/services/timetable.service'
 import { ForbiddenError } from '@/server/api/errors'
 import { PageHeader } from '@/components/layout/app-shell'
 import { Button } from '@/components/ui/button'
@@ -10,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Alert, EmptyState } from '@/components/ui/feedback'
 import { StatTile } from '@/features/dashboard/stat-tiles'
+import { TodayClassesCard } from '@/features/timetable/today-classes'
 
 export const metadata: Metadata = { title: 'Staff dashboard' }
 export const dynamic = 'force-dynamic'
@@ -43,7 +45,10 @@ export default async function StaffDashboardPage() {
     throw error
   }
 
-  const sections = await getMySections(ctx, dashboard.currentSession?.id)
+  const [sections, today] = await Promise.all([
+    getMySections(ctx, dashboard.currentSession?.id),
+    getMyClassesToday(ctx),
+  ])
 
   return (
     <>
@@ -83,7 +88,9 @@ export default async function StaffDashboardPage() {
       </section>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <div className="lg:col-span-2">
+        <div className="space-y-4 lg:col-span-2">
+          <TodayClassesCard today={today} />
+
           <Card>
             <CardHeader>
               <div className="min-w-0">
@@ -180,30 +187,6 @@ export default async function StaffDashboardPage() {
               </CardContent>
             </Card>
           ) : null}
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Not built yet</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ul className="space-y-2">
-                {[
-                  { name: 'Attendance', phase: 7 },
-                  { name: 'Exams & marks', phase: 8 },
-                  { name: 'Results', phase: 9 },
-                  { name: 'Timetable', phase: 10 },
-                ].map((module) => (
-                  <li
-                    key={module.name}
-                    className="flex items-center justify-between gap-3 rounded-[var(--radius-control)] border border-dashed border-border p-3 text-sm"
-                  >
-                    <span className="text-foreground-muted">{module.name}</span>
-                    <Badge variant="neutral">Phase {module.phase}</Badge>
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
         </div>
       </div>
     </>
