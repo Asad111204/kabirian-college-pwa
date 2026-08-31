@@ -1,0 +1,1270 @@
+// Kabirian College Management System — database schema
+// Design notes: docs/DATABASE_SCHEMA.md · decisions: DECISIONS.md (ADR-031/032/033)
+//
+// Phase 1 implements: identity & access, the academic structure, people (schema only,
+// UI in phases 4–5) and system tables. Attendance, exams, results, timetable, notices
+// and documents arrive in their own phases as new migrations.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+// Prisma 7: the connection URL lives in prisma.config.ts (for the CLI) and is
+// passed to PrismaClient through a driver adapter (src/server/db/prisma.ts).
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  ADMIN
+  STAFF
+  STUDENT
+
+  @@map("user_role")
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+
+  @@map("user_status")
+}
+
+enum PermissionEffect {
+  GRANT
+  REVOKE
+
+  @@map("permission_effect")
+}
+
+enum SessionStatus {
+  UPCOMING
+  ACTIVE
+  CLOSED
+
+  @@map("session_status")
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+
+  @@map("gender")
+}
+
+enum StudentStatus {
+  ACTIVE
+  INACTIVE
+  LEFT
+  GRADUATED
+  TRANSFERRED_OUT
+
+  @@map("student_status")
+}
+
+enum EnrollmentStatus {
+  /// The student is currently sitting in this section. Only one per session.
+  ACTIVE
+  /// Closed because the student moved to a different section, program or
+  /// division inside the SAME session. The row stays as history.
+  TRANSFERRED
+  /// Closed at the end of the year; the student moved up to the next class.
+  PROMOTED
+  /// Closed at the end of the year; the student repeats the same class.
+  REPEATED
+  /// Closed because the student finished their final year.
+  COMPLETED
+  /// Closed because the student left the college mid-session.
+  LEFT
+
+  @@map("enrollment_status")
+}
+
+enum StaffType {
+  /// Teaches subjects — only this type can receive teaching assignments.
+  TEACHING
+  /// Office and management staff: principal, clerk, accountant.
+  ADMINISTRATIVE
+  /// Lab assistants, librarians, caretakers.
+  SUPPORT
+  /// Deprecated: replaced by ADMINISTRATIVE and SUPPORT in Phase 5. Kept only
+  /// because PostgreSQL cannot drop an enum value safely; never offered in the UI.
+  NON_TEACHING
+
+  @@map("staff_type")
+}
+
+enum EmploymentStatus {
+  /// Currently working. Only active staff can receive new assignments.
+  ACTIVE
+  /// Temporarily not working but still employed.
+  ON_LEAVE
+  /// Suspended or otherwise not currently working.
+  INACTIVE
+  /// Left of their own accord.
+  RESIGNED
+  /// Reached retirement.
+  RETIRED
+  /// Employment ended by the college.
+  TERMINATED
+  /// Deprecated generic "no longer here"; the specific reasons above replaced it.
+  LEFT
+
+  @@map("employment_status")
+}
+
+enum DocumentOwner {
+  /// Belongs to one student.
+  STUDENT
+  /// Belongs to one staff member.
+  STAFF
+  /// Attached to a notice (Phase 9).
+  NOTICE
+  /// Attached to an event (Phase 9).
+  EVENT
+  /// Belongs to the college itself, not to a person.
+  COLLEGE
+
+  @@map("document_owner")
+}
+
+enum DocumentStatus {
+  /// The row exists but the file has not finished uploading. A crash mid-upload
+  /// leaves the record here, which is how orphans are found.
+  UPLOADING
+  /// The current, valid document.
+  ACTIVE
+  /// Readable, but an administrator has asked for a better copy.
+  NEEDS_REPLACEMENT
+  /// Superseded by a newer upload. Kept so the history is never lost.
+  REPLACED
+  /// Removed by an administrator. The row stays; the file goes to Drive's trash.
+  DELETED
+  /// The upload did not complete. Kept briefly so the failure is visible.
+  FAILED
+
+  @@map("document_status")
+}
+
+enum AttendanceStatus {
+  /// In class. Counts towards the attendance percentage.
+  PRESENT
+  /// Not in class. Counts against the percentage.
+  ABSENT
+  /// Arrived late but attended. Counts as PRESENT for the percentage, and is
+  /// recorded separately so a pattern of lateness stays visible (ADR-079).
+  LATE
+  /// Approved leave. By default it lowers the percentage, exactly like an
+  /// absence; the `attendance.leave_counts_as_present` setting flips that
+  /// without a migration.
+  LEAVE
+
+  @@map("attendance_status")
+}
+
+enum SheetStatus {
+  /// The teacher is still marking. They may still correct it themselves.
+  DRAFT
+  /// Finished and handed in. Only the office can change it afterwards, which
+  /// needs the `attendance.update_submitted` permission.
+  SUBMITTED
+  /// The class did not happen. The sheet and its entries stay on record so the
+  /// day is explained rather than silently missing (ADR-081).
+  CANCELLED
+
+  @@map("sheet_status")
+}
+
+enum ExamStatus {
+  /// Being set up. Papers and the date sheet can still change.
+  DRAFT
+  /// The date sheet is fixed and visible to staff and students.
+  SCHEDULED
+  /// Papers have been sat; teachers are entering marks.
+  MARKS_ENTRY
+  /// Every mark sheet is published and results have been generated.
+  COMPLETED
+  /// Called off. Kept on record rather than deleted.
+  CANCELLED
+
+  @@map("exam_status")
+}
+
+enum MarkSheetStatus {
+  /// The teacher is still entering marks. Nothing counts yet.
+  DRAFT
+  /// Complete and handed in. The teacher can no longer change it.
+  SUBMITTED
+  /// Released, so the marks can be used to generate a result.
+  PUBLISHED
+
+  @@map("mark_sheet_status")
+}
+
+enum MarkStatus {
+  /// The student sits this paper but no mark has been entered yet.
+  /// `obtained_marks` is NULL — never 0, which would be a claim about them.
+  PENDING
+  /// A mark has been entered. `obtained_marks` is present.
+  ENTERED
+  /// The student did not sit the paper. Kabirian counts this as 0 obtained,
+  /// but the fact of absence is stored separately and never inferred from the
+  /// zero — "scored nothing" and "was not there" are different facts.
+  ABSENT
+
+  @@map("mark_status")
+}
+
+enum ResultOutcome {
+  /// Every subject passed AND overall percentage at least 50%.
+  PASS
+  /// Complete, but a subject was failed or the overall percentage fell short.
+  FAIL
+  /// The result cannot be judged — a student who joined after the exam, or a
+  /// paper with no mark. Never scored as zero.
+  INCOMPLETE
+
+  @@map("result_outcome")
+}
+
+enum ResultStatus {
+  /// Generated but not visible to the student.
+  DRAFT
+  /// Visible to the student. Corrections create a new version.
+  PUBLISHED
+
+  @@map("result_status")
+}
+
+// ---------------------------------------------------------------------------
+// Identity & access
+// ---------------------------------------------------------------------------
+
+model User {
+  id       String  @id @default(uuid(7)) @db.Uuid
+  username String  @unique @db.VarChar(50)
+  email    String? @unique @db.VarChar(255)
+
+  /// Display name for accounts with no Staff/Student profile (administrators).
+  /// When a profile IS linked, that record's name is authoritative and this is
+  /// only a fallback — the name is never stored in two places at once.
+  fullName String? @map("full_name") @db.VarChar(120)
+
+  passwordHash        String     @map("password_hash")
+  role                UserRole
+  status              UserStatus @default(ACTIVE)
+  mustChangePassword  Boolean    @default(true) @map("must_change_password")
+  failedLoginAttempts Int        @default(0) @map("failed_login_attempts")
+  lockedUntil         DateTime?  @map("locked_until") @db.Timestamptz(3)
+  lastLoginAt         DateTime?  @map("last_login_at") @db.Timestamptz(3)
+  passwordChangedAt   DateTime?  @map("password_changed_at") @db.Timestamptz(3)
+  isSystemOwner       Boolean    @default(false) @map("is_system_owner")
+  createdAt           DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  sessions          Session[]
+  userPermissions   UserPermission[] @relation("UserPermissionOwner")
+  grantedBy         UserPermission[] @relation("UserPermissionGrantedBy")
+  student           Student?
+  staff             Staff?
+  auditLogs         AuditLog[]
+  uploadedDocuments Document[]       @relation("DocumentUploader")
+
+  @@index([role, status])
+  @@map("users")
+}
+
+model Session {
+  id           String   @id @default(uuid(7)) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  tokenHash    String   @unique @map("token_hash") @db.Char(64)
+  expiresAt    DateTime @map("expires_at") @db.Timestamptz(3)
+  lastActiveAt DateTime @default(now()) @map("last_active_at") @db.Timestamptz(3)
+  ipAddress    String?  @map("ip_address") @db.VarChar(45)
+  userAgent    String?  @map("user_agent") @db.VarChar(512)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model Permission {
+  key         String @id @db.VarChar(64)
+  module      String @db.VarChar(32)
+  description String @db.VarChar(255)
+  sortOrder   Int    @default(0) @map("sort_order")
+
+  rolePermissions RolePermission[]
+  userPermissions UserPermission[]
+
+  @@index([module])
+  @@map("permissions")
+}
+
+model RolePermission {
+  role          UserRole
+  permissionKey String   @map("permission_key") @db.VarChar(64)
+
+  permission Permission @relation(fields: [permissionKey], references: [key], onDelete: Cascade)
+
+  @@id([role, permissionKey])
+  @@map("role_permissions")
+}
+
+model UserPermission {
+  userId          String           @map("user_id") @db.Uuid
+  permissionKey   String           @map("permission_key") @db.VarChar(64)
+  effect          PermissionEffect
+  grantedByUserId String?          @map("granted_by_user_id") @db.Uuid
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user       User       @relation("UserPermissionOwner", fields: [userId], references: [id], onDelete: Cascade)
+  grantedBy  User?      @relation("UserPermissionGrantedBy", fields: [grantedByUserId], references: [id], onDelete: SetNull)
+  permission Permission @relation(fields: [permissionKey], references: [key], onDelete: Cascade)
+
+  @@id([userId, permissionKey])
+  @@map("user_permissions")
+}
+
+// ---------------------------------------------------------------------------
+// Academic building blocks — defined once, reused by every session (ADR-031)
+// ---------------------------------------------------------------------------
+
+model Class {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  name        String   @unique @db.VarChar(60)
+  displayName String?  @map("display_name") @db.VarChar(100)
+  code        String   @unique @db.VarChar(20)
+  level       Int
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  academicGroups     AcademicGroup[]
+  curriculumSubjects CurriculumSubject[]
+  examPapers         ExamPaper[]
+
+  @@index([level])
+  @@map("classes")
+}
+
+model Division {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  name      String   @unique @db.VarChar(60)
+  code      String   @unique @db.VarChar(10)
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  academicGroups AcademicGroup[]
+
+  @@map("divisions")
+}
+
+model Program {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  name        String   @unique @db.VarChar(80)
+  code        String   @unique @db.VarChar(20)
+  description String?  @db.VarChar(255)
+  sortOrder   Int      @default(0) @map("sort_order")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  academicGroups     AcademicGroup[]
+  curriculumSubjects CurriculumSubject[]
+  examPapers         ExamPaper[]
+
+  @@map("programs")
+}
+
+model Subject {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  name        String   @unique @db.VarChar(100)
+  code        String?  @unique @db.VarChar(20)
+  description String?  @db.VarChar(255)
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  curriculumSubjects CurriculumSubject[]
+  teacherAssignments TeacherAssignment[]
+  attendanceSheets   AttendanceSheet[]
+  examPapers         ExamPaper[]
+
+  @@map("subjects")
+}
+
+model Department {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  name      String   @unique @db.VarChar(100)
+  code      String?  @unique @db.VarChar(20)
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  staff Staff[]
+
+  @@map("departments")
+}
+
+/// Job titles: Lecturer, Assistant Professor, Principal, Lab Assistant…
+/// A reference table rather than free text, so the college's list stays
+/// consistent and the Admin can add to it without a code change.
+model Designation {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  name       String   @unique @db.VarChar(100)
+  code       String?  @unique @db.VarChar(20)
+  /// Marks the titles that normally teach; used only to order the list sensibly.
+  isTeaching Boolean  @default(true) @map("is_teaching")
+  sortOrder  Int      @default(0) @map("sort_order")
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  staff Staff[]
+
+  @@map("designations")
+}
+
+// ---------------------------------------------------------------------------
+// Academic structure of one session
+// ---------------------------------------------------------------------------
+
+model AcademicSession {
+  id        String        @id @default(uuid(7)) @db.Uuid
+  name      String        @unique @db.VarChar(20)
+  startDate DateTime      @map("start_date") @db.Date
+  endDate   DateTime      @map("end_date") @db.Date
+  status    SessionStatus @default(UPCOMING)
+  isCurrent Boolean       @default(false) @map("is_current")
+  createdAt DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  academicGroups     AcademicGroup[]
+  curriculumSubjects CurriculumSubject[]
+  admittedStudents   Student[]
+  exams              Exam[]
+
+  @@index([status])
+  @@map("academic_sessions")
+}
+
+/// One row per combination that actually runs in a session:
+/// Session x Class x Division x Program (20 rows for Kabirian College today).
+model AcademicGroup {
+  id                String   @id @default(uuid(7)) @db.Uuid
+  academicSessionId String   @map("academic_session_id") @db.Uuid
+  classId           String   @map("class_id") @db.Uuid
+  divisionId        String   @map("division_id") @db.Uuid
+  programId         String   @map("program_id") @db.Uuid
+  isActive          Boolean  @default(true) @map("is_active")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  academicSession AcademicSession @relation(fields: [academicSessionId], references: [id])
+  class           Class           @relation(fields: [classId], references: [id])
+  division        Division        @relation(fields: [divisionId], references: [id])
+  program         Program         @relation(fields: [programId], references: [id])
+  sections        Section[]
+
+  @@unique([academicSessionId, classId, divisionId, programId])
+  @@unique([id, academicSessionId])
+  @@index([academicSessionId, isActive])
+  @@index([classId])
+  @@index([divisionId])
+  @@index([programId])
+  @@map("academic_groups")
+}
+
+/// Students are enrolled here and teaching happens here.
+/// A section knows its group, and the group knows class + division + program.
+model Section {
+  id                String   @id @default(uuid(7)) @db.Uuid
+  academicGroupId   String   @map("academic_group_id") @db.Uuid
+  /// Denormalised so child rows can prove (via composite FK) that they belong
+  /// to the same academic session as this section.
+  academicSessionId String   @map("academic_session_id") @db.Uuid
+  name              String   @db.VarChar(20)
+  capacity          Int?
+  isActive          Boolean  @default(true) @map("is_active")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  academicGroup AcademicGroup @relation(fields: [academicGroupId, academicSessionId], references: [id, academicSessionId])
+
+  enrollments        StudentEnrollment[]
+  teacherAssignments TeacherAssignment[]
+  incharges          SectionIncharge[]
+  attendanceSheets   AttendanceSheet[]
+  examMarkSheets     ExamMarkSheet[]
+
+  @@unique([academicGroupId, name])
+  @@unique([id, academicSessionId])
+  @@index([academicSessionId, isActive])
+  @@map("sections")
+}
+
+/// Who is responsible for a section as a whole (the class teacher).
+///
+/// A table rather than a column on `sections`, because changing the in-charge
+/// must keep the previous one on record — the same reason student enrollments
+/// are rows rather than an editable field (ADR-056). A partial unique index
+/// allows only one ACTIVE in-charge per section at a time.
+model SectionIncharge {
+  id                String    @id @default(uuid(7)) @db.Uuid
+  sectionId         String    @map("section_id") @db.Uuid
+  staffId           String    @map("staff_id") @db.Uuid
+  /// Denormalised from the section so scope lookups need no extra join.
+  academicSessionId String    @map("academic_session_id") @db.Uuid
+  isActive          Boolean   @default(true) @map("is_active")
+  assignedAt        DateTime  @map("assigned_at") @db.Date
+  endedAt           DateTime? @map("ended_at") @db.Date
+  createdByUserId   String?   @map("created_by_user_id") @db.Uuid
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  section Section @relation(fields: [sectionId, academicSessionId], references: [id, academicSessionId])
+  staff   Staff   @relation(fields: [staffId], references: [id])
+
+  // "At most one ACTIVE in-charge per section" is a partial unique index added
+  // by hand in the Phase 5 migration; Prisma cannot express the WHERE clause.
+  @@index([sectionId, isActive])
+  @@index([staffId, isActive])
+  @@index([academicSessionId, isActive])
+  @@map("section_incharges")
+}
+
+/// Which subjects a Class x Program studies in a session (ADR-033).
+/// A section's subject list is derived from its group's class + program.
+model CurriculumSubject {
+  id                String   @id @default(uuid(7)) @db.Uuid
+  academicSessionId String   @map("academic_session_id") @db.Uuid
+  classId           String   @map("class_id") @db.Uuid
+  programId         String   @map("program_id") @db.Uuid
+  subjectId         String   @map("subject_id") @db.Uuid
+  isCompulsory      Boolean  @default(true) @map("is_compulsory")
+  sortOrder         Int      @default(0) @map("sort_order")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  academicSession AcademicSession @relation(fields: [academicSessionId], references: [id])
+  class           Class           @relation(fields: [classId], references: [id])
+  program         Program         @relation(fields: [programId], references: [id])
+  subject         Subject         @relation(fields: [subjectId], references: [id])
+
+  @@unique([academicSessionId, classId, programId, subjectId])
+  @@index([academicSessionId, classId, programId])
+  @@index([subjectId])
+  @@map("curriculum_subjects")
+}
+
+// ---------------------------------------------------------------------------
+// People
+// ---------------------------------------------------------------------------
+
+model Student {
+  id                     String        @id @default(uuid(7)) @db.Uuid
+  userId                 String?       @unique @map("user_id") @db.Uuid
+  studentCode            String        @unique @map("student_code") @db.VarChar(20)
+  admissionNumber        String        @unique @map("admission_number") @db.VarChar(30)
+  fullName               String        @map("full_name") @db.VarChar(120)
+  dateOfBirth            DateTime?     @map("date_of_birth") @db.Date
+  gender                 Gender?
+  phone                  String?       @db.VarChar(20)
+  email                  String?       @db.VarChar(255)
+  address                String?
+  city                   String?       @db.VarChar(80)
+  cnicBformNumber        String?       @map("cnic_bform_number") @db.VarChar(15)
+  fatherName             String        @map("father_name") @db.VarChar(120)
+  fatherCnic             String?       @map("father_cnic") @db.VarChar(15)
+  fatherPhone            String?       @map("father_phone") @db.VarChar(20)
+  fatherOccupation       String?       @map("father_occupation") @db.VarChar(100)
+  motherName             String?       @map("mother_name") @db.VarChar(120)
+  guardianName           String?       @map("guardian_name") @db.VarChar(120)
+  guardianRelation       String?       @map("guardian_relation") @db.VarChar(50)
+  guardianPhone          String?       @map("guardian_phone") @db.VarChar(20)
+  previousInstitution    String?       @map("previous_institution") @db.VarChar(200)
+  previousResultSummary  String?       @map("previous_result_summary") @db.VarChar(200)
+  previousResultObtained Int?          @map("previous_result_obtained")
+  previousResultTotal    Int?          @map("previous_result_total")
+  matricRollNumber       String?       @map("matric_roll_number") @db.VarChar(30)
+  matricBoard            String?       @map("matric_board") @db.VarChar(100)
+  admissionDate          DateTime      @map("admission_date") @db.Date
+  admissionSessionId     String        @map("admission_session_id") @db.Uuid
+  status                 StudentStatus @default(ACTIVE)
+  photoThumbnail         Bytes?        @map("photo_thumbnail")
+  driveFolderId          String?       @map("drive_folder_id") @db.VarChar(128)
+  notes                  String?
+  createdAt              DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt              DateTime?     @map("deleted_at") @db.Timestamptz(3)
+
+  user              User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  admissionSession  AcademicSession     @relation(fields: [admissionSessionId], references: [id])
+  enrollments       StudentEnrollment[]
+  documents         Document[]
+  attendanceEntries AttendanceEntry[]
+  marks             Mark[]
+  results           Result[]
+
+  @@index([status])
+  @@index([fullName])
+  @@index([fatherCnic])
+  @@index([admissionSessionId])
+  @@map("students")
+}
+
+/// Where a student sits in a given session. Class/division/program are NOT
+/// copied here — they come from section -> academic_group (ADR-032).
+/// Moving to a new session creates a NEW row; the old one is kept forever.
+model StudentEnrollment {
+  id                String           @id @default(uuid(7)) @db.Uuid
+  studentId         String           @map("student_id") @db.Uuid
+  academicSessionId String           @map("academic_session_id") @db.Uuid
+  sectionId         String           @map("section_id") @db.Uuid
+  rollNumber        String?          @map("roll_number") @db.VarChar(20)
+  status            EnrollmentStatus @default(ACTIVE)
+  startDate         DateTime         @map("start_date") @db.Date
+  endDate           DateTime?        @map("end_date") @db.Date
+  createdByUserId   String?          @map("created_by_user_id") @db.Uuid
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  student Student @relation(fields: [studentId], references: [id])
+  section Section @relation(fields: [sectionId, academicSessionId], references: [id, academicSessionId])
+
+  // NOTE: two rules are enforced by hand-written partial indexes rather than by
+  // Prisma, because they apply only to ACTIVE rows (see the Phase 4 migration):
+  //   * one ACTIVE enrollment per student per session — closed historical rows
+  //     are unlimited, which is what makes transfer and promotion keep history;
+  //   * a roll number is unique within a section among ACTIVE enrollments, so a
+  //     roll number becomes free again once a student moves out of the section.
+  @@index([sectionId, status])
+  @@index([academicSessionId, status])
+  @@index([studentId, startDate])
+  @@index([rollNumber])
+  @@map("student_enrollments")
+}
+
+model Staff {
+  id                  String           @id @default(uuid(7)) @db.Uuid
+  userId              String?          @unique @map("user_id") @db.Uuid
+  staffCode           String           @unique @map("staff_code") @db.VarChar(20)
+  fullName            String           @map("full_name") @db.VarChar(120)
+  fatherOrHusbandName String?          @map("father_or_husband_name") @db.VarChar(120)
+  dateOfBirth         DateTime?        @map("date_of_birth") @db.Date
+  gender              Gender?
+  cnicNumber          String?          @map("cnic_number") @db.VarChar(15)
+  phone               String?          @db.VarChar(20)
+  email               String?          @db.VarChar(255)
+  address             String?
+  designationId       String           @map("designation_id") @db.Uuid
+  departmentId        String?          @map("department_id") @db.Uuid
+  staffType           StaffType        @default(TEACHING) @map("staff_type")
+  qualification       String?          @db.VarChar(200)
+  joiningDate         DateTime         @map("joining_date") @db.Date
+  leavingDate         DateTime?        @map("leaving_date") @db.Date
+  employmentStatus    EmploymentStatus @default(ACTIVE) @map("employment_status")
+  photoThumbnail      Bytes?           @map("photo_thumbnail")
+  driveFolderId       String?          @map("drive_folder_id") @db.VarChar(128)
+  notes               String?
+  createdAt           DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt           DateTime?        @map("deleted_at") @db.Timestamptz(3)
+
+  user               User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  designation        Designation         @relation(fields: [designationId], references: [id])
+  department         Department?         @relation(fields: [departmentId], references: [id])
+  teacherAssignments TeacherAssignment[]
+  sectionsInCharge   SectionIncharge[]
+  documents          Document[]
+  attendanceSheets   AttendanceSheet[]
+  examMarkSheets     ExamMarkSheet[]
+
+  @@index([employmentStatus])
+  @@index([fullName])
+  @@index([departmentId])
+  @@index([designationId])
+  @@index([staffCode])
+  @@map("staff")
+}
+
+/// "This teacher teaches this subject in this section." The section supplies
+/// session + class + division + program, so one row expresses the whole chain.
+model TeacherAssignment {
+  id                String    @id @default(uuid(7)) @db.Uuid
+  staffId           String    @map("staff_id") @db.Uuid
+  sectionId         String    @map("section_id") @db.Uuid
+  subjectId         String    @map("subject_id") @db.Uuid
+  academicSessionId String    @map("academic_session_id") @db.Uuid
+  isActive          Boolean   @default(true) @map("is_active")
+  assignedAt        DateTime  @map("assigned_at") @db.Date
+  endedAt           DateTime? @map("ended_at") @db.Date
+  createdByUserId   String?   @map("created_by_user_id") @db.Uuid
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  staff   Staff   @relation(fields: [staffId], references: [id])
+  section Section @relation(fields: [sectionId, academicSessionId], references: [id, academicSessionId])
+  subject Subject @relation(fields: [subjectId], references: [id])
+
+  // Uniqueness applies only to ACTIVE rows (partial index in the Phase 5
+  // migration): a teacher who once taught Biology in Section A and was later
+  // removed can be assigned to it again, and the closed row stays as history.
+  @@index([staffId, academicSessionId, isActive])
+  @@index([sectionId, subjectId, isActive])
+  @@index([sectionId, isActive])
+  @@map("teacher_assignments")
+}
+
+// ---------------------------------------------------------------------------
+// System
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  actorUserId String?   @map("actor_user_id") @db.Uuid
+  actorRole   UserRole? @map("actor_role")
+  action      String    @db.VarChar(64)
+  entityType  String    @map("entity_type") @db.VarChar(40)
+  entityId    String?   @map("entity_id") @db.Uuid
+  entityLabel String?   @map("entity_label") @db.VarChar(200)
+  beforeData  Json?     @map("before_data")
+  afterData   Json?     @map("after_data")
+  metadata    Json?
+  ipAddress   String?   @map("ip_address") @db.VarChar(45)
+  userAgent   String?   @map("user_agent") @db.VarChar(512)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  actor User? @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([createdAt])
+  @@index([action])
+  @@map("audit_logs")
+}
+
+model Setting {
+  key             String   @id @db.VarChar(64)
+  value           Json
+  description     String?  @db.VarChar(255)
+  updatedByUserId String?  @map("updated_by_user_id") @db.Uuid
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("settings")
+}
+
+model CodeSequence {
+  key       String @id @db.VarChar(32)
+  prefix    String @db.VarChar(10)
+  nextValue Int    @map("next_value")
+  padding   Int    @default(4)
+
+  @@map("code_sequences")
+}
+
+// ---------------------------------------------------------------------------
+// Documents (Phase 6)
+//
+// The database is the record of every document: who it belongs to, what it is,
+// who uploaded it and when. Google Drive holds only the bytes. Losing the Drive
+// account would lose the files, but never the record of what existed.
+// ---------------------------------------------------------------------------
+
+/// The document checklist, managed by the Admin rather than written in code.
+/// Adding "Domicile Certificate" is a row here, not a migration.
+model DocumentType {
+  key              String        @id @db.VarChar(50)
+  label            String        @db.VarChar(100)
+  ownerType        DocumentOwner @map("owner_type")
+  /// Required types drive the "documents missing" checklist on a profile.
+  isRequired       Boolean       @default(false) @map("is_required")
+  /// Sensitive types (CNIC, B-Form, results) need `documents.view_sensitive`.
+  /// A photo is not sensitive; an identity document is.
+  isSensitive      Boolean       @default(true) @map("is_sensitive")
+  /// Per-type limits, so photos can be capped tighter than PDF scans.
+  allowedMimeTypes String[]      @map("allowed_mime_types")
+  maxSizeBytes     Int           @map("max_size_bytes")
+  description      String?       @db.VarChar(255)
+  sortOrder        Int           @default(0) @map("sort_order")
+  isActive         Boolean       @default(true) @map("is_active")
+  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  documents Document[]
+
+  @@index([ownerType, sortOrder])
+  @@map("document_types")
+}
+
+/// One uploaded file. `id` is the only identifier the browser ever sees — the
+/// Google Drive file id stays on the server (ADR-012).
+model Document {
+  id              String @id @default(uuid()) @db.Uuid
+  documentTypeKey String @map("document_type_key") @db.VarChar(50)
+
+  /// Exactly one owner column is set, enforced by a check constraint.
+  studentId String? @map("student_id") @db.Uuid
+  staffId   String? @map("staff_id") @db.Uuid
+
+  storageProvider String  @default("google_drive") @map("storage_provider") @db.VarChar(30)
+  storageFileId   String  @map("storage_file_id") @db.VarChar(256)
+  storageFolderId String? @map("storage_folder_id") @db.VarChar(256)
+
+  /// The name we generated (predictable, safe). `originalFileName` is what the
+  /// person chose, kept for display only and never used to build a path.
+  fileName         String @map("file_name") @db.VarChar(255)
+  originalFileName String @map("original_file_name") @db.VarChar(255)
+  /// Verified from the file's own bytes, not from what the browser claimed.
+  mimeType         String @map("mime_type") @db.VarChar(100)
+  fileSizeBytes    Int    @map("file_size_bytes")
+  checksumSha256   String @map("checksum_sha256") @db.Char(64)
+
+  status               DocumentStatus @default(UPLOADING)
+  replacementReason    String?        @map("replacement_reason") @db.VarChar(255)
+  replacedByDocumentId String?        @map("replaced_by_document_id") @db.Uuid
+
+  uploadedByUserId String    @map("uploaded_by_user_id") @db.Uuid
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt        DateTime? @map("deleted_at") @db.Timestamptz(3)
+
+  documentType DocumentType @relation(fields: [documentTypeKey], references: [key])
+  student      Student?     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  staff        Staff?       @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  uploadedBy   User         @relation("DocumentUploader", fields: [uploadedByUserId], references: [id])
+  replacedBy   Document?    @relation("DocumentReplacement", fields: [replacedByDocumentId], references: [id], onDelete: SetNull)
+  replaces     Document[]   @relation("DocumentReplacement")
+
+  // NOTE: two rules are enforced by hand-written SQL in the Phase 6 migration,
+  // because Prisma cannot express either one:
+  //   * a CHECK constraint that exactly one owner column is set, so a document
+  //     can never belong to both a student and a staff member;
+  //   * partial unique indexes giving at most one CURRENT document of each type
+  //     per person (ACTIVE or NEEDS_REPLACEMENT). Replaced and deleted rows are
+  //     history and are unlimited — the same rule as enrollments (ADR-056).
+  @@unique([storageProvider, storageFileId])
+  @@index([studentId, documentTypeKey, status])
+  @@index([staffId, documentTypeKey, status])
+  @@index([status])
+  @@map("documents")
+}
+
+// ---------------------------------------------------------------------------
+// Attendance (Phase 7)
+//
+// A *sheet* is one class meeting: a section, on a date, in a period, for a
+// subject — or for no subject at all, which means the section in-charge's daily
+// roll-call. An *entry* is one student at that meeting.
+//
+// Splitting it this way matches how a register is actually taken. Facts about
+// the meeting (who marked it, when it was handed in, whether the class was
+// cancelled) belong to the sheet; facts about a student belong to the entry.
+// ---------------------------------------------------------------------------
+
+/// One class meeting whose register was taken.
+model AttendanceSheet {
+  id String @id @default(uuid(7)) @db.Uuid
+
+  sectionId         String @map("section_id") @db.Uuid
+  /// Denormalised so the composite foreign key below can prove this sheet and
+  /// its section belong to the SAME academic session — the pattern used by
+  /// enrollments, teacher assignments and section in-charges.
+  academicSessionId String @map("academic_session_id") @db.Uuid
+
+  /// NULL means daily roll-call for the whole section, taken by the in-charge.
+  /// A value means subject-wise attendance taken by that subject's teacher.
+  subjectId String? @map("subject_id") @db.Uuid
+
+  /// The calendar date in the college's own timezone (Asia/Karachi), not a
+  /// moment in time. See src/server/time/college-date.ts.
+  date   DateTime @db.Date
+  /// Which class of the day. Defaults to 1 so a college running one period per
+  /// subject per day never has to think about it.
+  period Int      @default(1) @db.SmallInt
+
+  /// Who actually took the register. Deliberately recorded here rather than
+  /// looked up later, so closing a teacher's assignment never rewrites history.
+  markedByStaffId String @map("marked_by_staff_id") @db.Uuid
+
+  status          SheetStatus @default(DRAFT)
+  submittedAt     DateTime?   @map("submitted_at") @db.Timestamptz(3)
+  cancelledReason String?     @map("cancelled_reason") @db.VarChar(255)
+
+  createdByUserId String?  @map("created_by_user_id") @db.Uuid
+  updatedByUserId String?  @map("updated_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  section  Section  @relation(fields: [sectionId, academicSessionId], references: [id, academicSessionId])
+  subject  Subject? @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  markedBy Staff    @relation(fields: [markedByStaffId], references: [id])
+
+  entries AttendanceEntry[]
+
+  /// NOTE: the migration creates this index with `NULLS NOT DISTINCT`, which
+  /// Prisma cannot express. Without it PostgreSQL treats every NULL subject as
+  /// unique, and a section could have unlimited daily sheets on one date.
+  @@unique([sectionId, subjectId, date, period])
+  /// Lets an entry prove it carries its sheet's academic session.
+  @@unique([id, academicSessionId])
+  @@index([sectionId, date])
+  @@index([academicSessionId, date])
+  @@index([markedByStaffId, date])
+  @@map("attendance_sheets")
+}
+
+/// One student's attendance at one class meeting.
+///
+/// Deliberately lean: it points at the *person*, and reaches section and subject
+/// through its sheet. That is what keeps history honest — a student who
+/// transfers section in March keeps their January attendance attached to the
+/// section they were actually sitting in, because the section lives on the sheet
+/// and nothing about the entry needs rewriting.
+model AttendanceEntry {
+  id      String @id @default(uuid(7)) @db.Uuid
+  sheetId String @map("sheet_id") @db.Uuid
+
+  studentId String           @map("student_id") @db.Uuid
+  status    AttendanceStatus
+  remarks   String?          @db.VarChar(255)
+
+  /// Denormalised from the sheet and written once. These two columns exist so
+  /// the most common query in the whole system — "this student's attendance
+  /// this session" — is a single index lookup with no join. The composite
+  /// foreign key below guarantees academicSessionId matches the sheet; `date`
+  /// is copied by the service when the sheet is created.
+  academicSessionId String   @map("academic_session_id") @db.Uuid
+  date              DateTime @db.Date
+
+  updatedByUserId String?  @map("updated_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  sheet   AttendanceSheet @relation(fields: [sheetId, academicSessionId], references: [id, academicSessionId], onDelete: Cascade)
+  student Student         @relation(fields: [studentId], references: [id])
+
+  @@unique([sheetId, studentId])
+  @@index([studentId, academicSessionId, date])
+  @@map("attendance_entries")
+}
+
+// ---------------------------------------------------------------------------
+// Exams, marks and results (Phase 8)
+//
+// The shape mirrors attendance, because the problem is the same: a teacher fills
+// in a sheet for one section, hands it in, and it becomes part of a record that
+// must still be readable years later.
+//
+//   Exam -> ExamPaper -> ExamMarkSheet -> Mark
+//                                          |
+//                                       Result  (a snapshot, per student per exam)
+//
+// Two rules shape everything here. **Who sits a paper is derived**, never stored
+// -- from the student's active enrolment and their program's curriculum -- so one
+// "1st Year Biology" paper covers Boys and Girls and every section without being
+// copied. And **a published result is a snapshot**: renaming a subject or
+// changing the grading policy in 2028 cannot alter a result published in 2026.
+// ---------------------------------------------------------------------------
+
+/// The kinds of examination the college holds. Reference data the Admin manages,
+/// exactly like designations and departments -- adding "Pre-Board" is a row.
+model ExamType {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  name      String   @unique @db.VarChar(60)
+  code      String   @unique @db.VarChar(20)
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  exams Exam[]
+
+  @@map("exam_types")
+}
+
+/// One examination in one academic session.
+model Exam {
+  id                String     @id @default(uuid(7)) @db.Uuid
+  name              String     @db.VarChar(120)
+  examTypeId        String     @map("exam_type_id") @db.Uuid
+  academicSessionId String     @map("academic_session_id") @db.Uuid
+  startDate         DateTime?  @map("start_date") @db.Date
+  endDate           DateTime?  @map("end_date") @db.Date
+  status            ExamStatus @default(DRAFT)
+  description       String?    @db.VarChar(500)
+  createdByUserId   String?    @map("created_by_user_id") @db.Uuid
+  updatedByUserId   String?    @map("updated_by_user_id") @db.Uuid
+  createdAt         DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  examType        ExamType        @relation(fields: [examTypeId], references: [id])
+  academicSession AcademicSession @relation(fields: [academicSessionId], references: [id])
+
+  papers  ExamPaper[]
+  results Result[]
+
+  @@unique([academicSessionId, name])
+  /// Lets a paper prove it belongs to the same session as its exam.
+  @@unique([id, academicSessionId])
+  @@index([academicSessionId, status])
+  @@map("exams")
+}
+
+/// One paper: an exam sitting of one subject for one class.
+///
+/// Scoped to a **class**, not a section, so a single "1st Year Biology, max 100"
+/// row covers every Pre-Medical section in both divisions. `programId` is the
+/// escape hatch for the day two programs in the same class need different
+/// maximum marks for the same subject; NULL means "every program that studies
+/// this subject in this class".
+model ExamPaper {
+  id                String @id @default(uuid(7)) @db.Uuid
+  examId            String @map("exam_id") @db.Uuid
+  /// Denormalised from the exam so mark sheets can prove, through a composite
+  /// foreign key, that their section is in the same session as the paper.
+  academicSessionId String @map("academic_session_id") @db.Uuid
+
+  classId   String  @map("class_id") @db.Uuid
+  subjectId String  @map("subject_id") @db.Uuid
+  programId String? @map("program_id") @db.Uuid
+
+  /// Date sheet. Times are stored as HH:MM text rather than as a `time` column:
+  /// a clock face has no date and no zone, and this project has already been
+  /// bitten once by JavaScript dates that carry both (ADR-082).
+  examDate  DateTime? @map("exam_date") @db.Date
+  startTime String?   @map("start_time") @db.VarChar(5)
+  endTime   String?   @map("end_time") @db.VarChar(5)
+  room      String?   @db.VarChar(50)
+
+  maxMarks          Decimal @map("max_marks") @db.Decimal(6, 2)
+  /// The pass rule as a **percentage**, not a computed number of marks, so the
+  /// rule that applied to this paper survives even if the policy changes later.
+  /// Kabirian confirmed 50% of each paper.
+  passingPercentage Decimal @default(50.00) @map("passing_percentage") @db.Decimal(5, 2)
+
+  isActive        Boolean  @default(true) @map("is_active")
+  createdByUserId String?  @map("created_by_user_id") @db.Uuid
+  updatedByUserId String?  @map("updated_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  exam    Exam     @relation(fields: [examId, academicSessionId], references: [id, academicSessionId])
+  class   Class    @relation(fields: [classId], references: [id])
+  subject Subject  @relation(fields: [subjectId], references: [id])
+  program Program? @relation(fields: [programId], references: [id])
+
+  markSheets ExamMarkSheet[]
+  marks      Mark[]
+
+  /// NOTE: the migration creates this with `NULLS NOT DISTINCT` (ADR-080).
+  /// Without it, a NULL `program_id` would let the same paper be created twice.
+  @@unique([examId, classId, subjectId, programId])
+  @@unique([id, academicSessionId])
+  @@index([examId, classId])
+  @@index([examId, examDate])
+  @@map("exam_papers")
+}
+
+/// The grading policy, as data rather than code.
+model GradeScale {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  name        String   @unique @db.VarChar(60)
+  description String?  @db.VarChar(255)
+  isDefault   Boolean  @default(false) @map("is_default")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  bands   GradeBand[]
+  results Result[]
+
+  // "Only one default scale" is a partial unique index in the migration.
+  @@map("grade_scales")
+}
+
+/// One band of a grading scale.
+///
+/// `minPercentage` is authoritative: a percentage takes the grade of the band
+/// with the greatest `minPercentage` at or below it. `maxPercentage` is kept for
+/// display ("80-89"). Resolving by the minimum alone means there is no gap for a
+/// mark like 89.5 to fall into.
+model GradeBand {
+  id            String   @id @default(uuid(7)) @db.Uuid
+  gradeScaleId  String   @map("grade_scale_id") @db.Uuid
+  grade         String   @db.VarChar(5)
+  minPercentage Decimal  @map("min_percentage") @db.Decimal(5, 2)
+  maxPercentage Decimal  @map("max_percentage") @db.Decimal(5, 2)
+  remarks       String?  @db.VarChar(50)
+  sortOrder     Int      @default(0) @map("sort_order")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  gradeScale GradeScale @relation(fields: [gradeScaleId], references: [id], onDelete: Cascade)
+
+  @@unique([gradeScaleId, grade])
+  @@unique([gradeScaleId, minPercentage])
+  @@index([gradeScaleId, sortOrder])
+  @@map("grade_bands")
+}
+
+/// One paper's marks for one section -- the unit a teacher fills in and hands in.
+///
+/// The same reasoning as an attendance register: facts about the *event* (who
+/// entered it, when it was handed in, when it was published) belong here rather
+/// than being repeated on every student row.
+model ExamMarkSheet {
+  id                String @id @default(uuid(7)) @db.Uuid
+  examPaperId       String @map("exam_paper_id") @db.Uuid
+  academicSessionId String @map("academic_session_id") @db.Uuid
+  sectionId         String @map("section_id") @db.Uuid
+
+  status MarkSheetStatus @default(DRAFT)
+
+  /// The teacher who actually marked these papers, recorded here rather than
+  /// looked up later, so closing an assignment never rewrites history.
+  enteredByStaffId String @map("entered_by_staff_id") @db.Uuid
+
+  submittedAt       DateTime? @map("submitted_at") @db.Timestamptz(3)
+  publishedAt       DateTime? @map("published_at") @db.Timestamptz(3)
+  publishedByUserId String?   @map("published_by_user_id") @db.Uuid
+  createdByUserId   String?   @map("created_by_user_id") @db.Uuid
+  updatedByUserId   String?   @map("updated_by_user_id") @db.Uuid
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  examPaper ExamPaper @relation(fields: [examPaperId, academicSessionId], references: [id, academicSessionId])
+  section   Section   @relation(fields: [sectionId, academicSessionId], references: [id, academicSessionId])
+  enteredBy Staff     @relation(fields: [enteredByStaffId], references: [id])
+
+  marks Mark[]
+
+  @@unique([examPaperId, sectionId])
+  /// Lets a mark prove its denormalised paper really is its sheet paper.
+  @@unique([id, examPaperId])
+  @@index([sectionId, status])
+  @@index([examPaperId, status])
+  @@map("exam_mark_sheets")
+}
+
+/// One student mark for one paper.
+model Mark {
+  id          String @id @default(uuid(7)) @db.Uuid
+  markSheetId String @map("mark_sheet_id") @db.Uuid
+  /// Denormalised from the sheet and tied to it by a composite foreign key, so
+  /// it can never drift. It carries the uniqueness rule below.
+  examPaperId String @map("exam_paper_id") @db.Uuid
+  studentId   String @map("student_id") @db.Uuid
+
+  status        MarkStatus @default(PENDING)
+  /// NULL while PENDING, a value once ENTERED, and exactly 0 when ABSENT --
+  /// enforced by a check constraint, so a missing mark can never be read as a
+  /// zero by accident.
+  obtainedMarks Decimal?   @map("obtained_marks") @db.Decimal(6, 2)
+  remarks       String?    @db.VarChar(255)
+
+  updatedByUserId String?  @map("updated_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  markSheet ExamMarkSheet @relation(fields: [markSheetId, examPaperId], references: [id, examPaperId], onDelete: Cascade)
+  examPaper ExamPaper     @relation(fields: [examPaperId], references: [id])
+  student   Student       @relation(fields: [studentId], references: [id])
+
+  /// One mark per student per paper, even if they change section mid-session.
+  @@unique([examPaperId, studentId])
+  @@index([studentId])
+  @@index([markSheetId, status])
+  @@map("marks")
+}
+
+/// A student result for one exam -- a snapshot, not a view.
+///
+/// Everything a result card needs is copied in at generation time: the student
+/// name and code, the class, division, program and section they sat in, every
+/// subject with its marks and grade, and the grade scale that was applied. A
+/// card printed in 2030 reads only this row. It does not touch the curriculum,
+/// the grading policy or the student current section -- none of which are the
+/// same facts they were on the day.
+model Result {
+  id        String  @id @default(uuid(7)) @db.Uuid
+  examId    String  @map("exam_id") @db.Uuid
+  studentId String  @map("student_id") @db.Uuid
+  /// Corrections never overwrite: they supersede. Version 1 stays readable.
+  version   Int     @default(1)
+  /// Exactly one current version per student per exam -- a partial unique index
+  /// in the migration, the same rule as active enrolments (ADR-056).
+  isCurrent Boolean @default(true) @map("is_current")
+
+  // --- where the student sat it, snapshotted ---
+  academicSessionId String @map("academic_session_id") @db.Uuid
+  sectionId         String @map("section_id") @db.Uuid
+  academicGroupId   String @map("academic_group_id") @db.Uuid
+
+  // --- what the result card prints, snapshotted ---
+  studentCode  String  @map("student_code") @db.VarChar(20)
+  studentName  String  @map("student_name") @db.VarChar(120)
+  fatherName   String? @map("father_name") @db.VarChar(120)
+  rollNumber   String? @map("roll_number") @db.VarChar(20)
+  examName     String  @map("exam_name") @db.VarChar(120)
+  examTypeName String  @map("exam_type_name") @db.VarChar(60)
+  sessionName  String  @map("session_name") @db.VarChar(20)
+  className    String  @map("class_name") @db.VarChar(100)
+  divisionName String  @map("division_name") @db.VarChar(60)
+  programName  String  @map("program_name") @db.VarChar(80)
+  sectionName  String  @map("section_name") @db.VarChar(20)
+
+  // --- the figures ---
+  totalMaxMarks      Decimal       @map("total_max_marks") @db.Decimal(8, 2)
+  totalObtainedMarks Decimal       @map("total_obtained_marks") @db.Decimal(8, 2)
+  /// NULL for an INCOMPLETE result, and required for every other outcome -- a
+  /// CHECK constraint in the migration enforces both halves. A student whose
+  /// papers are not all marked has no official percentage: the share they have
+  /// scored so far reads as a score, and it is not one (ADR-129).
+  percentage         Decimal?      @db.Decimal(5, 2)
+  grade              String?       @db.VarChar(5)
+  outcome            ResultOutcome
+  /// Per subject: name, max, obtained, percentage, grade, passing marks, pass
+  /// and absent. Snapshotted so a renamed or deleted subject cannot alter it.
+  subjectBreakdown   Json          @map("subject_breakdown")
+
+  /// Rank by total obtained marks. NULL for an INCOMPLETE result, which is
+  /// never given a position.
+  position      Int?
+  positionScope String? @map("position_scope") @db.VarChar(20)
+
+  gradeScaleId   String? @map("grade_scale_id") @db.Uuid
+  gradeScaleName String? @map("grade_scale_name") @db.VarChar(60)
+
+  status            ResultStatus @default(DRAFT)
+  generatedAt       DateTime     @default(now()) @map("generated_at") @db.Timestamptz(3)
+  generatedByUserId String?      @map("generated_by_user_id") @db.Uuid
+  publishedAt       DateTime?    @map("published_at") @db.Timestamptz(3)
+  publishedByUserId String?      @map("published_by_user_id") @db.Uuid
+  correctionReason  String?      @map("correction_reason") @db.VarChar(255)
+  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  exam       Exam        @relation(fields: [examId], references: [id])
+  student    Student     @relation(fields: [studentId], references: [id])
+  gradeScale GradeScale? @relation(fields: [gradeScaleId], references: [id])
+
+  @@unique([examId, studentId, version])
+  @@index([examId, sectionId])
+  @@index([examId, academicGroupId, totalObtainedMarks(sort: Desc)])
+  @@index([studentId, status])
+  @@map("results")
+}

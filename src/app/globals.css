@@ -1,0 +1,280 @@
+@import 'tailwindcss';
+
+/* ==========================================================================
+   Kabirian College — design tokens
+   --------------------------------------------------------------------------
+   Every colour, radius and shadow used in the app is defined here once. Change
+   a value here and the whole application follows — that is what makes it a
+   "design system" rather than scattered colours.
+
+   The brand colour is a deep teal that reads as academic and calm, and stays
+   legible on the cheap phone screens many students use.
+   ========================================================================== */
+
+@theme {
+  /* Brand */
+  --color-brand-50: oklch(0.976 0.017 180);
+  --color-brand-100: oklch(0.947 0.036 180);
+  --color-brand-200: oklch(0.9 0.061 181);
+  --color-brand-300: oklch(0.837 0.09 182);
+  --color-brand-400: oklch(0.76 0.106 184);
+  --color-brand-500: oklch(0.68 0.107 187);
+  --color-brand-600: oklch(0.582 0.094 189);
+  --color-brand-700: oklch(0.49 0.077 190);
+  --color-brand-800: oklch(0.412 0.062 191);
+  --color-brand-900: oklch(0.357 0.05 192);
+  --color-brand-950: oklch(0.24 0.036 194);
+
+  /* The navy read straight off the official college logo (#002850). It is the
+     college's own colour, so the result card uses it and nothing else does --
+     the app keeps its teal. */
+  --color-college: oklch(0.288 0.078 253.4);
+
+  /* Neutrals */
+  --color-ink-50: oklch(0.985 0.002 247);
+  --color-ink-100: oklch(0.967 0.003 247);
+  --color-ink-200: oklch(0.929 0.006 264);
+  --color-ink-300: oklch(0.871 0.009 258);
+  --color-ink-400: oklch(0.704 0.017 256);
+  --color-ink-500: oklch(0.554 0.02 257);
+  --color-ink-600: oklch(0.446 0.021 257);
+  --color-ink-700: oklch(0.373 0.022 259);
+  --color-ink-800: oklch(0.279 0.02 256);
+  --color-ink-900: oklch(0.214 0.02 253);
+  --color-ink-950: oklch(0.147 0.014 254);
+
+  /* Status */
+  --color-success-50: oklch(0.972 0.031 154);
+  --color-success-600: oklch(0.586 0.146 152);
+  --color-success-700: oklch(0.503 0.126 153);
+  --color-warning-50: oklch(0.977 0.045 92);
+  --color-warning-600: oklch(0.681 0.152 76);
+  --color-warning-700: oklch(0.586 0.14 71);
+  --color-danger-50: oklch(0.971 0.02 17);
+  --color-danger-600: oklch(0.577 0.221 27);
+  --color-danger-700: oklch(0.505 0.19 27);
+  --color-info-50: oklch(0.97 0.02 245);
+  --color-info-600: oklch(0.546 0.183 261);
+
+  /* Typography */
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    'Noto Sans', sans-serif;
+
+  /* Radii */
+  --radius-card: 0.75rem;
+  --radius-control: 0.5rem;
+}
+
+/* ==========================================================================
+   Semantic variables — light theme (default) and dark theme.
+   Components use these, never raw palette values, so both themes stay correct.
+   ========================================================================== */
+
+:root {
+  --background: var(--color-ink-50);
+  --surface: #ffffff;
+  --surface-muted: var(--color-ink-100);
+  --border: var(--color-ink-200);
+  --border-strong: var(--color-ink-300);
+  --foreground: var(--color-ink-900);
+  --foreground-muted: var(--color-ink-600);
+  --foreground-subtle: var(--color-ink-500);
+  --primary: var(--color-brand-700);
+  --primary-hover: var(--color-brand-800);
+  --primary-foreground: #ffffff;
+  --ring: var(--color-brand-600);
+  --sidebar: var(--color-brand-950);
+  --sidebar-foreground: var(--color-brand-50);
+  --sidebar-muted: color-mix(in oklch, var(--color-brand-50) 65%, transparent);
+  --sidebar-active: color-mix(in oklch, var(--color-brand-400) 22%, transparent);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --background: var(--color-ink-950);
+    --surface: var(--color-ink-900);
+    --surface-muted: var(--color-ink-800);
+    --border: var(--color-ink-800);
+    --border-strong: var(--color-ink-700);
+    --foreground: var(--color-ink-50);
+    --foreground-muted: var(--color-ink-300);
+    --foreground-subtle: var(--color-ink-400);
+    --primary: var(--color-brand-500);
+    --primary-hover: var(--color-brand-400);
+    --primary-foreground: var(--color-ink-950);
+    --ring: var(--color-brand-400);
+    --sidebar: var(--color-ink-900);
+    --sidebar-foreground: var(--color-ink-100);
+    --sidebar-muted: var(--color-ink-400);
+    --sidebar-active: color-mix(in oklch, var(--color-brand-400) 18%, transparent);
+  }
+}
+
+:root[data-theme='dark'] {
+  --background: var(--color-ink-950);
+  --surface: var(--color-ink-900);
+  --surface-muted: var(--color-ink-800);
+  --border: var(--color-ink-800);
+  --border-strong: var(--color-ink-700);
+  --foreground: var(--color-ink-50);
+  --foreground-muted: var(--color-ink-300);
+  --foreground-subtle: var(--color-ink-400);
+  --primary: var(--color-brand-500);
+  --primary-hover: var(--color-brand-400);
+  --primary-foreground: var(--color-ink-950);
+  --ring: var(--color-brand-400);
+  --sidebar: var(--color-ink-900);
+  --sidebar-foreground: var(--color-ink-100);
+  --sidebar-muted: var(--color-ink-400);
+  --sidebar-active: color-mix(in oklch, var(--color-brand-400) 18%, transparent);
+}
+
+/* Make the semantic variables available as Tailwind utilities
+   (bg-surface, text-foreground-muted, border-border, …) */
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-foreground: var(--foreground);
+  --color-foreground-muted: var(--foreground-muted);
+  --color-foreground-subtle: var(--foreground-subtle);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-muted: var(--sidebar-muted);
+  --color-sidebar-active: var(--sidebar-active);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* A single, consistent focus ring everywhere — important for keyboard users. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  /* Respect "reduce motion" accessibility settings. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer utilities {
+  /* Tables and wide content scroll inside their own box, never the page. */
+  .scroll-x {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* ==========================================================================
+   Printing
+   --------------------------------------------------------------------------
+   One rule set, used by the official result card and available to anything
+   else that needs a printed page later.
+
+   The card lives inside the portal shell, so printing cannot simply hide the
+   siblings of one element -- the card is nested many levels deep. Hiding
+   everything by VISIBILITY and then revealing the print area and its
+   descendants works regardless of where in the tree the card sits, and does
+   not disturb the layout the way `display: none` on ancestors would.
+   ========================================================================== */
+
+@page {
+  size: A4 portrait;
+  /* The card draws its own inner padding; this is the printer's own margin. */
+  margin: 12mm;
+}
+
+@media print {
+  html,
+  body {
+    background: #fff;
+    /* A printed result card is a document, not a screenshot of a screen. */
+    color: #000;
+    width: 100%;
+    height: auto;
+  }
+
+  /* Borders and tinted panels must survive the printer's colour stripping,
+     or the table loses its grid. */
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .print-area,
+  .print-area * {
+    visibility: visible;
+  }
+
+  .print-area {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+    max-width: none;
+    min-height: 0;
+  }
+
+  /* Anything the reader clicks has no business on paper. */
+  .print-hide {
+    display: none !important;
+  }
+
+  /* Wide content scrolls on screen; on paper it simply fits. */
+  .scroll-x {
+    overflow: visible !important;
+  }
+
+  /* Keep a block off a page boundary where splitting it would be confusing. */
+  .print-keep-together {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
+
+@layer utilities {
+  /* Shown only on paper -- the counterpart of .print-hide. */
+  .screen-hide {
+    display: none;
+  }
+
+  @media print {
+    .screen-hide {
+      display: block;
+    }
+  }
+}
