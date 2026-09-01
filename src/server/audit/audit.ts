@@ -141,7 +141,7 @@ export type AuditAction =
   // timetable (Phase 10)
   | 'timetable_slot.created'
   | 'timetable_slot.updated'
-  | 'timetable_slot.cleared'
+  | 'timetable_slot.deactivated'
   | 'result.corrected'
 
 export interface AuditInput {

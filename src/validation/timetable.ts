@@ -95,6 +95,13 @@ export const teachingPeriod = z.coerce
  * "not decided yet", which is allowed and clashes with nothing.
  */
 export const timetableSlotCreateSchema = z.object({
+  /**
+   * Optional, and never authoritative. A lesson's session is its section's; if
+   * the caller sends one it is *checked against* the section rather than used,
+   * so a request that disagrees with the database is refused instead of
+   * quietly filed under the wrong year.
+   */
+  academicSessionId: uuid.optional(),
   sectionId: uuid,
   subjectId: uuid,
   staffId: uuid,
@@ -120,9 +127,49 @@ export const timetableSlotUpdateSchema = z.object({
 
 export type TimetableSlotUpdateInput = z.infer<typeof timetableSlotUpdateSchema>
 
-/** Which section's week the admin is looking at. */
-export const timetableQuerySchema = z.object({
+/**
+ * What the office is looking at.
+ *
+ * The session is required: a timetable only means anything inside one. Section
+ * and day narrow it; `includeInactive` brings back the lessons that have been
+ * removed from cells, which the office needs for history and nobody else does.
+ */
+export const timetableListQuerySchema = z.object({
+  academicSessionId: uuid,
+  sectionId: uuid.optional(),
+  dayOfWeek: dayOfWeek.optional(),
+  includeInactive: z
+    .union([z.boolean(), z.string()])
+    .transform((v) => v === true || v === 'true')
+    .default(false),
+})
+
+export type TimetableListQuery = z.infer<typeof timetableListQuerySchema>
+
+/**
+ * A teacher narrowing their own week.
+ *
+ * There is deliberately no `staffId` here. Whose timetable this is comes from
+ * the session cookie and nowhere else, so there is no field to forge — and the
+ * session id below is a filter, never an authority.
+ */
+export const myTimetableQuerySchema = z.object({
+  academicSessionId: uuid.optional(),
+  dayOfWeek: dayOfWeek.optional(),
+})
+
+export type MyTimetableQuery = z.infer<typeof myTimetableQuerySchema>
+
+/** Which session the builder is looking at. Optional: the current one by default. */
+export const timetableOptionsQuerySchema = z.object({
+  sessionId: uuid.optional(),
+})
+
+export type TimetableOptionsQuery = z.infer<typeof timetableOptionsQuerySchema>
+
+/** Which section's week the builder is editing. */
+export const sectionTimetableQuerySchema = z.object({
   sectionId: uuid,
 })
 
-export type TimetableQuery = z.infer<typeof timetableQuerySchema>
+export type SectionTimetableQuery = z.infer<typeof sectionTimetableQuerySchema>

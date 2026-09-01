@@ -1,7 +1,7 @@
 import { jsonOk, parseJsonBody, withAuth, zodFieldErrors } from '@/server/api/handler'
-import { createTimetableSlot, getSectionTimetable } from '@/server/services/timetable.service'
+import { createTimetableSlot, listTimetable } from '@/server/services/timetable.service'
 import { ValidationError } from '@/server/api/errors'
-import { timetableQuerySchema, timetableSlotCreateSchema } from '@/validation/timetable'
+import { timetableListQuerySchema, timetableSlotCreateSchema } from '@/validation/timetable'
 
 /**
  * The master timetable, for administrators only.
@@ -13,11 +13,11 @@ import { timetableQuerySchema, timetableSlotCreateSchema } from '@/validation/ti
 
 export const GET = withAuth(async ({ request, ctx }) => {
   const params = Object.fromEntries(new URL(request.url).searchParams)
-  const parsed = timetableQuerySchema.safeParse(params)
+  const parsed = timetableListQuerySchema.safeParse(params)
   if (!parsed.success) {
     throw new ValidationError('Those filters are not valid.', zodFieldErrors(parsed.error))
   }
-  return jsonOk(await getSectionTimetable(ctx, parsed.data.sectionId))
+  return jsonOk(await listTimetable(ctx, parsed.data))
 })
 
 export const POST = withAuth(async ({ request, ctx }) => {

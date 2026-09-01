@@ -1,16 +1,29 @@
 import { jsonOk, parseJsonBody, withAuth } from '@/server/api/handler'
-import { clearTimetableSlot, updateTimetableSlot } from '@/server/services/timetable.service'
+import {
+  deactivateTimetableSlot,
+  getTimetableSlot,
+  updateTimetableSlot,
+} from '@/server/services/timetable.service'
 import { timetableSlotUpdateSchema } from '@/validation/timetable'
 
 /** One lesson. Administrators only — the service checks, not this file. */
+
+export const GET = withAuth(async ({ ctx, params }) => jsonOk(await getTimetableSlot(ctx, params.id!)))
 
 export const PATCH = withAuth(async ({ request, ctx, params }) => {
   const input = await parseJsonBody(request, timetableSlotUpdateSchema)
   return jsonOk(await updateTimetableSlot(ctx, params.id!, input))
 })
 
-/** Empties the cell. The row is deactivated, not deleted, so it stays auditable. */
+/**
+ * Empties the cell.
+ *
+ * DELETE is the verb the project uses for "remove this from the working set",
+ * and it never means a database DELETE here: the row is deactivated so the
+ * change stays auditable, and the partial unique indexes — which count active
+ * rows only — free the section, teacher and room cells for reuse.
+ */
 export const DELETE = withAuth(async ({ ctx, params }) => {
-  await clearTimetableSlot(ctx, params.id!)
-  return jsonOk({ cleared: true })
+  await deactivateTimetableSlot(ctx, params.id!)
+  return jsonOk({ deactivated: true })
 })

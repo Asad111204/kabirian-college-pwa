@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   DAYS_OF_WEEK,
   TIMETABLE_DAYS,
+  myTimetableQuerySchema,
+  sectionTimetableQuerySchema,
   teachingPeriod,
-  timetableQuerySchema,
+  timetableListQuerySchema,
   timetableSlotCreateSchema,
   timetableSlotUpdateSchema,
 } from '@/validation/timetable'
@@ -20,6 +22,7 @@ import {
 const SECTION = '11111111-1111-4111-8111-111111111111'
 const SUBJECT = '22222222-2222-4222-8222-222222222222'
 const STAFF = '33333333-3333-4333-8333-333333333333'
+const SESSION = '44444444-4444-4444-8444-444444444444'
 
 const lesson = (over: Record<string, unknown> = {}) => ({
   sectionId: SECTION,
@@ -72,11 +75,16 @@ describe('a proposed lesson', () => {
     }
   })
 
-  it('never lets the browser name the academic session', () => {
+  it('accepts nothing else the browser tries to attach', () => {
+    // Whatever else a caller sends is dropped here, so it cannot reach the
+    // service and cannot reach the database.
     const parsed = timetableSlotCreateSchema.parse(
-      lesson({ academicSessionId: '44444444-4444-4444-8444-444444444444' }),
+      lesson({ startTime: '08:00', endTime: '08:30', isActive: false, id: 'x' }),
     )
-    expect(parsed).not.toHaveProperty('academicSessionId')
+    expect(parsed).not.toHaveProperty('startTime')
+    expect(parsed).not.toHaveProperty('endTime')
+    expect(parsed).not.toHaveProperty('isActive')
+    expect(parsed).not.toHaveProperty('id')
   })
 })
 
@@ -132,16 +140,98 @@ describe('editing a lesson', () => {
   })
 })
 
-describe('the admin query', () => {
-  it('needs a section', () => {
-    expect(timetableQuerySchema.safeParse({ sectionId: SECTION }).success).toBe(true)
-    expect(timetableQuerySchema.safeParse({}).success).toBe(false)
-    expect(timetableQuerySchema.safeParse({ sectionId: 'nope' }).success).toBe(false)
+describe('a session sent with a new lesson', () => {
+  it('is accepted, so the service can check it against the section', () => {
+    const parsed = timetableSlotCreateSchema.parse(lesson({ academicSessionId: SESSION }))
+    expect(parsed.academicSessionId).toBe(SESSION)
   })
 
-  it('gives a teacher nothing to point at somebody else', () => {
-    const parsed = timetableQuerySchema.parse({ sectionId: SECTION, staffId: STAFF })
+  it('is optional, because the section already knows its own session', () => {
+    expect(timetableSlotCreateSchema.parse(lesson()).academicSessionId).toBeUndefined()
+  })
+
+  it('still has to look like an id', () => {
+    expect(
+      timetableSlotCreateSchema.safeParse(lesson({ academicSessionId: 'last-year' })).success,
+    ).toBe(false)
+  })
+})
+
+describe('the admin listing filters', () => {
+  it('require a session, because a timetable only means anything inside one', () => {
+    expect(timetableListQuerySchema.safeParse({ academicSessionId: SESSION }).success).toBe(true)
+    expect(timetableListQuerySchema.safeParse({}).success).toBe(false)
+    expect(timetableListQuerySchema.safeParse({ academicSessionId: 'nope' }).success).toBe(false)
+  })
+
+  it('narrow by section and day when asked', () => {
+    const parsed = timetableListQuerySchema.parse({
+      academicSessionId: SESSION,
+      sectionId: SECTION,
+      dayOfWeek: 'TUESDAY',
+    })
+    expect(parsed.sectionId).toBe(SECTION)
+    expect(parsed.dayOfWeek).toBe('TUESDAY')
+  })
+
+  it('refuse a day that is not a day', () => {
+    expect(
+      timetableListQuerySchema.safeParse({ academicSessionId: SESSION, dayOfWeek: 'FUNDAY' })
+        .success,
+    ).toBe(false)
+  })
+
+  it('leave removed lessons out unless the office asks', () => {
+    expect(timetableListQuerySchema.parse({ academicSessionId: SESSION }).includeInactive).toBe(
+      false,
+    )
+    expect(
+      timetableListQuerySchema.parse({ academicSessionId: SESSION, includeInactive: 'true' })
+        .includeInactive,
+    ).toBe(true)
+    // Anything that is not the word "true" means no.
+    expect(
+      timetableListQuerySchema.parse({ academicSessionId: SESSION, includeInactive: 'yes' })
+        .includeInactive,
+    ).toBe(false)
+  })
+
+  it('give nobody a staffId to point at somebody else', () => {
+    const parsed = timetableListQuerySchema.parse({ academicSessionId: SESSION, staffId: STAFF })
     expect(parsed).not.toHaveProperty('staffId')
+  })
+})
+
+describe('a teacher narrowing their own week', () => {
+  it('may filter by session and day', () => {
+    const parsed = myTimetableQuerySchema.parse({
+      academicSessionId: SESSION,
+      dayOfWeek: 'FRIDAY',
+    })
+    expect(parsed.academicSessionId).toBe(SESSION)
+    expect(parsed.dayOfWeek).toBe('FRIDAY')
+  })
+
+  it('may ask for the whole current week', () => {
+    expect(myTimetableQuerySchema.parse({}).academicSessionId).toBeUndefined()
+  })
+
+  it('has no staffId to send — whose week it is comes from the cookie', () => {
+    const parsed = myTimetableQuerySchema.parse({ staffId: STAFF, sectionId: SECTION })
+    expect(parsed).not.toHaveProperty('staffId')
+    expect(parsed).not.toHaveProperty('sectionId')
+  })
+
+  it('refuses a malformed session id rather than ignoring it', () => {
+    expect(myTimetableQuerySchema.safeParse({ academicSessionId: 'nope' }).success).toBe(false)
+  })
+})
+
+describe('the builder query', () => {
+  it('needs a section', () => {
+    expect(sectionTimetableQuerySchema.safeParse({ sectionId: SECTION }).success).toBe(true)
+    expect(sectionTimetableQuerySchema.safeParse({}).success).toBe(false)
+    expect(sectionTimetableQuerySchema.safeParse({ sectionId: 'nope' }).success).toBe(false)
   })
 })
 

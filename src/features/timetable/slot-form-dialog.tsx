@@ -1,8 +1,6 @@
 'use client'
 
 import * as React from 'react'
-import { useRouter } from 'next/navigation'
-import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog'
 import { Field, Input, Select } from '@/components/ui/field'
@@ -15,6 +13,7 @@ import { DAY_LABEL, type DayOfWeekValue } from '@/validation/timetable'
 export interface SlotTarget {
   dayOfWeek: DayOfWeekValue
   period: number
+  /** Shown as a caption only. Times are never sent — they belong to periods.ts. */
   startTime: string
   endTime: string
   slotId?: string
@@ -24,13 +23,49 @@ export interface SlotTarget {
 }
 
 /**
- * Put one lesson in one cell of the week.
+ * A clash, said in a sentence an administrator can act on.
+ *
+ * The server sends its own wording and puts it against the field that caused
+ * it; this maps that field to the box the reader should look at, so a teacher
+ * clash highlights the teacher rather than the whole form. The server stays the
+ * authority — nothing here decides whether something clashes.
+ */
+const CONFLICT_TEXT: Record<string, string> = {
+  staffId: 'Teacher is already scheduled during this period.',
+  room: 'Room is already occupied during this period.',
+  period: 'This section already has a class during this period.',
+}
+
+function conflictFields(error: ApiError): Record<string, string[]> {
+  if (error.fields && Object.keys(error.fields).length > 0) {
+    return Object.fromEntries(
+      Object.entries(error.fields).map(([field, messages]) => [
+        field,
+        [CONFLICT_TEXT[field] ?? messages[0] ?? 'This value is not allowed here.'],
+      ]),
+    )
+  }
+  return {}
+}
+
+function conflictSummary(error: ApiError): string {
+  const fields = Object.keys(error.fields ?? {})
+  const known = fields.map((f) => CONFLICT_TEXT[f]).filter(Boolean)
+  if (known.length > 0) return known.join(' ')
+  return error.message
+}
+
+/**
+ * Put one class in one cell of the week.
  *
  * The subject list is not every subject in the college — it is the section's
  * **curriculum**. The teacher list is not every teacher — it is the ones
  * holding an active assignment for that section *and* that subject, so it
  * changes as soon as the subject does. The server checks both again; these
  * dropdowns just stop the mistake being possible in the first place.
+ *
+ * There are no time fields. A class is placed by day and period, and the clock
+ * times come from the college's fixed grid.
  */
 export function SlotFormDialog({
   open,
@@ -38,14 +73,15 @@ export function SlotFormDialog({
   sectionId,
   target,
   subjects,
+  onSaved,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   sectionId: string
   target: SlotTarget | null
   subjects: TimetableSubjectOption[]
+  onSaved: () => void | Promise<void>
 }) {
-  const router = useRouter()
   const editing = Boolean(target?.slotId)
 
   const [subjectId, setSubjectId] = React.useState(target?.subjectId ?? '')
@@ -56,7 +92,8 @@ export function SlotFormDialog({
   const [fieldErrors, setFieldErrors] = React.useState<Record<string, string[]>>({})
 
   // Reset as the dialog opens, during render rather than in an effect, so the
-  // form never flashes the previous cell's values.
+  // form never flashes the previous cell's values. Deliberately NOT reset on a
+  // failed save: what the administrator typed stays on screen.
   const [wasOpen, setWasOpen] = React.useState(open)
   if (open !== wasOpen) {
     setWasOpen(open)
@@ -86,28 +123,29 @@ export function SlotFormDialog({
     setFieldErrors({})
     try {
       if (editing && target.slotId) {
+        // Only what an edit is allowed to change. Day, period and section are
+        // not sent, because moving a class is deactivating one and adding
+        // another.
         await api.patch(`/api/v1/timetable/${target.slotId}`, {
           subjectId,
           staffId: effectiveStaffId,
-          room,
+          room: room.trim(),
         })
       } else {
         await api.post('/api/v1/timetable', {
           sectionId,
           subjectId,
           staffId: effectiveStaffId,
-          room,
           dayOfWeek: target.dayOfWeek,
           period: target.period,
+          room: room.trim(),
         })
       }
-      toast.success(editing ? 'Lesson updated.' : 'Lesson added.')
-      onOpenChange(false)
-      router.refresh()
+      await onSaved()
     } catch (error) {
       if (error instanceof ApiError) {
-        setFormError(error.message)
-        setFieldErrors(error.fields ?? {})
+        setFormError(error.status === 409 ? conflictSummary(error) : error.message)
+        setFieldErrors(error.status === 409 ? conflictFields(error) : (error.fields ?? {}))
       } else {
         setFormError('Something went wrong. Please try again.')
       }
@@ -123,7 +161,7 @@ export function SlotFormDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        title={editing ? 'Edit lesson' : 'Add lesson'}
+        title={editing ? 'Edit class' : 'Add class'}
         description={`${DAY_LABEL[target.dayOfWeek]} · Period ${target.period} · ${target.startTime}–${target.endTime}`}
       >
         <form onSubmit={submit} className="space-y-4">
@@ -166,7 +204,7 @@ export function SlotFormDialog({
               <option value="">Choose a teacher</option>
               {teachers.map((teacher) => (
                 <option key={teacher.staffId} value={teacher.staffId}>
-                  {teacher.fullName} ({teacher.staffCode})
+                  {teacher.fullName}
                 </option>
               ))}
             </Select>
@@ -199,7 +237,7 @@ export function SlotFormDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={submitting || subjectId === '' || !effectiveStaffId}>
-              {submitting ? 'Saving…' : editing ? 'Save lesson' : 'Add lesson'}
+              {submitting ? 'Saving…' : editing ? 'Save class' : 'Add class'}
             </Button>
           </DialogFooter>
         </form>

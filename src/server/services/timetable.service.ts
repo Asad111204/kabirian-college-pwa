@@ -46,6 +46,8 @@ import {
 import { assertAdminArea, withUniqueConstraintHandling } from './service-utils'
 import type {
   DayOfWeekValue,
+  MyTimetableQuery,
+  TimetableListQuery,
   TimetableSlotCreateInput,
   TimetableSlotUpdateInput,
 } from '@/validation/timetable'
@@ -103,7 +105,33 @@ export interface SectionTimetable {
   subjects: TimetableSubjectOption[]
 }
 
+/**
+ * One lesson as the office lists it: everything a grid needs to draw a cell,
+ * with the clock times filled in from `periods.ts` rather than the database.
+ */
+export interface TimetableListRow extends TimetableSlotRow {
+  academicSessionId: string
+  sessionName: string
+  sectionId: string
+  sectionName: string
+  className: string
+  divisionName: string
+  programName: string
+  isActive: boolean
+}
+
+export interface TimetableSessionOption {
+  id: string
+  name: string
+  isCurrent: boolean
+}
+
 export interface TimetableOptions {
+  /** Every session the college has, newest first. */
+  sessions: TimetableSessionOption[]
+  /** The one these sections belong to: the one asked for, else the current. */
+  selectedSessionId: string | null
+  /** Kept so callers that only ever wanted "this year" still work. */
   currentSession: { id: string; name: string } | null
   sections: TimetableSectionSummary[]
 }
@@ -178,6 +206,66 @@ function toSectionSummary(section: SectionWithGroup): TimetableSectionSummary {
 const periodOf = (period: number): CollegePeriod | null =>
   PERIODS.find((p) => p.period === period) ?? null
 
+/** Everything a listed lesson names, in one query. */
+const LIST_INCLUDE = {
+  subject: { select: { id: true, name: true } },
+  staff: { select: { id: true, fullName: true, staffCode: true } },
+  section: {
+    include: {
+      academicGroup: {
+        include: { class: true, division: true, program: true, academicSession: true },
+      },
+    },
+  },
+} as const
+
+interface ListedSlot {
+  id: string
+  academicSessionId: string
+  dayOfWeek: string
+  period: number
+  room: string | null
+  isActive: boolean
+  subject: { id: string; name: string }
+  staff: { id: string; fullName: string; staffCode: string }
+  section: {
+    id: string
+    name: string
+    academicGroup: {
+      class: { name: string }
+      division: { name: string }
+      program: { name: string }
+      academicSession: { name: string }
+    }
+  }
+}
+
+function toListRow(slot: ListedSlot): TimetableListRow {
+  const period = periodOf(slot.period)
+  return {
+    id: slot.id,
+    academicSessionId: slot.academicSessionId,
+    sessionName: slot.section.academicGroup.academicSession.name,
+    sectionId: slot.section.id,
+    sectionName: slot.section.name,
+    className: slot.section.academicGroup.class.name,
+    divisionName: slot.section.academicGroup.division.name,
+    programName: slot.section.academicGroup.program.name,
+    dayOfWeek: slot.dayOfWeek as DayOfWeekValue,
+    period: slot.period,
+    // Never stored. The college's bell schedule lives in periods.ts.
+    startTime: period?.start ?? '',
+    endTime: period?.end ?? '',
+    subjectId: slot.subject.id,
+    subjectName: slot.subject.name,
+    staffId: slot.staff.id,
+    staffName: slot.staff.fullName,
+    staffCode: slot.staff.staffCode,
+    room: slot.room,
+    isActive: slot.isActive,
+  }
+}
+
 /* ========================================================================== */
 /* Admin: reading the master timetable                                        */
 /* ========================================================================== */
@@ -189,20 +277,36 @@ function requireTimetableAdmin(ctx: AuthContext, permission: string): void {
 }
 
 /**
- * The sections an administrator may build a timetable for, in the current
- * session.
+ * What the builder may offer: the college's sessions, and the sections of
+ * whichever one is being looked at.
+ *
+ * `sessionId` chooses; without it the current session is used. A timetable is
+ * built one year at a time, so the sections never come from more than one — a
+ * section picked in 2026-27 cannot survive a switch to 2027-28, and the caller
+ * is given the list to prove it.
  */
-export async function getTimetableOptions(ctx: AuthContext): Promise<TimetableOptions> {
+export async function getTimetableOptions(
+  ctx: AuthContext,
+  sessionId?: string,
+): Promise<TimetableOptions> {
   requireTimetableAdmin(ctx, 'timetable.view')
 
-  const currentSession = await prisma.academicSession.findFirst({
-    where: { isCurrent: true },
-    select: { id: true, name: true },
+  const sessions = await prisma.academicSession.findMany({
+    select: { id: true, name: true, isCurrent: true },
+    orderBy: { startDate: 'desc' },
   })
-  if (!currentSession) return { currentSession: null, sections: [] }
+
+  const current = sessions.find((s) => s.isCurrent) ?? null
+  const selected = sessionId
+    ? (sessions.find((s) => s.id === sessionId) ?? null)
+    : (current ?? sessions[0] ?? null)
+
+  const currentSession = current ? { id: current.id, name: current.name } : null
+
+  if (!selected) return { sessions, selectedSessionId: null, currentSession, sections: [] }
 
   const sections = await prisma.section.findMany({
-    where: { academicSessionId: currentSession.id, isActive: true },
+    where: { academicSessionId: selected.id, isActive: true },
     include: SECTION_INCLUDE,
     orderBy: [
       { academicGroup: { class: { level: 'asc' } } },
@@ -213,9 +317,59 @@ export async function getTimetableOptions(ctx: AuthContext): Promise<TimetableOp
   })
 
   return {
+    sessions,
+    selectedSessionId: selected.id,
     currentSession,
     sections: sections.map(toSectionSummary),
   }
+}
+
+/**
+ * The master timetable, filtered.
+ *
+ * Scoped to one academic session always — a timetable means nothing outside
+ * one — and optionally to a section and a day. Removed lessons are left out
+ * unless the office asks for them: they are history, and history does not
+ * belong on a grid somebody is about to teach from.
+ */
+export async function listTimetable(
+  ctx: AuthContext,
+  query: TimetableListQuery,
+): Promise<TimetableListRow[]> {
+  requireTimetableAdmin(ctx, 'timetable.view')
+
+  const slots = await prisma.timetableSlot.findMany({
+    where: {
+      academicSessionId: query.academicSessionId,
+      ...(query.sectionId ? { sectionId: query.sectionId } : {}),
+      ...(query.dayOfWeek ? { dayOfWeek: query.dayOfWeek } : {}),
+      ...(query.includeInactive ? {} : { isActive: true }),
+    },
+    include: LIST_INCLUDE,
+    orderBy: [{ section: { name: 'asc' } }, { dayOfWeek: 'asc' }, { period: 'asc' }],
+  })
+
+  return slots.map(toListRow)
+}
+
+/**
+ * One lesson.
+ *
+ * A removed lesson is still a lesson and is returned, marked inactive — only a
+ * slot that genuinely does not exist is a 404.
+ */
+export async function getTimetableSlot(
+  ctx: AuthContext,
+  slotId: string,
+): Promise<TimetableListRow> {
+  requireTimetableAdmin(ctx, 'timetable.view')
+
+  const slot = await prisma.timetableSlot.findUnique({
+    where: { id: slotId },
+    include: LIST_INCLUDE,
+  })
+  if (!slot) throw new NotFoundError('That lesson does not exist.')
+  return toListRow(slot)
 }
 
 async function loadSection(sectionId: string): Promise<SectionWithGroup> {
@@ -450,6 +604,15 @@ export async function createTimetableSlot(
 
   const section = await loadSection(input.sectionId)
 
+  // A session may be sent, but only so it can be checked. If the caller thinks
+  // this section is in a different year from the one the database records, that
+  // is a mistake worth showing rather than silently overruling.
+  if (input.academicSessionId && input.academicSessionId !== section.academicSessionId) {
+    throw new ValidationError('That section does not belong to that academic session.', {
+      academicSessionId: ['That section does not belong to that academic session.'],
+    })
+  }
+
   const proposed: ProposedSlot = {
     academicSessionId: section.academicSessionId,
     sectionId: section.id,
@@ -539,14 +702,26 @@ export async function updateTimetableSlot(
   )
 
   const after = toSlotRow(updated)
-  await writeAuditLog(ctx, {
-    action: 'timetable_slot.updated',
-    entityType: 'TimetableSlot',
-    entityId: slotId,
-    entityLabel: `${after.subjectName} · ${section.name} · ${after.dayOfWeek} period ${after.period}`,
-    before,
-    after,
-  })
+
+  // Only the fields that actually moved. An audit trail that records a change
+  // where nothing changed teaches the reader to ignore it.
+  const changed: Record<string, { from: unknown; to: unknown }> = {}
+  for (const field of ['subjectName', 'staffName', 'room'] as const) {
+    if (before[field] !== after[field]) changed[field] = { from: before[field], to: after[field] }
+  }
+
+  if (Object.keys(changed).length > 0) {
+    await writeAuditLog(ctx, {
+      action: 'timetable_slot.updated',
+      entityType: 'TimetableSlot',
+      entityId: slotId,
+      entityLabel: `${after.subjectName} · ${section.name} · ${after.dayOfWeek} period ${after.period}`,
+      before: Object.fromEntries(Object.entries(changed).map(([k, v]) => [k, v.from])),
+      after: Object.fromEntries(Object.entries(changed).map(([k, v]) => [k, v.to])),
+      metadata: { changedFields: Object.keys(changed) },
+    })
+  }
+
   return after
 }
 
@@ -557,7 +732,7 @@ export async function updateTimetableSlot(
  * — and because the section's uniqueness index only counts ACTIVE rows, the
  * cell is genuinely free again afterwards.
  */
-export async function clearTimetableSlot(ctx: AuthContext, slotId: string): Promise<void> {
+export async function deactivateTimetableSlot(ctx: AuthContext, slotId: string): Promise<void> {
   requireTimetableAdmin(ctx, 'timetable.manage')
 
   const existing = await prisma.timetableSlot.findUnique({
@@ -572,7 +747,7 @@ export async function clearTimetableSlot(ctx: AuthContext, slotId: string): Prom
   })
 
   await writeAuditLog(ctx, {
-    action: 'timetable_slot.cleared',
+    action: 'timetable_slot.deactivated',
     entityType: 'TimetableSlot',
     entityId: slotId,
     entityLabel: `${existing.subject.name} · ${existing.dayOfWeek} period ${existing.period}`,
@@ -648,15 +823,34 @@ async function currentSession() {
   })
 }
 
-/** The signed-in teacher's own week. */
-export async function getMyTimetable(ctx: AuthContext): Promise<TeacherTimetable> {
+/**
+ * The signed-in teacher's own week.
+ *
+ * `filters` may narrow it to a session or a day. It cannot widen it: whose
+ * timetable this is comes from `ctx.staffId`, which is not a parameter, so
+ * every query below is already inside one teacher's own lessons.
+ */
+export async function getMyTimetable(
+  ctx: AuthContext,
+  filters: MyTimetableQuery = {},
+): Promise<TeacherTimetable> {
   const staffId = requireOwnStaffId(ctx)
 
-  const session = await currentSession()
+  const session = filters.academicSessionId
+    ? await prisma.academicSession.findUnique({
+        where: { id: filters.academicSessionId },
+        select: { id: true, name: true },
+      })
+    : await currentSession()
   if (!session) return { sessionName: null, periods: PERIODS, lessons: [] }
 
   const slots = await prisma.timetableSlot.findMany({
-    where: { staffId, academicSessionId: session.id, isActive: true },
+    where: {
+      staffId,
+      academicSessionId: session.id,
+      isActive: true,
+      ...(filters.dayOfWeek ? { dayOfWeek: filters.dayOfWeek } : {}),
+    },
     include: LESSON_INCLUDE,
     orderBy: [{ dayOfWeek: 'asc' }, { period: 'asc' }],
   })
