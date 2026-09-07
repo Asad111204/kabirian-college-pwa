@@ -48,3 +48,8 @@ Thumbs.db
 *.tsbuildinfo
 .eslintcache
 
+# stray clones of this repo made into the project folder.
+# Committed as gitlinks these produce "unrelated histories" and a broken
+# submodule entry on GitHub. Ignored so it cannot happen again.
+/Kabirian College PWA
+/kabirian-college-pwa
