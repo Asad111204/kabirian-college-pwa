@@ -53,3 +53,11 @@ Thumbs.db
 # submodule entry on GitHub. Ignored so it cannot happen again.
 /Kabirian College PWA
 /kabirian-college-pwa
+
+# test harness and browser tests (generated)
+/tests/harness/pgdata
+/tests/harness/ids*.json
+/tests/harness/*.log
+/test-results
+/playwright-report
+/coverage

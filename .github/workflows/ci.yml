@@ -1,24 +1,28 @@
 name: CI
 
-# Runs on every push and pull request: the same four checks a developer runs
-# before committing, plus the dependency audit. No database is needed — the
-# tests that touch PostgreSQL start their own in-memory one.
+# Runs on every push and pull request. The first job is the four checks a
+# developer runs before committing, plus the dependency audit. The second
+# builds the production bundle and runs it against an in-memory PostgreSQL:
+# the API and page checks for every module, the browser tests on a phone and
+# a desktop, and the 5,000-student load check. No secret and no real
+# database is involved anywhere.
 on:
   push:
     branches: [main]
   pull_request:
 
+env:
+  # Placeholders so env.ts validates; nothing here connects to Neon.
+  DATABASE_URL: postgresql://localhost:5432/kabirian_ci
+  APP_URL: http://localhost:3000
+  APP_TIMEZONE: Asia/Karachi
+  # 32 zero bytes, base64 — a placeholder that satisfies the format check only.
+  APP_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+
 jobs:
   checks:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    env:
-      # Placeholders so env.ts validates; nothing here connects to Neon.
-      DATABASE_URL: postgresql://localhost:5432/kabirian_ci
-      APP_URL: http://localhost:3000
-      APP_TIMEZONE: Asia/Karachi
-      # 32 zero bytes, base64 — a placeholder that satisfies the format check only.
-      APP_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -32,3 +36,26 @@ jobs:
       - run: npm test
       - name: Dependency audit (production dependencies, high and above)
         run: npm run audit
+
+  production-harness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - name: API, page, browser and load checks against a throwaway database
+        run: node tests/harness/run.mjs --playwright --load
+        env:
+          CI: 'true'
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 7

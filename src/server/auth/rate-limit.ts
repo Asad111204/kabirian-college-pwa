@@ -67,8 +67,15 @@ export function clearRateLimit(key: string): void {
 }
 
 export const LOGIN_LIMITS = {
-  /** Per IP address: 20 attempts in 15 minutes. */
-  perIp: { limit: 20, windowMs: 15 * 60 * 1000 },
+  /**
+   * Per IP address: 300 attempts in 15 minutes. A college's staff and
+   * students all sign in from the campus Wi-Fi — one public address — so
+   * this is only a brake on wide password spraying; the per-username limit
+   * and the account lockout below are the real defence. (Found by the Phase
+   * 16 harness, which is one address making many sign-ins: at 20 it locked
+   * itself out, as a campus would at eight in the morning.)
+   */
+  perIp: { limit: 300, windowMs: 15 * 60 * 1000 },
   /** Per username: 10 attempts in 15 minutes. */
   perUsername: { limit: 10, windowMs: 15 * 60 * 1000 },
   /** After this many consecutive failures the account locks for a while. */
