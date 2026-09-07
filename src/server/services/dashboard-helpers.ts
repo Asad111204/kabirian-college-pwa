@@ -396,12 +396,6 @@ export interface UpcomingModule {
  * attendance does not exist yet.
  */
 export const UPCOMING_MODULES: UpcomingModule[] = [
-  { name: 'Student records', phase: 4, description: 'Admissions, enrolment, promotion and transfer' },
-  { name: 'Staff records', phase: 5, description: 'Staff profiles and teacher assignments' },
-  { name: 'Documents', phase: 6, description: 'Google Drive storage and the document checklist' },
-  { name: 'Attendance', phase: 7, description: 'Daily marking, corrections and percentages' },
-  { name: 'Exams & marks', phase: 8, description: 'Exam schedules and marks entry' },
-  { name: 'Results', phase: 9, description: 'Result generation, grades and publishing' },
-  { name: 'Timetable', phase: 10, description: 'Weekly timetable per section' },
-  { name: 'Notices & events', phase: 11, description: 'Announcements targeted by audience' },
+  // Phases 4 to 11 are built. The list is kept, empty, so the dashboard can
+  // say so honestly if a later phase adds a module before its figures exist.
 ]

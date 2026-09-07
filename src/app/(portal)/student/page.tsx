@@ -4,6 +4,9 @@ import { prisma } from '@/server/db/prisma'
 import { PageHeader } from '@/components/layout/app-shell'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert } from '@/components/ui/feedback'
+import { EventsCard, NoticesCard } from '@/features/notices/communication-card'
+import { getMyNoticeFeed } from '@/server/services/notices.service'
+import { getMyEventFeed } from '@/server/services/events.service'
 
 export const metadata: Metadata = { title: 'Student dashboard' }
 export const dynamic = 'force-dynamic'
@@ -34,6 +37,10 @@ export default async function StudentDashboardPage() {
     : null
 
   const group = enrollment?.section.academicGroup
+  const [notices, events] = await Promise.all([
+    getMyNoticeFeed(ctx, { page: 1, pageSize: 5 }),
+    getMyEventFeed(ctx, { page: 1, pageSize: 3, includePast: false }),
+  ])
 
   return (
     <>
@@ -65,6 +72,11 @@ export default async function StudentDashboardPage() {
           )}
         </CardContent>
       </Card>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <NoticesCard notices={notices.items} href="/student/notices" />
+        <EventsCard events={events.items} href="/student/events" />
+      </div>
 
       <Alert variant="info" className="mt-4">
         Your attendance, exam date sheets and published results are in the menu. Your class

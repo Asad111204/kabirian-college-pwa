@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | **Phase 10 complete: the timetable.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). The whole examination cycle works end to end, students can print an official result card, and now the office builds the master timetable one section at a time, teachers see their own week and today's classes, and every clash is refused before it is written and again by the database. Next: Phase 11, notices and events. |
-| **Last updated** | 2026-09-08 (rev. 27 — Phase 11 step 3: the office's notice and event screens) |
+| **Status** | **Phase 11 complete: notices and events.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). The office writes notices for everyone, a population or one part of the structure, schedules them and attaches files; events carry a date, a place and a picture; teachers and students read what reaches them in their portals and on their dashboards. **The Phase 11 migration is written and verified but not yet applied to Neon** — that is the next, confirmed step. Then Phase 12, dashboards and KPIs. |
+| **Last updated** | 2026-09-08 (rev. 28 — Phase 11 complete, migration pending on Neon) |
 | **Companion docs** | [DECISIONS.md](DECISIONS.md) · [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) · [README.md](README.md) |
 
 ---
@@ -738,7 +738,7 @@ Everything else in §20 will proceed on the stated defaults.
 
 ## 22. Progress tracker
 
-**Current phase:** 11 — notices and events. Steps 1–3 done (schema, migration, policy; validation, services, API; the office's screens); the migration is **not yet applied to Neon**. Step 4: portal feeds and dashboard widgets, then the migration. The college's further requests (§23A) begin after Phase 17.
+**Current phase:** 11 — complete in code; the migration `20260906000000_notices_and_events` awaits confirmation to apply to Neon. Next: Phase 12, dashboards and KPIs. The college's further requests (§23A) begin after Phase 17.
 
 | Phase | Status | Notes |
 |---|---|---|
@@ -753,7 +753,8 @@ Everything else in §20 will proceed on the stated defaults.
 | 8 Exams & results | ✅ Done (2026-08-31) | Architecture, database and calculation, exam and date-sheet screens, marks entry, result generation and publication, and the student and staff result portals. Result cards and exports are deliberately left for later. See §22.26–§22.31 |
 | 9 Results | ✅ Done (2026-08-31) | Generation, review, publication, portals and the printable A4 result card. See §22.29–§22.33 |
 | 10 Timetable | ✅ Done (2026-09-07) | Fixed period grid in code, master timetable builder, teacher week and today's classes, three clash rules backed by partial unique indexes. No student timetable, by decision. See §22.34 |
-| 11 – 17 | ⏳ Not started | Next: notices & events |
+| 11 Notices & events | ✅ Code complete (2026-09-08) | Targets as rows, publish windows, attachments through Drive, office screens, portal feeds and dashboard cards. Migration pending on Neon. See §22.35–§22.38 |
+| 12 – 17 | ⏳ Not started | Next: dashboards & KPIs |
 
 **Live database:** the college's Neon PostgreSQL instance is connected and holds the real academic structure (2026-27, 20 groups, 20 sections). All **nine** migrations are applied to it, along with the reference data (12 designations, 10 departments, **8 document types**, and the confirmed **grading scale**).
 
@@ -1771,6 +1772,12 @@ A **Communication** group in the office's navigation carries both. Nothing was a
 **Tests: 18 new component tests** — the editor's exact payload (targets from rows, no status, no zone), a 400 landing on its field with the typed values kept, PUT on edit, server-side filtering through the URL, confirmed publish by PATCH, delete for drafts only, the cover picker by PUT, and the navigation. **1,072 in total across 41 files.**
 
 **Verified through the production build against a throwaway PostgreSQL — 103 checks, all passing**, the 85 from step 2 plus every office page rendering for the admin, a 404 page for a missing notice, no storage or user id in any page, and students, teachers and visitors sent away from all of them.
+
+### 22.38 Phase 11, step 4: the portals (2026-09-08)
+
+**Staff → Notices / Events** and **Student → Notices / Events**: read-only feeds over the reader's own scope, a category filter and paging for notices, past events on request, a cancelled event shown struck through and marked, attachments opened through the document endpoint that re-checks the reader every time (ADR-154). Both dashboards carry a Notices card (the latest five that reach the reader) and an Upcoming events card (the next three). The admin dashboard's "Not built yet" card has nothing left to list and is gone.
+
+**Verified through the production build against a throwaway PostgreSQL — 117 checks, all passing**: the 103 from step 3 plus every portal page rendering with exactly the right notices for a student, two teachers and an unlinked staff login, the dashboards carrying the cards, no office words on any portal page, and the redirects. **1,072 tests across 41 files.** Lint, typecheck and build clean.
 
 ### 22.7 What Phase 4 delivered
 

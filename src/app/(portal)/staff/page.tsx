@@ -12,6 +12,9 @@ import { Badge } from '@/components/ui/badge'
 import { Alert, EmptyState } from '@/components/ui/feedback'
 import { StatTile } from '@/features/dashboard/stat-tiles'
 import { TodayClassesCard } from '@/features/timetable/today-classes'
+import { EventsCard, NoticesCard } from '@/features/notices/communication-card'
+import { getMyNoticeFeed } from '@/server/services/notices.service'
+import { getMyEventFeed } from '@/server/services/events.service'
 
 export const metadata: Metadata = { title: 'Staff dashboard' }
 export const dynamic = 'force-dynamic'
@@ -45,9 +48,11 @@ export default async function StaffDashboardPage() {
     throw error
   }
 
-  const [sections, today] = await Promise.all([
+  const [sections, today, notices, events] = await Promise.all([
     getMySections(ctx, dashboard.currentSession?.id),
     getMyClassesToday(ctx),
+    getMyNoticeFeed(ctx, { page: 1, pageSize: 5 }),
+    getMyEventFeed(ctx, { page: 1, pageSize: 3, includePast: false }),
   ])
 
   return (
@@ -90,6 +95,8 @@ export default async function StaffDashboardPage() {
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
           <TodayClassesCard today={today} />
+          <NoticesCard notices={notices.items} href="/staff/notices" />
+          <EventsCard events={events.items} href="/staff/events" />
 
           <Card>
             <CardHeader>

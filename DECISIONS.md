@@ -2589,3 +2589,17 @@ Attachments are filed in Drive under `Notices/<year>` and `Events/<year>`, found
 The attachments panel is one component for notices and events, built on the Phase 6 upload pipeline: a multipart POST to the owner's endpoint, viewing through `/documents/[id]/content`, removal to the Drive trash with a confirmation. When Drive is not connected it explains that instead of offering a button that would fail.
 
 **Consequences.** The UI tests assert the editor's payload carries no status and no zone, that publishing is PATCHed only after the dialog is confirmed, and that a published notice offers Archive and no Delete. The harness renders every office page through the production build and sends students, teachers and visitors away from all of them.
+
+---
+
+## ADR-154 · A reader's feed sends only a page number and a category
+
+**Status:** Accepted · 2026-09-08
+
+**Context.** The portal notice screens could have been the office screen with the buttons hidden. Hiding is not a boundary (requirement: "UI hiding is NOT security"), and a screen that knows about drafts, archives and other people's sections is one bug away from showing them.
+
+**Decision.** The staff and student feeds are separate, read-only components over `/api/v1/notices/feed` and `/api/v1/events/feed`. The only things they ever send are a page number, a category, and whether to include past events. Who the reader is comes from the session; what reaches them is decided on the server; the first page is fetched on the server and handed over as plain data. The dashboards carry the same feeds' first few items in two small cards.
+
+The admin dashboard's "Not built yet" card, which had listed every module since Phase 3, now has nothing to list and is not rendered. The list is kept, empty, so a future phase can be honest in the same way.
+
+**Consequences.** The harness renders every portal page through the production build: a student's page names their section's notice and not the next section's, a teacher's names their class and not the students-only one, a staff login with no assignments sees only the population notices, and the office's write words appear on none of them.

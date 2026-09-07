@@ -180,7 +180,7 @@ export default async function AdminDashboardPage() {
             />
           ) : null}
 
-          <UpcomingModules modules={data.upcomingModules} />
+          {data.upcomingModules.length > 0 ? <UpcomingModules modules={data.upcomingModules} /> : null}
         </div>
 
         <div className="space-y-4">

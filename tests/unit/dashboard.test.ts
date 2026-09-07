@@ -328,13 +328,8 @@ describe('buildQuickActions', () => {
 /* -------------------------------------------------------------------------- */
 
 describe('unbuilt modules', () => {
-  it('lists the modules that have no data yet, with their phase', () => {
-    const names = UPCOMING_MODULES.map((m) => m.name)
-    expect(names).toContain('Attendance')
-    expect(names).toContain('Exams & marks')
-    expect(names).toContain('Results')
-    expect(names).toContain('Documents')
-    expect(names).toContain('Notices & events')
+  it('lists nothing as unbuilt now that every module through Phase 11 exists', () => {
+    expect(UPCOMING_MODULES).toEqual([])
   })
 
   it('never carries a numeric value that could be mistaken for a statistic', () => {
