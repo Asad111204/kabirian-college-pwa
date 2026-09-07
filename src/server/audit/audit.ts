@@ -142,6 +142,14 @@ export type AuditAction =
   | 'timetable_slot.created'
   | 'timetable_slot.updated'
   | 'timetable_slot.deactivated'
+  | 'notice.created'
+  | 'notice.updated'
+  | 'notice.status_changed'
+  | 'notice.deleted'
+  | 'event.created'
+  | 'event.updated'
+  | 'event.status_changed'
+  | 'event.deleted'
   | 'result.corrected'
 
 export interface AuditInput {

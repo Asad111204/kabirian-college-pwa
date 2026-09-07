@@ -126,3 +126,58 @@ export function todaysCollegeWeekday(now: Date = new Date()): CollegeWeekday {
 }
 
 export const collegeTimezone = env.APP_TIMEZONE
+
+/* -------------------------------------------------------------------------- */
+/* Wall-clock times                                                           */
+/* -------------------------------------------------------------------------- */
+
+const LOCAL_DATE_TIME = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/
+
+const partsFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: env.APP_TIMEZONE,
+  hourCycle: 'h23',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+})
+
+/** The college's own clock reading for an instant, as `YYYY-MM-DDTHH:mm`. */
+export function instantToCollegeLocal(instant: Date): string {
+  const p: Record<string, string> = {}
+  for (const part of partsFormatter.formatToParts(instant)) p[part.type] = part.value
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`
+}
+
+/**
+ * Turns a time read off the college's clock -- `2026-09-08T08:00`, no zone --
+ * into the instant it names.
+ *
+ * A form in Karachi and a form on a laptop abroad send the same string for the
+ * same bell, and this is where the college's zone is applied: never in the
+ * browser (the same reasoning as ADR-082). Works for any zone, with or without
+ * daylight saving, by reading the zone's offset at the moment in question and
+ * correcting once.
+ */
+export function collegeLocalToInstant(value: string): Date {
+  const m = LOCAL_DATE_TIME.exec(value)
+  if (!m) throw new Error(`Not a wall-clock time: ${value}`)
+  const [, y, mo, d, h, mi] = m.map(Number) as unknown as [string, number, number, number, number, number]
+  const wanted = Date.UTC(y, mo - 1, d, h, mi)
+
+  // First guess: treat the wall clock as UTC, see what the zone shows then,
+  // and shift by the difference. Do it twice so a DST boundary lands right.
+  let guess = wanted
+  for (let i = 0; i < 2; i += 1) {
+    const shown = instantToCollegeLocal(new Date(guess))
+    const sm = LOCAL_DATE_TIME.exec(shown)!
+    const [, sy, smo, sd, sh, smi] = sm.map(Number) as unknown as [string, number, number, number, number, number]
+    const shownAsUtc = Date.UTC(sy, smo - 1, sd, sh, smi)
+    guess += wanted - shownAsUtc
+  }
+  const result = new Date(guess)
+  if (Number.isNaN(result.getTime())) throw new Error(`Not a real date: ${value}`)
+  return result
+}

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   collegeDateToStorage,
+  collegeLocalToInstant,
+  instantToCollegeLocal,
   isFutureCollegeDate,
   isValidCollegeDate,
   storageToCollegeDate,
@@ -100,5 +102,32 @@ describe('is a date in the future', () => {
     // 19:30 UTC is already the 2nd in Karachi, so the 2nd is no longer future.
     const evening = new Date('2026-09-01T19:30:00.000Z')
     expect(isFutureCollegeDate('2026-09-02', evening)).toBe(false)
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+
+describe('a time read off the college clock', () => {
+  it('names the instant five hours earlier in UTC, because Karachi is +05:00', () => {
+    expect(collegeLocalToInstant('2026-09-08T08:00').toISOString()).toBe('2026-09-08T03:00:00.000Z')
+  })
+
+  it('crosses midnight correctly: 02:30 in Karachi is the previous UTC evening', () => {
+    expect(collegeLocalToInstant('2026-09-08T02:30').toISOString()).toBe('2026-09-07T21:30:00.000Z')
+  })
+
+  it('reads back the same clock time it was given', () => {
+    for (const value of ['2026-09-08T08:00', '2026-01-01T00:00', '2026-12-31T23:59']) {
+      expect(instantToCollegeLocal(collegeLocalToInstant(value))).toBe(value)
+    }
+  })
+
+  it('shows an instant on the college clock, not the machine clock', () => {
+    expect(instantToCollegeLocal(new Date('2026-09-01T19:30:00.000Z'))).toBe('2026-09-02T00:30')
+  })
+
+  it('refuses something that is not a wall-clock time', () => {
+    expect(() => collegeLocalToInstant('2026-09-08')).toThrow()
+    expect(() => collegeLocalToInstant('2026-09-08T08:00:00Z')).toThrow()
   })
 })

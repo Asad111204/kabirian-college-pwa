@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | **Phase 10 complete: the timetable.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). The whole examination cycle works end to end, students can print an official result card, and now the office builds the master timetable one section at a time, teachers see their own week and today's classes, and every clash is refused before it is written and again by the database. Next: Phase 11, notices and events. |
-| **Last updated** | 2026-09-07 (rev. 25 — Phase 11 begun: the notices and events foundation) |
+| **Last updated** | 2026-09-08 (rev. 26 — Phase 11 step 2: notices and events service and API) |
 | **Companion docs** | [DECISIONS.md](DECISIONS.md) · [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) · [README.md](README.md) |
 
 ---
@@ -738,7 +738,7 @@ Everything else in §20 will proceed on the stated defaults.
 
 ## 22. Progress tracker
 
-**Current phase:** 11 — notices and events. Step 1 (schema, migration, pure policy) done; the migration is **not yet applied to Neon**. Steps 2–4: service and API, admin screens, portal feeds and widgets. The college's further requests (§23A) begin after Phase 17.
+**Current phase:** 11 — notices and events. Steps 1–2 done (schema, migration, policy; validation, services, API); the migration is **not yet applied to Neon**. Steps 3–4: admin screens, portal feeds and widgets. The college's further requests (§23A) begin after Phase 17.
 
 | Phase | Status | Notes |
 |---|---|---|
@@ -1745,6 +1745,20 @@ Five subjects used to spill onto a second page. An intermediate programme is six
 **Policy.** `src/server/notices/notice-policy.ts`: target validation and duplicate detection, who a target reaches (student by placement, teacher by teaching scope, admin always), the publish window with exact boundaries, the whole visibility decision, and event visibility (ADR-148, ADR-150).
 
 **Tests: 72 new — 46 policy, 26 schema against a throwaway PostgreSQL replaying the full migration history. 1,025 in total across 39 files.** Lint and typecheck clean.
+
+### 22.36 Phase 11, step 2: validation, services and API (2026-09-08)
+
+**Validation** (`src/validation/notices.ts`). Targets checked by the same `checkTarget` rule the policy uses, so the form is told the exact field; no duplicate audiences; a notice cannot expire before it publishes; an event cannot end before it starts; an event is for a whole population only. Times are wall-clock strings on the college's clock (ADR-151).
+
+**Services.** `notices.service.ts` — the office's list, detail, target options, create, update (targets replaced; audit records only what changed), publish/archive, delete-if-draft; the reader's feed and single notice, built from the reader's own placement or teaching scope, pinned first, category the only filter. `events.service.ts` — the same shape, plus a cover picture chosen from the event's own attachments. Both refuse everything to non-admins with 403 and answer every "not for you" with 404. `documents.service.ts` now accepts notice and event owners (ADR-152).
+
+**API.** `/api/v1/notices` (list, create), `/notices/options`, `/notices/[id]` (get, update, status, delete), `/notices/[id]/attachments`, `/notices/feed`, `/notices/feed/[id]`; the same for `/api/v1/events`, plus `/events/[id]/cover`. Three document types seeded: `NOTICE_ATTACHMENT`, `EVENT_IMAGE`, `EVENT_ATTACHMENT`.
+
+**Verified through the production build against a throwaway PostgreSQL — 85 checks, all passing.** A student in Section 11A sees everyone / students / their section / the pinned notice and not staff, another section, another class, the draft, the scheduled, the expired or the archived; the pinned notice comes first; `?sectionId=` and `?staffId=` are ignored; a teacher sees their sections and class and not another teacher's; a staff login with no assignments sees only the population notices; every "not for you" is a 404; a teacher's real upload is 403; attachments follow their notice's visibility; signed out is 401; no stack or Prisma name in any error.
+
+**A finding.** The harness's PGlite inherits the machine's +05:00 zone and read Prisma's zone-less timestamp parameters five hours early, emptying every feed. Neon's session zone is GMT, so production is unaffected; the harness now pins UTC (ADR-151).
+
+**Tests: 29 new — 24 validation, 5 wall-clock conversion. 1,054 in total across 40 files.** Lint, typecheck and build clean.
 
 ### 22.7 What Phase 4 delivered
 

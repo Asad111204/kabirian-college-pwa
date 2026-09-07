@@ -24,6 +24,9 @@ import { env } from '../config/env'
 import { logger } from '../logger'
 import { getStorageProvider } from '../storage/provider'
 import { getScopedSectionIds } from './staff-portal.service'
+import { canViewNotice } from './notices.service'
+import { canViewEvent } from './events.service'
+import { todayInCollegeTimezone } from '../time/college-date'
 import { buildStoredFileName, validateUpload } from '../documents/file-validation'
 import { decideDocumentAccess } from '../documents/access'
 import type { DocumentOwner, DocumentStatus } from '@/generated/prisma/enums'
@@ -135,6 +138,27 @@ async function assertCanViewDocument(
       ...(document.studentId ? { studentId: document.studentId } : {}),
     })
   }
+}
+
+/**
+ * An attachment is seen by exactly the people who see the notice or event it
+ * belongs to -- and by nobody else, however they found the document id. The
+ * notice and event services already answer that question, from the reader's
+ * own placement or scope; asking them here means there is one definition of
+ * "who sees this notice", not two. A refusal is a 404, so the existence of a
+ * draft's file is not confirmed by a 403.
+ */
+async function assertCanViewAttachment(
+  ctx: AuthContext,
+  attachment: { noticeId: string | null; eventId: string | null },
+): Promise<void> {
+  authorize(ctx, 'documents.view')
+  const visible = attachment.noticeId
+    ? await canViewNotice(ctx, attachment.noticeId)
+    : attachment.eventId
+      ? await canViewEvent(ctx, attachment.eventId)
+      : false
+  if (!visible) throw new NotFoundError('document')
 }
 
 /**
@@ -304,10 +328,17 @@ interface OwnerRecord {
   ownerType: DocumentOwner
   studentId: string | null
   staffId: string | null
+  noticeId: string | null
+  eventId: string | null
+  /** A person's code, or a short tag for a notice or event: used in file names. */
   code: string
+  /** A person's name, or a notice's or event's title. */
   fullName: string
   driveFolderId: string | null
 }
+
+/** A person may have one current document per type; a notice or event holds many. */
+const isPerson = (owner: OwnerRecord): boolean => owner.studentId !== null || owner.staffId !== null
 
 async function loadOwner(ownerType: DocumentOwner, ownerId: string): Promise<OwnerRecord> {
   if (ownerType === 'STUDENT') {
@@ -320,6 +351,8 @@ async function loadOwner(ownerType: DocumentOwner, ownerId: string): Promise<Own
       ownerType,
       studentId: student.id,
       staffId: null,
+      noticeId: null,
+      eventId: null,
       code: student.studentCode,
       fullName: student.fullName,
       driveFolderId: student.driveFolderId,
@@ -336,13 +369,43 @@ async function loadOwner(ownerType: DocumentOwner, ownerId: string): Promise<Own
       ownerType,
       studentId: null,
       staffId: staff.id,
+      noticeId: null,
+      eventId: null,
       code: staff.staffCode,
       fullName: staff.fullName,
       driveFolderId: staff.driveFolderId,
     }
   }
 
-  throw new ValidationError('Only student and staff documents can be uploaded at the moment.')
+  if (ownerType === 'NOTICE') {
+    const notice = await prisma.notice.findUnique({ where: { id: ownerId }, select: { id: true, title: true } })
+    if (!notice) throw new NotFoundError('notice')
+    return {
+      ownerType,
+      studentId: null,
+      staffId: null,
+      noticeId: notice.id,
+      eventId: null,
+      code: `NOTICE-${notice.id.slice(0, 8)}`,
+      fullName: notice.title,
+      driveFolderId: null,
+    }
+  }
+  if (ownerType === 'EVENT') {
+    const event = await prisma.event.findUnique({ where: { id: ownerId }, select: { id: true, title: true } })
+    if (!event) throw new NotFoundError('event')
+    return {
+      ownerType,
+      studentId: null,
+      staffId: null,
+      noticeId: null,
+      eventId: event.id,
+      code: `EVENT-${event.id.slice(0, 8)}`,
+      fullName: event.title,
+      driveFolderId: null,
+    }
+  }
+  throw new ValidationError('Only student, staff, notice and event documents can be uploaded.')
 }
 
 /**
@@ -355,6 +418,15 @@ async function ensureOwnerFolder(owner: OwnerRecord): Promise<string> {
   if (owner.driveFolderId) return owner.driveFolderId
 
   const storage = getStorageProvider()
+
+  // Notices and events are filed by year, not by owner: `Notices/2026`. There
+  // is no id to remember, so the folder is found (or made) on each upload --
+  // one cheap Drive lookup, for something the office does a few times a week.
+  if (owner.ownerType === 'NOTICE' || owner.ownerType === 'EVENT') {
+    const year = todayInCollegeTimezone().slice(0, 4)
+    const { folderId } = await storage.ensureFolder([owner.ownerType === 'NOTICE' ? 'Notices' : 'Events', year])
+    return folderId
+  }
   const parent = owner.ownerType === 'STUDENT' ? 'Students' : 'Staff'
   const { folderId } = await storage.ensureFolder([parent, `${owner.code} ${owner.fullName}`])
 
@@ -405,14 +477,18 @@ export async function uploadDocument(
   }
 
   // Is there already a current document of this type? Then this is a replace.
-  const existing = await prisma.document.findFirst({
-    where: {
-      documentTypeKey: documentType.key,
-      ...(owner.studentId ? { studentId: owner.studentId } : { staffId: owner.staffId }),
-      status: { in: CURRENT_STATUSES },
-    },
-    select: { id: true, storageFileId: true, originalFileName: true },
-  })
+  // Only for a person: a notice or an event holds any number of attachments,
+  // and a second PDF is a second file, not a replacement for the first.
+  const existing = isPerson(owner)
+    ? await prisma.document.findFirst({
+        where: {
+          documentTypeKey: documentType.key,
+          ...(owner.studentId ? { studentId: owner.studentId } : { staffId: owner.staffId }),
+          status: { in: CURRENT_STATUSES },
+        },
+        select: { id: true, storageFileId: true, originalFileName: true },
+      })
+    : null
 
   assertCanManageDocuments(ctx, existing ? 'documents.replace' : 'documents.upload')
 
@@ -463,6 +539,8 @@ export async function uploadDocument(
           documentTypeKey: documentType.key,
           studentId: owner.studentId,
           staffId: owner.staffId,
+          noticeId: owner.noticeId,
+          eventId: owner.eventId,
           storageProvider: storage.name === 'google-drive' ? 'google_drive' : storage.name,
           storageFileId: uploaded.fileId,
           storageFolderId: folderId,
@@ -559,6 +637,8 @@ export async function getDocumentContent(ctx: AuthContext, documentId: string): 
       id: true,
       studentId: true,
       staffId: true,
+      noticeId: true,
+      eventId: true,
       storageFileId: true,
       fileName: true,
       originalFileName: true,
@@ -573,11 +653,15 @@ export async function getDocumentContent(ctx: AuthContext, documentId: string): 
     throw new NotFoundError('document')
   }
 
-  await assertCanViewDocument(ctx, {
-    studentId: document.studentId,
-    staffId: document.staffId,
-    isSensitive: document.documentType.isSensitive,
-  })
+  if (document.noticeId !== null || document.eventId !== null) {
+    await assertCanViewAttachment(ctx, { noticeId: document.noticeId, eventId: document.eventId })
+  } else {
+    await assertCanViewDocument(ctx, {
+      studentId: document.studentId,
+      staffId: document.staffId,
+      isSensitive: document.documentType.isSensitive,
+    })
+  }
 
   const storage = getStorageProvider()
   const file = await storage.download(document.storageFileId)
@@ -620,6 +704,8 @@ export async function deleteDocument(
       documentType: { select: { label: true } },
       student: { select: { studentCode: true, fullName: true } },
       staff: { select: { staffCode: true, fullName: true } },
+      notice: { select: { title: true } },
+      event: { select: { title: true } },
     },
   })
 
@@ -629,13 +715,20 @@ export async function deleteDocument(
     ? `${document.student.studentCode} ${document.student.fullName}`
     : document.staff
       ? `${document.staff.staffCode} ${document.staff.fullName}`
-      : 'unknown'
+      : document.notice
+        ? `Notice: ${document.notice.title}`
+        : document.event
+          ? `Event: ${document.event.title}`
+          : 'the college'
 
   await prisma.$transaction(async (tx) => {
     await tx.document.update({
       where: { id: document.id },
       data: { status: 'DELETED', deletedAt: new Date() },
     })
+
+    // The row is kept, so the FK's SET NULL never fires: clear a cover by hand.
+    await tx.event.updateMany({ where: { coverDocumentId: document.id }, data: { coverDocumentId: null } })
 
     await writeAuditLog(
       ctx,

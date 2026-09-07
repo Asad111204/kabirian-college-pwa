@@ -198,6 +198,41 @@ const DOCUMENT_TYPES = [
     description: 'Qualifications and experience, as a PDF.',
     sortOrder: 3,
   },
+  // Phase 11: files attached to notices and events. Not sensitive -- they are
+  // published to an audience -- and never required.
+  {
+    key: 'NOTICE_ATTACHMENT',
+    label: 'Notice attachment',
+    ownerType: 'NOTICE',
+    isRequired: false,
+    isSensitive: false,
+    allowedMimeTypes: SCAN_TYPES,
+    maxSizeBytes: 10 * MB,
+    description: 'A circular, form or timetable attached to a notice.',
+    sortOrder: 1,
+  },
+  {
+    key: 'EVENT_IMAGE',
+    label: 'Event picture',
+    ownerType: 'EVENT',
+    isRequired: false,
+    isSensitive: false,
+    allowedMimeTypes: IMAGE_TYPES,
+    maxSizeBytes: 5 * MB,
+    description: 'The picture shown with an event.',
+    sortOrder: 1,
+  },
+  {
+    key: 'EVENT_ATTACHMENT',
+    label: 'Event attachment',
+    ownerType: 'EVENT',
+    isRequired: false,
+    isSensitive: false,
+    allowedMimeTypes: SCAN_TYPES,
+    maxSizeBytes: 10 * MB,
+    description: 'A programme, form or map attached to an event.',
+    sortOrder: 2,
+  },
 ] as const
 
 /**

@@ -2547,3 +2547,31 @@ This is the only statement in the Phase 11 migration that alters something alrea
 **Decision.** `events.audience` is `ALL`, `STUDENTS` or `STAFF`, kept so by a CHECK; the structural audiences belong to notices. A cancelled event is still shown to its audience, marked cancelled — the point of cancelling is that people find out — and only a draft is the office's alone. `ends_at` may equal `starts_at` (a moment) but not precede it.
 
 **Consequences.** The Step 2 feeds show cancelled events with a badge rather than dropping them; the tests pin that a students' event is not seen by staff and vice versa.
+
+---
+
+## ADR-151 · Times are entered on the college's clock and converted on the server
+
+**Status:** Accepted · 2026-09-08
+
+**Context.** A notice is published "at 08:00 on Monday" and an event "starts at 09:00". An `<input type="datetime-local">` sends `2026-09-08T08:00` with no zone; a browser that converted it to an instant would use *its own* zone, so a member of the office entering the notice from a laptop abroad would schedule it five hours off.
+
+**Decision.** The API accepts wall-clock times only — `YYYY-MM-DDTHH:mm`, validated by `collegeLocalDateTime`; a zoned or ISO string is refused — and `collegeLocalToInstant` in `college-date.ts` turns them into instants using `APP_TIMEZONE`. Every timestamp goes back out both ways: the instant, and `…Local` on the college clock for the form. Same reasoning as ADR-082: a clock face has no zone, so the browser is not allowed to invent one.
+
+**A finding on the way.** Prisma 7 with the `pg` adapter sends a `Date` parameter without a zone, so a `timestamptz` comparison depends on the database session's time zone. Neon's is **GMT**, so a zone-less parameter reads as UTC and the comparison is right. The PGlite harness inherits the machine's zone (+05:00) unless told otherwise, and every reader feed came back empty until the throwaway database was pinned to UTC. The harness now pins it; production needs nothing, but if the college ever moves database the session zone is the first thing to check.
+
+**Consequences.** Tests pin the conversion both ways at the Karachi offset and across midnight; the harness asserts that `2026-09-08T08:00` becomes `2026-09-08T03:00:00.000Z`.
+
+---
+
+## ADR-152 · An attachment is seen by exactly the people who see its notice
+
+**Status:** Accepted · 2026-09-08
+
+**Context.** Phase 6's document access rules are about people: your own file, your students' files, sensitive or not. A notice's circular is none of those — it belongs to an audience.
+
+**Decision.** `documents` gains notice and event owners (ADR-149), and `getDocumentContent` asks the notice or event service whether *this reader sees that notice now*. There is one definition of "who sees this notice" — `decideNoticeVisible` — and the attachment path calls it rather than restating it. A refusal is a **404**, so a draft's attachment does not confirm the draft exists. Uploading stays office work (ADMIN + `documents.upload`), and unlike a person's documents, attachments never replace each other: a second PDF is a second file.
+
+Attachments are filed in Drive under `Notices/<year>` and `Events/<year>`, found or made on each upload rather than remembered — one cheap lookup for something done a few times a week.
+
+**Consequences.** Verified through the production build: a student opens their section's attachment (the check passes and the request reaches storage), gets 404 for a draft's and for a staff event's; a teacher's real upload to a notice is 403; a student document type cannot be attached to a notice. Deleting an attachment also clears it as an event's cover, because the row is kept and the foreign key's `SET NULL` never fires.
