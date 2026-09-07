@@ -313,13 +313,16 @@ export function AttendanceList({
             ))}
           </Select>
 
-          <div className="flex items-center gap-2">
+          {/* Two date inputs share one grid cell: without min-w-0 they keep their
+              intrinsic width and push the page sideways on a desktop. */}
+          <div className="flex min-w-0 items-center gap-2">
             <label className="sr-only" htmlFor="f-from">
               From date
             </label>
             <Input
               id="f-from"
               type="date"
+              className="min-w-0 flex-1"
               value={filters.dateFrom}
               onChange={(e) => applyFilters({ dateFrom: e.target.value, date: '' })}
               aria-label="From date"
@@ -331,6 +334,7 @@ export function AttendanceList({
             <Input
               id="f-to"
               type="date"
+              className="min-w-0 flex-1"
               value={filters.dateTo}
               onChange={(e) => applyFilters({ dateTo: e.target.value, date: '' })}
               aria-label="To date"

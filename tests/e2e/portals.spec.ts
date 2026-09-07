@@ -21,7 +21,7 @@ test.describe('the office', () => {
     await expect(page.getByRole('link', { name: /Ali Raza/ }).first()).toBeVisible()
     await page.getByRole('link', { name: /Ali Raza/ }).first().click()
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Ali Raza')
-    await expect(page.getByText('HSTU-0001')).toBeVisible()
+    await expect(page.getByText('HSTU-0001').first()).toBeVisible()
   })
 
   test('writes a notice for everyone and publishes it', async ({ page }) => {
@@ -31,10 +31,11 @@ test.describe('the office', () => {
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible()
     const title = `Browser notice ${Date.now()}`
-    await dialog.getByLabel(/title/i).fill(title)
-    await dialog.getByLabel(/body|text|message/i).first().fill('Written from the browser test.')
-    await dialog.getByRole('button', { name: /save|create/i }).click()
-    await expect(page.getByText(title)).toBeVisible()
+    // Required fields carry a mark in their label, so the ids are the stable handle.
+    await dialog.locator('#notice-title').fill(title)
+    await dialog.locator('#notice-body').fill('Written from the browser test.')
+    await dialog.locator('button[type="submit"]').click()
+    await expect(page.getByText(title).first()).toBeVisible()
   })
 
   test('the audit log shows what just happened, with details but no snapshot', async ({ page }) => {
@@ -55,7 +56,8 @@ test.describe('a teacher', () => {
     await expect(page.getByText(/Biology/).first()).toBeVisible()
     await page.goto('/staff/timetable')
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
-    await expect(page.getByText('Lab 1').first()).toBeVisible()
+    // The week is rendered twice — a grid for wide screens and a list for phones — and only one is shown.
+    await expect(page.getByText('Lab 1').filter({ visible: true }).first()).toBeVisible()
   })
 
   test('sees only their own sections in the register', async ({ page }) => {
@@ -70,7 +72,7 @@ test.describe('a student', () => {
   test('sees the notice the office wrote for their section, and not the draft', async ({ page }) => {
     await signIn(page, 'student')
     await page.goto('/student/notices')
-    await expect(page.getByText(notices.notices.sec11A!.title)).toBeVisible()
+    await expect(page.getByText(notices.notices.sec11A!.title).first()).toBeVisible()
     await expect(page.getByText(notices.notices.draft!.title)).toHaveCount(0)
   })
 

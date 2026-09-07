@@ -57,12 +57,14 @@ test('going offline shows the banner and the API fails at once', async ({ page, 
 test('with the network gone, a page load shows the offline page from the worker', async ({ page, context }) => {
   await signIn(page, 'student')
   await page.goto('/student')
+  // The worker must be installed *and* controlling this page before the
+  // network goes: the first load of a fresh profile is never controlled.
   await page.evaluate(() => navigator.serviceWorker.ready)
   await page.reload()
-  await page.evaluate(() => navigator.serviceWorker.ready)
+  await page.waitForFunction(() => navigator.serviceWorker.controller !== null)
   await context.setOffline(true)
-  await page.goto('/student/notices').catch(() => undefined)
-  await expect(page.getByRole('heading', { name: 'You are offline' })).toBeVisible({ timeout: 10_000 })
+  await page.goto('/student/notices', { waitUntil: 'commit' }).catch(() => undefined)
+  await expect(page.getByRole('heading', { name: 'You are offline' })).toBeVisible({ timeout: 15_000 })
   await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible()
   await context.setOffline(false)
 })

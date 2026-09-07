@@ -81,7 +81,9 @@ export function MyStudentsView({
           value={filters.sectionId}
           onChange={(e) => apply({ sectionId: e.target.value })}
           aria-label="Filter by section"
-          className="w-auto"
+          // Section labels are long ("1st Year · Boys · Pre-Medical · Section A"):
+          // on a phone the select must shrink to the row, not widen the page.
+          className="w-auto max-w-full"
         >
           <option value="">All my sections ({total})</option>
           {sections.map((section) => (

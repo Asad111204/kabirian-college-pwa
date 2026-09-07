@@ -112,8 +112,10 @@ export default async function StaffDashboardPage() {
         />
       </section>
 
+      {/* min-w-0 on the columns: a grid item otherwise refuses to be narrower
+          than its content, and a long lesson line would widen a phone screen. */}
       <div className="grid gap-4 lg:grid-cols-3">
-        <div className="space-y-4 lg:col-span-2">
+        <div className="min-w-0 space-y-4 lg:col-span-2">
           <TodayClassesCard today={today} />
           <NoticesCard notices={notices.items} href="/staff/notices" />
           <EventsCard events={events.items} href="/staff/events" />
@@ -173,7 +175,7 @@ export default async function StaffDashboardPage() {
           </Card>
         </div>
 
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4">
           <Card>
             <CardHeader>
               <CardTitle>Quick links</CardTitle>

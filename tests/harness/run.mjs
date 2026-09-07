@@ -98,6 +98,12 @@ try {
   console.log('  listening')
 
   log('swap .env for the harness')
+  if (existsSync(envBackup)) {
+    // A previous run was killed before it could clean up (a hard stop on
+    // Windows skips the exit handler): the backup is the real file.
+    renameSync(envBackup, envPath)
+    console.log('  restored .env left behind by an earlier run')
+  }
   if (existsSync(envPath)) renameSync(envPath, envBackup)
   envSwapped = true
   writeFileSync(

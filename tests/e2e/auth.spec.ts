@@ -10,12 +10,13 @@ test.describe('signing in', () => {
     await page.goto('/login')
     await expect(page.getByRole('heading', { name: 'Kabirian College' })).toBeVisible()
 
-    await page.getByLabel('Username').fill(USERS.teacher)
-    await page.getByLabel('Password').fill('not-the-password')
+    await page.locator('#username').fill(USERS.teacher)
+    await page.locator('#password').fill('not-the-password')
     await page.getByRole('button', { name: /sign in/i }).click()
-    await expect(page.getByRole('alert')).toContainText(/username or password|incorrect|not right/i)
+    // The form shows one alert; a field may show another. Any of them must carry the sentence.
+    await expect(page.getByRole('alert').filter({ hasText: /username|password|incorrect|not right|try again/i }).first()).toBeVisible()
 
-    await page.getByLabel('Password').fill(ids.password)
+    await page.locator('#password').fill(ids.password)
     await page.getByRole('button', { name: /sign in/i }).click()
     await page.waitForURL('**/staff')
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()

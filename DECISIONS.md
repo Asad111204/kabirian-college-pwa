@@ -2707,3 +2707,19 @@ On screen: a banner the moment the connection drops, the three "submit" buttons 
 The roadmap asked for a "Lighthouse PWA pass". Lighthouse removed its PWA category in version 12 (2024); what remains is Chrome's installability check — a manifest with icons, a service worker with a fetch handler, HTTPS — which this build meets, and the harness verifies each piece over HTTP.
 
 **Consequences.** Through the production build the worker was served as JavaScript with `Service-Worker-Allowed: /`, never cached, precaching the offline page, the stylesheet and the icons and not one JavaScript chunk; the offline page rendered with no session; the manifest carried a maskable icon and four shortcuts; each shortcut sent a student, a teacher and the office to their own page, and a signed-out visitor to sign in. Offline queuing of attendance and marks remains out (ADR-021).
+
+---
+
+## ADR-162 · The production harness lives in the repository, and the browser tests run against it
+
+**Status:** Accepted · 2026-09-08
+
+**Context.** Since Phase 10 every phase has been verified "through the production build against a throwaway PostgreSQL" — a PGlite server on a local socket, the migrations, fixture seeds, `next start`, and a script of HTTP checks per module. It worked, and it caught real bugs before they shipped, but it lived in a scratch directory outside the repository: nobody but the person who wrote it could run it, and it could not run in CI. ADR-032 asked for Playwright end-to-end tests; none existed. The roadmap's Phase 16 asked for coverage gaps, end-to-end tests per portal, a responsive matrix and a 5,000-student load check.
+
+**Decision.** `tests/harness/` is the harness, checked in: `run.mjs` (Node, cross-platform) starts the in-memory PostgreSQL, moves `.env` aside and restores it whatever happens, applies the migrations, seeds, starts the production build on port 3002, and runs the verifiers for Phases 10–15 — `npm run e2e`. `--playwright` adds the browser tests in `tests/e2e/` (`npm run e2e:browser`); `--load` adds 5,000 students in 100 sections with 500 logins and times the endpoints an office uses every day (`npm run e2e:load`); `--keep` leaves the server up for a manual look. The GitHub Actions workflow runs the whole thing on every push: the build, the API and page checks, the browser tests on a phone and a desktop, and the load check — with no secret and no real database anywhere near it.
+
+The browser tests are Playwright on two projects, a Pixel 5 and a 1280-pixel desktop, and every spec runs on both: the sign-in form and the portal boundary; one real flow per portal against the same fixtures the API checks use; the responsive matrix — twenty-three pages that must never scroll sideways, and a navigation that is a drawer on a phone and a sidebar on a desktop; and the app as an app — the manifest, the service worker installing and taking control, the offline banner, the API failing at once, the offline page served by the worker with the network gone, and a cache that holds the offline page and build files but never a page or an API call.
+
+The load check's budgets are loose on purpose (PGlite is slower than Neon, and a CI runner slower still); what it exists to catch is a query that grows with the college — an unpaginated list, an N+1, a report that reads what it does not show. It reports its timings so a regression is a number, not a feeling.
+
+**Consequences.** One command now proves the whole system from a clean database, on any machine, and CI does it on every push. The vitest suite gained tests for the last untested pure modules (display formatting, the shared validators, the sign-in and password-change schemas, Argon2id hashing), and `npm run test:coverage` reports where the gaps still are. What stays manual: installing on a real Android and iOS device, and the Google Drive connection — both need something a CI runner does not have.

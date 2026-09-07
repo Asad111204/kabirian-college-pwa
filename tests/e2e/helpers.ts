@@ -30,13 +30,23 @@ export async function signIn(page: Page, who: keyof typeof USERS): Promise<void>
   expect(res.ok(), `sign in as ${who}`).toBeTruthy()
 }
 
-/** The page must never scroll sideways, whatever the viewport. */
-export async function expectNoHorizontalOverflow(page: Page): Promise<void> {
-  const overflow = await page.evaluate(() => ({
-    scrollWidth: document.documentElement.scrollWidth,
-    clientWidth: document.documentElement.clientWidth,
-  }))
-  expect(overflow.scrollWidth, `page is ${overflow.scrollWidth}px wide in a ${overflow.clientWidth}px viewport`).toBeLessThanOrEqual(overflow.clientWidth + 1)
+/**
+ * The page must never scroll sideways, whatever the viewport.
+ *
+ * Measured two ways, because `documentElement.scrollWidth` in Chromium also
+ * counts content that scrolls inside its own box (a wide table in a
+ * `.scroll-x` wrapper) and would cry wolf: the body's width, and whether the
+ * window can actually be scrolled to the right at all.
+ */
+export async function expectNoHorizontalOverflow(page: Page, path = page.url()): Promise<void> {
+  const overflow = await page.evaluate(() => {
+    window.scrollTo(10_000, 0)
+    const scrolledTo = window.scrollX
+    window.scrollTo(0, 0)
+    return { bodyWidth: document.body.scrollWidth, clientWidth: document.documentElement.clientWidth, scrolledTo }
+  })
+  expect(overflow.bodyWidth, `${path}: page is ${overflow.bodyWidth}px wide in a ${overflow.clientWidth}px viewport`).toBeLessThanOrEqual(overflow.clientWidth + 1)
+  expect(overflow.scrolledTo, `${path}: the window scrolled ${overflow.scrolledTo}px to the right`).toBe(0)
 }
 
 export const isPhone = (page: Page) => (page.viewportSize()?.width ?? 1280) < 1024

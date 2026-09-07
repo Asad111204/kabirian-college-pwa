@@ -18,7 +18,7 @@ for (const [who, paths] of Object.entries(PAGES) as [keyof typeof PAGES, string[
     for (const path of paths) {
       await page.goto(path)
       await expect(page.getByRole('heading', { level: 1 }), path).toBeVisible()
-      await expectNoHorizontalOverflow(page)
+      await expectNoHorizontalOverflow(page, path)
     }
   })
 }
@@ -31,17 +31,19 @@ test('the sign-in page fits a phone and a desktop', async ({ page }) => {
 test('on a phone the navigation is a drawer; on a desktop it is a sidebar', async ({ page }) => {
   await signIn(page, 'admin')
   await page.goto('/admin')
-  const students = page.getByRole('link', { name: 'Students', exact: true })
+  // The dashboard's quick actions link to Students too; the navigation lives in an <aside>.
+  const sidebarLink = page.locator('aside').first().getByRole('link', { name: 'Students', exact: true })
   if (isPhone(page)) {
-    await expect(students).toBeHidden()
+    await expect(sidebarLink).toBeHidden()
     await page.getByRole('button', { name: 'Open menu' }).click()
-    await expect(students).toBeVisible()
-    await students.click()
+    const drawerLink = page.locator('aside').last().getByRole('link', { name: 'Students', exact: true })
+    await expect(drawerLink).toBeVisible()
+    await drawerLink.click()
     await expect(page).toHaveURL(/\/admin\/students$/)
     // Tapping a link closes the drawer.
     await expect(page.getByRole('button', { name: 'Close menu' }).first()).toBeHidden()
   } else {
-    await expect(students).toBeVisible()
+    await expect(sidebarLink).toBeVisible()
     await expect(page.getByRole('button', { name: 'Open menu' })).toBeHidden()
   }
 })

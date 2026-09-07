@@ -84,7 +84,7 @@ body = JSON.parse(r.text())
 check(`grouped by section: ${r.ms} ms, ${body.data.groups.length} groups`, r.status === 200 && body.data.groups.length >= 100 && r.ms < 6000)
 
 r = await timed('admin', `/api/v1/reports/missing-documents?academicSessionId=${ids.session}`)
-check(`missing documents across the college: ${r.ms} ms`, r.status === 200 && r.ms < 8000)
+check(`missing documents across the college: ${r.ms} ms`, r.status === 200 && r.ms < 8000, `${r.status} ${r.text().slice(0, 200)}`)
 
 r = await timed('admin', '/api/v1/dashboard')
 check(`the admin dashboard: ${r.ms} ms`, r.status === 200 && r.ms < 2500)

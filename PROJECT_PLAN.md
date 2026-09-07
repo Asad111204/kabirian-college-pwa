@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | **Phase 15 complete: PWA and offline.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Every module through reports, the audit viewer and security hardening are live on Neon. The app now installs from the browser (Chrome's prompt, or Share → Add to Home Screen on iOS) with home-screen shortcuts, launches with an offline page when there is no connection, shows an offline banner and refuses to try a submit that cannot reach the server, and prompts before applying a new version. The service worker keeps build files only — never a page, never the API. Next: Phase 16, testing and QA. |
-| **Last updated** | 2026-09-08 (rev. 33 — Phase 15 complete) |
+| **Status** | **Phase 16 complete: testing and QA.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Every module through reports, the audit viewer, security hardening and the PWA are live on Neon. The production harness now lives in the repository (`npm run e2e`), with Playwright browser tests on a phone and a desktop (`npm run e2e:browser`), a 5,000-student load check with timings (`npm run e2e:load`), and a CI workflow that runs all of it on every push against an in-memory database. Next: Phase 17, deployment. |
+| **Last updated** | 2026-09-08 (rev. 34 — Phase 16 complete) |
 | **Companion docs** | [DECISIONS.md](DECISIONS.md) · [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) · [README.md](README.md) |
 
 ---
@@ -592,7 +592,7 @@ Real `.env` is git-ignored; secrets only in the host's environment settings in p
 | Unit | Vitest | Grade calculation, percentages, ranking, validators, file naming, permission resolution |
 | Integration | Vitest + Prisma against a test DB (Neon test branch or local) | Services & API handlers; **authorization matrix**: student A ↔ student B, staff vs unassigned section, unpublished results invisible, deactivated user rejected, permission overrides |
 | Storage | `InMemoryStorageProvider` | Upload/replace/delete flows without touching Drive; one opt-in real-Drive smoke test |
-| E2E | Playwright | Login → portal flows on mobile & desktop viewports; attendance marking; marks entry; PWA manifest/SW checks; Lighthouse PWA audit |
+| E2E | `tests/harness/run.mjs` (production build against in-memory PostgreSQL) + Playwright (`tests/e2e/`, Pixel 5 and desktop projects) | API and page checks per module (Phases 10–15); sign-in and portal boundary; one real flow per portal; responsive matrix (no page scrolls sideways; drawer vs sidebar); PWA manifest, service worker, offline banner and offline page; 5,000-student load timings. Lighthouse's PWA category no longer exists (ADR-161) |
 | Manual | Checklists per phase | Real Google Drive connection, install on Android/iOS |
 
 Tests are written *with* each phase, not only in Phase 16.
@@ -738,7 +738,7 @@ Everything else in §20 will proceed on the stated defaults.
 
 ## 22. Progress tracker
 
-**Current phase:** 15 — complete. Next: Phase 16, testing and QA. The college's further requests (§23A) begin after Phase 17.
+**Current phase:** 16 — complete. Next: Phase 17, deployment. The college's further requests (§23A) begin after Phase 17.
 
 | Phase | Status | Notes |
 |---|---|---|
@@ -758,7 +758,8 @@ Everything else in §20 will proceed on the stated defaults.
 | 13 Reports & exports | ✅ Done (2026-09-08) | Report centre with structure filters and grouping; print via the browser; CSV from the same query. See §22.41 |
 | 14 Audit UI & security | ✅ Done (2026-09-08) | Audit viewer with redacted detail and CSV; CSP with a nonce per request; signed-in devices; account rate limits; log redaction by shape; CI + audit gate. See §22.42 |
 | 15 PWA & offline | ✅ Done (2026-09-08) | Serwist worker (build files only), offline page, offline banner and guarded submits, update prompt, install entry with iOS steps, shortcuts via `/go/*`. See §22.43 |
-| 16 – 17 | ⏳ Not started | Next: testing & QA |
+| 16 Testing & QA | ✅ Done (2026-09-08) | Harness in the repo, Playwright on phone + desktop, responsive matrix, 5k-student load check, coverage gaps closed, CI runs all of it. See §22.44 |
+| 17 | ⏳ Not started | Next: deployment |
 
 **Live database:** the college's Neon PostgreSQL instance is connected and holds the real academic structure (2026-27, 20 groups, 20 sections). All **ten** migrations are applied to it, along with the reference data (12 designations, 10 departments, **8 document types**, and the confirmed **grading scale**).
 
@@ -1834,6 +1835,18 @@ One tidy-up: the target index is now declared in the Prisma model under the migr
 **Verified through the production build against a throwaway PostgreSQL — the Phase 11–14 harness (235 checks) plus a new PWA harness (29 checks), all passing**: the worker as JavaScript with the right scope header and no caching, precaching the offline page, the stylesheet and the icons but no JavaScript chunk, network-only for the rest, no `skipWaiting`; the offline page with no session and the CSP; the manifest with a maskable icon and `/go` shortcuts; every icon a PNG; the page linking the manifest and the iOS icon; each shortcut resolving per role and 404 otherwise; the API still `no-store`.
 
 **Tests: 13 new — 9 for the caching rules, shortcuts, manifest and iOS detection, 3 for the banner, the guarded submit and the offline API client, 1 for the worker under the CSP. 1,171 in total across 54 files.** Lint, typecheck and build clean. Note: Lighthouse dropped its PWA category in v12, so the roadmap's "Lighthouse PWA pass" is replaced by Chrome's installability criteria, each verified by the harness; the acceptance test "installs on Android & iOS" needs a real phone — see the checklist in the Phase 15 report.
+
+### 22.44 Phase 16, testing and QA (2026-09-08)
+
+**The harness is in the repository** (`tests/harness/`, ADR-162). `npm run build` then `npm run e2e` starts an in-memory PostgreSQL, applies every migration, seeds the fixtures, starts the production build and runs the API and page checks for Phases 10–15 (264 checks); `.env` is moved aside and restored whatever happens, so nothing can reach Neon. `npm run e2e:browser` adds the Playwright tests; `npm run e2e:load` adds the 5,000-student load check; `--keep` leaves the server up to click around (`harness.admin`).
+
+**Browser tests** (`tests/e2e/`, 44 tests, 22 on each on a Pixel 5 and a 1280-px desktop): the sign-in form refusing a wrong password and opening the portal; sign-out from the menu; every portal sending a visitor to sign in; a student typing an office address landing on their own portal; the office finding a student and writing a notice; the audit log's details without a snapshot; the teacher's lesson on the dashboard and the timetable; the student seeing the notice for their section and not the draft; twenty-three pages that never scroll sideways; the drawer on a phone and the sidebar on a desktop; the manifest; the service worker installing and controlling the page; the offline banner and the API failing at once; the offline page served by the worker; a cache that never holds a page or an API call.
+
+**Load check** with 5,001 students, 100 sections and 505 logins (16 checks, all passing): one page of the student list 83 ms, a name search 149 ms (was 3 s before the roll-number clause was made conditional), the last page as fast as the first, the whole-college students report 318 ms as JSON and 353 ms as a 493 KB CSV, grouped by 101 sections 319 ms, missing documents 276 ms, the admin dashboard 143 ms, the audit log 34 ms, the attendance overview 67 ms, a student's own pages under 140 ms. Budgets are loose (PGlite, not Neon); the point is that nothing grows with the college.
+
+**Coverage gaps closed**: display formatting, the shared validators, the sign-in and password-change schemas, Argon2id hashing (22 new tests). `npm run test:coverage` is available. **1,193 tests in total across 58 files.** CI now runs lint, typecheck, tests, the audit gate, the build, the harness, the browser tests and the load check on every push.
+
+**Still manual**: installing on a real Android and iOS phone, and the Google Drive connection — see the Phase 15 and Phase 6 checklists.
 
 ### 22.7 What Phase 4 delivered
 
