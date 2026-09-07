@@ -7,6 +7,7 @@ import {
   relativeTime,
   summariseUserCounts,
   UPCOMING_MODULES,
+  percentageOf,
   type AuditEntryInput,
   type FlatGroup,
   type UserCountRow,
@@ -316,6 +317,13 @@ describe('buildQuickActions', () => {
       '/admin/academics/subjects',
       '/admin/academics/curriculum',
       '/admin/academics/sessions',
+      '/admin/students',
+      '/admin/staff',
+      '/admin/attendance',
+      '/admin/exams',
+      '/admin/timetable',
+      '/admin/notices',
+      '/admin/events',
     ]
     for (const action of QUICK_ACTIONS) {
       expect(builtRoutes, `${action.key} points at a page that must exist`).toContain(action.href)
@@ -339,5 +347,32 @@ describe('unbuilt modules', () => {
       expect(typeof entry.phase).toBe('number')
       expect(entry.phase).toBeGreaterThanOrEqual(4)
     }
+  })
+})
+
+describe('percentageOf', () => {
+  it('is a whole number', () => {
+    expect(percentageOf(2, 3)).toBe(67)
+    expect(percentageOf(1, 4)).toBe(25)
+    expect(percentageOf(3, 3)).toBe(100)
+  })
+
+  it('is null, not zero, when there is nothing to count', () => {
+    // No attendance taken is not "nobody came".
+    expect(percentageOf(0, 0)).toBeNull()
+    expect(percentageOf(0, 5)).toBe(0)
+  })
+})
+
+describe('the shortcuts for the built modules', () => {
+  it('offers attendance, exams, timetable, notices and events to an office with those permissions', () => {
+    const keys = buildQuickActions(
+      new Set(['attendance.view', 'exams.view', 'timetable.view', 'notices.manage', 'events.view']),
+    ).map((a) => a.key)
+    expect(keys).toEqual(['attendance', 'exams', 'timetable', 'notices', 'events'])
+  })
+
+  it('keeps the notice shortcut for those who may write one', () => {
+    expect(buildQuickActions(new Set(['notices.view'])).map((a) => a.key)).toEqual([])
   })
 })

@@ -24,6 +24,7 @@ import { StructureOverview } from '@/features/dashboard/structure-overview'
 import { RecentActivity } from '@/features/dashboard/recent-activity'
 import { QuickActions } from '@/features/dashboard/quick-actions'
 import { UpcomingModules } from '@/features/dashboard/upcoming-modules'
+import { SessionTiles, TodayTiles } from '@/features/dashboard/operations-tiles'
 import { RefreshButton } from '@/features/dashboard/refresh-button'
 
 export const metadata: Metadata = { title: 'Dashboard' }
@@ -104,14 +105,16 @@ export default async function AdminDashboardPage() {
             label="Students"
             value={people?.students ?? 0}
             icon={GraduationCap}
-            hint={people?.students === 0 ? 'None added yet — Phase 4' : 'Enrolled records'}
+            href="/admin/students"
+            hint={people?.students === 0 ? 'None added yet' : `${people?.studentsEnrolledThisSession ?? 0} enrolled this session`}
           />
 
           <StatTile
             label="Staff"
             value={people?.staff ?? 0}
             icon={UserCog}
-            hint={people?.staff === 0 ? 'None added yet — Phase 5' : 'Personnel records'}
+            href="/admin/staff"
+            hint={people?.staff === 0 ? 'None added yet' : 'Personnel records'}
           />
 
           {academics ? (
@@ -125,6 +128,9 @@ export default async function AdminDashboardPage() {
           ) : null}
         </div>
       </section>
+
+      <TodayTiles operations={data.operations} today={data.today} />
+      <SessionTiles operations={data.operations} sessionName={currentSession?.name ?? null} />
 
       {/* ---------------------------------------------------------------- */}
       {/* Academic building blocks                                          */}

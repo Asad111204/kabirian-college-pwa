@@ -81,8 +81,28 @@ export default async function StaffDashboardPage() {
           href="/staff/assignments"
           emphasis
         />
-        <StatTile label="Sections" value={dashboard.sectionsTaught} icon={Layers} />
-        <StatTile label="Subjects" value={dashboard.subjectsTaught} icon={ClipboardList} />
+        <StatTile
+          label="Registers today"
+          value={`${dashboard.attendanceToday.withRegister} / ${dashboard.attendanceToday.sections}`}
+          icon={ClipboardList}
+          href="/staff/attendance"
+          hint={
+            dashboard.attendanceToday.sections === 0
+              ? 'No sections assigned'
+              : dashboard.attendanceToday.withRegister < dashboard.attendanceToday.sections
+                ? 'Some sections still to mark'
+                : 'All marked'
+          }
+          emphasis={dashboard.attendanceToday.withRegister < dashboard.attendanceToday.sections}
+        />
+        <StatTile
+          label="Mark sheets open"
+          value={dashboard.markSheetsOpen}
+          icon={Layers}
+          href="/staff/exams"
+          hint={dashboard.markSheetsOpen > 0 ? 'Not yet submitted' : 'Nothing awaiting you'}
+          emphasis={dashboard.markSheetsOpen > 0}
+        />
         <StatTile
           label="Students"
           value={dashboard.studentsInScope}

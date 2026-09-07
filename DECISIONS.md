@@ -2603,3 +2603,17 @@ The attachments panel is one component for notices and events, built on the Phas
 The admin dashboard's "Not built yet" card, which had listed every module since Phase 3, now has nothing to list and is not rendered. The list is kept, empty, so a future phase can be honest in the same way.
 
 **Consequences.** The harness renders every portal page through the production build: a student's page names their section's notice and not the next section's, a teacher's names their class and not the students-only one, a staff login with no assignments sees only the population notices, and the office's write words appear on none of them.
+
+---
+
+## ADR-155 · A dashboard figure is a count the database made, and "no figure yet" is not zero
+
+**Status:** Accepted · 2026-09-08
+
+**Context.** The Phase 3 dashboard counted the structure and listed every later module as "not built yet". With ten modules live, the office needs to see what is happening — today's registers, open mark sheets, results waiting to be published, sections with no timetable, students missing a document — without the page becoming slow or the numbers becoming guesses.
+
+**Decision.** `getAdminDashboard` gains an `operations` block computed entirely by `count` and `groupBy` in one `Promise.all` — no rows are fetched to be counted in JavaScript, and the most expensive question ("which students are missing a required document") is one grouped query over current documents compared in memory to the number of required types. Each block is `null` when the administrator lacks the module's permission, and the page simply omits it. A percentage is `null`, not `0`, when there is nothing to count: no attendance taken this month is "no figure yet", and a `0%` would read as "nobody came" (`percentageOf`).
+
+The staff dashboard adds today's registers against the sections taught and the mark sheets the teacher has opened and not submitted, both from their own assignments. The student dashboard adds their attendance for the session, their published results and the next paper on a published date sheet for their class and programme — the identity for all three coming from the session, as everywhere else. The quick actions now cover every built module and are still filtered by permission.
+
+**Consequences.** The roadmap's acceptance criterion was "loads under a second with seeded data": through the production build against the throwaway database the dashboard API answered five consecutive calls in 74–94 ms and the three dashboard pages rendered in 101–114 ms. The `describeAuditEntry` fallback means every new audit action reads as a sentence on the activity list without a mapping being added.

@@ -4,6 +4,10 @@ import { prisma } from '@/server/db/prisma'
 import { PageHeader } from '@/components/layout/app-shell'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert } from '@/components/ui/feedback'
+import { CalendarDays, ClipboardCheck, ScrollText } from 'lucide-react'
+import { StatTile } from '@/features/dashboard/stat-tiles'
+import { formatExamDate } from '@/features/exams/shared'
+import { getStudentDashboard } from '@/server/services/dashboard.service'
 import { EventsCard, NoticesCard } from '@/features/notices/communication-card'
 import { getMyNoticeFeed } from '@/server/services/notices.service'
 import { getMyEventFeed } from '@/server/services/events.service'
@@ -37,9 +41,10 @@ export default async function StudentDashboardPage() {
     : null
 
   const group = enrollment?.section.academicGroup
-  const [notices, events] = await Promise.all([
+  const [notices, events, figures] = await Promise.all([
     getMyNoticeFeed(ctx, { page: 1, pageSize: 5 }),
     getMyEventFeed(ctx, { page: 1, pageSize: 3, includePast: false }),
+    ctx.studentId ? getStudentDashboard(ctx) : Promise.resolve(null),
   ])
 
   return (
@@ -48,6 +53,34 @@ export default async function StudentDashboardPage() {
         title={`Welcome, ${ctx.fullName}`}
         description={enrollment ? undefined : 'Your enrolment details are not available yet.'}
       />
+
+      {figures ? (
+        <section className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3" aria-label="My figures">
+          <StatTile
+            label="Attendance this session"
+            value={figures.attendancePercentage === null ? '—' : `${figures.attendancePercentage}%`}
+            icon={ClipboardCheck}
+            href="/student/attendance"
+            hint={figures.attendanceTotal === 0 ? 'No attendance taken yet' : `${figures.attendanceTotal} classes counted`}
+          />
+          <StatTile
+            label="Published results"
+            value={figures.publishedResults}
+            icon={ScrollText}
+            href="/student/results"
+          />
+          <StatTile
+            label="Next exam paper"
+            value={figures.nextPaper ? figures.nextPaper.subjectName : '—'}
+            icon={CalendarDays}
+            hint={
+              figures.nextPaper
+                ? `${formatExamDate(figures.nextPaper.date)}${figures.nextPaper.startTime ? ` · ${figures.nextPaper.startTime}` : ''} · ${figures.nextPaper.examName}`
+                : 'No date sheet published'
+            }
+          />
+        </section>
+      ) : null}
 
       <Card>
         <CardHeader>

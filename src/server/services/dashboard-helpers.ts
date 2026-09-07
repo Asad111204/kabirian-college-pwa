@@ -371,7 +371,26 @@ export const QUICK_ACTIONS: QuickActionDefinition[] = [
   { key: 'subjects', label: 'Manage subjects', href: '/admin/academics/subjects', permission: 'academics.view', icon: 'book-open' },
   { key: 'curriculum', label: 'Curriculum', href: '/admin/academics/curriculum', permission: 'academics.view', icon: 'scroll-text' },
   { key: 'sessions', label: 'Academic sessions', href: '/admin/academics/sessions', permission: 'academics.view', icon: 'calendar-days' },
+  // Phases 4 to 11.
+  { key: 'students', label: 'Students', href: '/admin/students', permission: 'students.view', icon: 'graduation-cap' },
+  { key: 'staff', label: 'Staff', href: '/admin/staff', permission: 'staff.view', icon: 'user-cog' },
+  { key: 'attendance', label: 'Attendance', href: '/admin/attendance', permission: 'attendance.view', icon: 'clipboard-check' },
+  { key: 'exams', label: 'Exams & results', href: '/admin/exams', permission: 'exams.view', icon: 'file-text' },
+  { key: 'timetable', label: 'Timetable', href: '/admin/timetable', permission: 'timetable.view', icon: 'calendar-days' },
+  { key: 'notices', label: 'Write a notice', href: '/admin/notices', permission: 'notices.manage', icon: 'megaphone' },
+  { key: 'events', label: 'Events', href: '/admin/events', permission: 'events.view', icon: 'calendar-days' },
 ]
+
+/**
+ * A whole-number percentage, or null when there is nothing to count.
+ *
+ * Null is not 0%: no attendance taken this month means "no figure yet", and
+ * showing 0% would read as "nobody came".
+ */
+export function percentageOf(part: number, whole: number): number | null {
+  if (whole <= 0) return null
+  return Math.round((part / whole) * 100)
+}
 
 /** Keeps only the shortcuts this particular administrator may actually use. */
 export function buildQuickActions(permissions: Set<string>): QuickActionDefinition[] {

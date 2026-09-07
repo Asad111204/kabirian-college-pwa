@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | **Phase 11 complete: notices and events.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). The office writes notices for everyone, a population or one part of the structure, schedules them and attaches files; events carry a date, a place and a picture; teachers and students read what reaches them in their portals and on their dashboards. The Phase 11 migration was applied to Neon on 2026-09-08 with every existing row count verified unchanged. Next: Phase 12, dashboards and KPIs. |
-| **Last updated** | 2026-09-08 (rev. 29 — Phase 11 complete and live on Neon) |
+| **Status** | **Phase 12 complete: dashboards and KPIs.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Every module through notices and events is live on Neon, and the three dashboards now show what is happening: today's registers and this month's attendance, exams in progress and results awaiting publication, timetable coverage, missing documents, notices and events — all as database counts, under a tenth of a second. Next: Phase 13, reports and exports. |
+| **Last updated** | 2026-09-08 (rev. 30 — Phase 12 complete) |
 | **Companion docs** | [DECISIONS.md](DECISIONS.md) · [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) · [README.md](README.md) |
 
 ---
@@ -738,7 +738,7 @@ Everything else in §20 will proceed on the stated defaults.
 
 ## 22. Progress tracker
 
-**Current phase:** 11 — complete and live. Next: Phase 12, dashboards and KPIs. The college's further requests (§23A) begin after Phase 17.
+**Current phase:** 12 — complete. Next: Phase 13, reports and exports. The college's further requests (§23A) begin after Phase 17.
 
 | Phase | Status | Notes |
 |---|---|---|
@@ -754,7 +754,8 @@ Everything else in §20 will proceed on the stated defaults.
 | 9 Results | ✅ Done (2026-08-31) | Generation, review, publication, portals and the printable A4 result card. See §22.29–§22.33 |
 | 10 Timetable | ✅ Done (2026-09-07) | Fixed period grid in code, master timetable builder, teacher week and today's classes, three clash rules backed by partial unique indexes. No student timetable, by decision. See §22.34 |
 | 11 Notices & events | ✅ Done (2026-09-08) | Targets as rows, publish windows, attachments through Drive, office screens, portal feeds and dashboard cards. Migration live on Neon. See §22.35–§22.38 |
-| 12 – 17 | ⏳ Not started | Next: dashboards & KPIs |
+| 12 Dashboards & KPIs | ✅ Done (2026-09-08) | Operations figures for the office, today's registers and open mark sheets for teachers, attendance / results / next paper for students; quick actions for every module. See §22.40 |
+| 13 – 17 | ⏳ Not started | Next: reports & exports |
 
 **Live database:** the college's Neon PostgreSQL instance is connected and holds the real academic structure (2026-27, 20 groups, 20 sections). All **ten** migrations are applied to it, along with the reference data (12 designations, 10 departments, **8 document types**, and the confirmed **grading scale**).
 
@@ -1784,6 +1785,16 @@ A **Communication** group in the office's navigation carries both. Nothing was a
 `20260906000000_notices_and_events` applied through `DATABASE_DIRECT_URL` after a read-only pre-flight (nine applied, none pending but this, zero drift, both existing documents already satisfying the widened owner rule). Verified afterwards: the three tables, four enums, two new `documents` columns, five CHECKs, the `NULLS NOT DISTINCT` target index, nine foreign keys, and every existing row count unchanged (students 3, staff 3, users 9, documents 2, timetable slots 2, results 1, audit 240). The reference seed then created the three attachment document types and nothing else (3 created, everything else "already existed").
 
 One tidy-up: the target index is now declared in the Prisma model under the migration's own name (`map:`), as the attendance register's is, so `migrate diff` reports **zero** difference between Neon and the schema.
+
+### 22.40 Phase 12, dashboards and KPIs (2026-09-08)
+
+**Admin.** Two new tile rows on the existing dashboard. *Today* — registers taken today against the session's sections (submitted and still-draft), attendance this month as a percentage of submitted entries (or "no figure yet"), notices showing, events in the next 30 days. *This session* — exams in progress with open mark sheets, results awaiting publication against those published, sections with a timetable, students missing a required document. Every figure is a `count`/`groupBy`; every block is omitted without the module's permission (ADR-155). The Students and Staff tiles now link to their pages, and the quick actions cover every built module. The "Not built yet" card is gone.
+
+**Staff.** Registers today (sections taught vs. those with a register) and mark sheets opened but not submitted, both from the teacher's own assignments.
+
+**Student.** Attendance this session, published results, and the next paper on a published date sheet for their class and programme — identity from the session only.
+
+**Verified through the production build against a throwaway PostgreSQL — 131 checks, all passing**, including the operations block's exact counts against the seeded data, the student and teacher refused the admin dashboard API, and the roadmap's criterion: the dashboard API answered in **74–94 ms** over five runs and the three pages in **101–114 ms**. **4 new unit tests; 1,076 in total across 41 files.** Lint, typecheck and build clean.
 
 ### 22.7 What Phase 4 delivered
 

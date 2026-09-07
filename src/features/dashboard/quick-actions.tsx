@@ -2,10 +2,14 @@ import Link from 'next/link'
 import {
   BookOpen,
   CalendarDays,
+  ClipboardCheck,
+  FileText,
   GraduationCap,
   Layers,
   LayoutDashboard,
+  Megaphone,
   ScrollText,
+  UserCog,
   UserPlus,
   Users,
   UsersRound,
@@ -25,6 +29,10 @@ const ICONS: Record<string, LucideIcon> = {
   'book-open': BookOpen,
   'scroll-text': ScrollText,
   'calendar-days': CalendarDays,
+  'user-cog': UserCog,
+  'clipboard-check': ClipboardCheck,
+  'file-text': FileText,
+  megaphone: Megaphone,
 }
 
 /**

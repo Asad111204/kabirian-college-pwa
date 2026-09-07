@@ -17,6 +17,7 @@
  */
 import 'server-only'
 import { prisma } from '../db/prisma'
+import { collegeDateToStorage, todayInCollegeTimezone } from '../time/college-date'
 import { authorize, type AuthContext } from '../auth/context'
 import { ForbiddenError, NotFoundError } from '../api/errors'
 import { paginate, paginatedResult, type PaginatedResult } from './service-utils'
@@ -88,6 +89,10 @@ export interface StaffDashboardData {
   subjectsTaught: number
   sectionsInCharge: number
   studentsInScope: number
+  /** Today, on the college's clock: sections taught, and how many have a register. */
+  attendanceToday: { sections: number; withRegister: number }
+  /** Mark sheets this teacher has opened and not yet submitted. */
+  markSheetsOpen: number
 }
 
 /* -------------------------------------------------------------------------- */
@@ -197,6 +202,26 @@ export async function getStaffDashboard(ctx: AuthContext): Promise<StaffDashboar
       : Promise.resolve(0),
   ])
 
+  // `sectionIds` (assignments plus in-charge sections) is the teacher's whole scope.
+  const today = collegeDateToStorage(todayInCollegeTimezone())
+  const [registersToday, markSheetsOpen] = await Promise.all([
+    sectionIds.length
+      ? prisma.attendanceSheet.findMany({
+          where: { sectionId: { in: sectionIds }, date: today, status: { not: 'CANCELLED' } },
+          select: { sectionId: true },
+          distinct: ['sectionId'],
+        })
+      : [],
+    assignments.length
+      ? prisma.examMarkSheet.count({
+          where: {
+            status: 'DRAFT',
+            OR: assignments.map((a) => ({ sectionId: a.sectionId, examPaper: { subjectId: a.subjectId } })),
+          },
+        })
+      : 0,
+  ])
+
   return {
     staffId: staff.id,
     fullName: staff.fullName,
@@ -205,6 +230,8 @@ export async function getStaffDashboard(ctx: AuthContext): Promise<StaffDashboar
     department: staff.department?.name ?? null,
     currentSession,
     activeAssignments: assignments.length,
+    attendanceToday: { sections: sectionIds.length, withRegister: registersToday.length },
+    markSheetsOpen,
     sectionsTaught: new Set(assignments.map((a) => a.sectionId)).size,
     subjectsTaught: new Set(assignments.map((a) => a.subjectId)).size,
     sectionsInCharge: inchargeSectionIds.size,
