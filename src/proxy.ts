@@ -55,7 +55,7 @@ export const config = {
        * Everything except the API, Next's own static files, and the icons:
        * those are not pages and carry no scripts.
        */
-      source: '/((?!api|_next/static|_next/image|favicon.ico|icons/|manifest.webmanifest).*)',
+      source: '/((?!api|serwist/|_next/static|_next/image|favicon.ico|icons/|brand/|manifest.webmanifest).*)',
       missing: [
         { type: 'header', key: 'next-router-prefetch' },
         { type: 'header', key: 'purpose', value: 'prefetch' },

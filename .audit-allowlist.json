@@ -9,6 +9,20 @@
       "reviewAgainBy": "2026-12-01"
     },
     {
+      "id": "GHSA-c83g-rgw3-j3cx",
+      "package": "browserslist",
+      "reason": "Reached only through @serwist/utils, which uses it at build time to pick esbuild targets for the service worker from a fixed query string. No request or user input ever reaches browserslist; the unbounded-cache growth needs attacker-chosen queries. No patched release yet.",
+      "reviewed": "2026-09-08",
+      "reviewAgainBy": "2026-11-01"
+    },
+    {
+      "id": "GHSA-73wf-gq98-2v4g",
+      "package": "browserslist",
+      "reason": "Same path as above. The crash needs an untrusted browserslist-stats.json, which this project does not have and never reads. No patched release yet.",
+      "reviewed": "2026-09-08",
+      "reviewAgainBy": "2026-11-01"
+    },
+    {
       "id": "GHSA-ggr8-5vv4-36mx",
       "package": "deepmerge-ts",
       "reason": "Used by @prisma/config to merge the CLI's configuration file, on the developer's machine only. Never runs on the server. Fixed upstream in Prisma 8, which is not yet adopted.",

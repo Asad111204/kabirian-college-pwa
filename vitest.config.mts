@@ -10,6 +10,12 @@ export default defineConfig({
      * run the rest of the suite just as fast.
      */
     pool: 'threads',
+    /**
+     * jsdom UI tests on this Windows machine take 2-7 s each when the whole
+     * suite runs at once; the 5 s default turned a slow machine into red
+     * tests. Nothing here legitimately needs more than a few seconds.
+     */
+    testTimeout: 15000,
     include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx'],
     globals: false,
     /**

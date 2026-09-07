@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 import { getAuthContext, portalPathForRole } from '@/server/auth/context'
 import { env } from '@/server/config/env'
 import { Logo } from '@/components/layout/logo'
+import { OfflineBanner } from '@/components/pwa/offline-banner'
 import { LoginForm } from './login-form'
 
 export const metadata: Metadata = { title: 'Sign in' }
@@ -21,6 +22,7 @@ export default async function LoginPage() {
           <p className="mt-1 text-sm text-foreground-muted">Management System</p>
         </div>
 
+        <OfflineBanner className="mb-4 rounded-[var(--radius-control)]" />
         <div className="rounded-[var(--radius-card)] border border-border bg-surface p-5 shadow-sm">
           <LoginForm />
         </div>

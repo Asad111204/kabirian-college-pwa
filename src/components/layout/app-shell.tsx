@@ -4,13 +4,15 @@ import * as React from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
-import { ChevronDown, LogOut, Menu, MonitorSmartphone, X, KeyRound } from 'lucide-react'
+import { ChevronDown, Download, LogOut, Menu, MonitorSmartphone, X, KeyRound } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { api } from '@/lib/api-client'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { LogoWordmark } from './logo'
 import { NAVIGATION, PORTAL_LABELS, type NavSection } from './nav-config'
+import { OfflineBanner } from '@/components/pwa/offline-banner'
+import { IosInstallDialog, useInstallMethod } from '@/components/pwa/install-prompt'
 import type { UserRole } from '@/generated/prisma/enums'
 
 export interface AppShellUser {
@@ -102,6 +104,7 @@ export function AppShell({
           <UserMenu user={user} />
         </header>
 
+        <OfflineBanner className="border-b border-warning-600/20" />
         <main className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 sm:py-6">{children}</main>
       </div>
     </div>
@@ -196,6 +199,8 @@ function SidebarFooter({ sessionLabel }: { sessionLabel?: string | null }) {
 function UserMenu({ user }: { user: AppShellUser }) {
   const router = useRouter()
   const [signingOut, setSigningOut] = React.useState(false)
+  const { method: installMethod, install } = useInstallMethod()
+  const [iosInstallOpen, setIosInstallOpen] = React.useState(false)
 
   async function handleSignOut() {
     setSigningOut(true)
@@ -209,6 +214,9 @@ function UserMenu({ user }: { user: AppShellUser }) {
   }
 
   return (
+    <>
+    {/* Outside the menu: the menu closes when an item is chosen. */}
+    <IosInstallDialog open={iosInstallOpen} onOpenChange={setIosInstallOpen} />
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>
         <button className="flex items-center gap-2 rounded-[var(--radius-control)] px-2 py-1.5 text-sm hover:bg-surface-muted">
@@ -235,6 +243,19 @@ function UserMenu({ user }: { user: AppShellUser }) {
           </div>
 
           <DropdownMenu.Separator className="my-1 h-px bg-border" />
+
+          {installMethod ? (
+            <DropdownMenu.Item asChild>
+              <button
+                type="button"
+                onClick={() => (installMethod === 'prompt' ? void install() : setIosInstallOpen(true))}
+                className="flex w-full cursor-pointer items-center gap-2 rounded-[var(--radius-control)] px-2 py-2 text-sm text-foreground outline-none hover:bg-surface-muted"
+              >
+                <Download className="h-4 w-4" />
+                Install app
+              </button>
+            </DropdownMenu.Item>
+          ) : null}
 
           <DropdownMenu.Item asChild>
             <Link
@@ -269,6 +290,7 @@ function UserMenu({ user }: { user: AppShellUser }) {
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>
+    </>
   )
 }
 

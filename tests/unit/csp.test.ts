@@ -58,5 +58,13 @@ describe('the Content Security Policy', () => {
     expect(pattern.test('/api/v1/audit')).toBe(false)
     expect(pattern.test('/_next/static/chunks/main.js')).toBe(false)
     expect(pattern.test('/manifest.webmanifest')).toBe(false)
+    expect(pattern.test('/serwist/sw.js')).toBe(false) // the worker is a script, not a page
+    expect(pattern.test('/~offline')).toBe(true) // the offline page is a page
+  })
+
+  it('lets the page start a same-origin service worker', () => {
+    const { directives } = policyFor()
+    expect(directives['worker-src']).toBe("'self'")
+    expect(directives['manifest-src']).toBe("'self'")
   })
 })

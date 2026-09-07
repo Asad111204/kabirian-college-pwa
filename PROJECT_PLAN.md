@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | **Phase 14 complete: audit viewer and security hardening.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Every module through reports is live on Neon. The office now has an audit viewer (who changed what, when — with a redacted change list per entry and a CSV), every page carries a per-request Content Security Policy, every account can see and end its own signed-in devices (and an administrator can end one device of any account), the expensive endpoints are rate-limited, the logger hides national IDs by shape, and a CI workflow runs lint, typecheck, tests and a dependency audit with named exceptions. Next: Phase 15, PWA and offline. |
-| **Last updated** | 2026-09-08 (rev. 32 — Phase 14 complete) |
+| **Status** | **Phase 15 complete: PWA and offline.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Every module through reports, the audit viewer and security hardening are live on Neon. The app now installs from the browser (Chrome's prompt, or Share → Add to Home Screen on iOS) with home-screen shortcuts, launches with an offline page when there is no connection, shows an offline banner and refuses to try a submit that cannot reach the server, and prompts before applying a new version. The service worker keeps build files only — never a page, never the API. Next: Phase 16, testing and QA. |
+| **Last updated** | 2026-09-08 (rev. 33 — Phase 15 complete) |
 | **Companion docs** | [DECISIONS.md](DECISIONS.md) · [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) · [README.md](README.md) |
 
 ---
@@ -479,8 +479,8 @@ Status per (person, type): **Uploaded** (an `ACTIVE` doc exists) · **Needs repl
 |---|---|
 | Manifest | `app/manifest.ts`: name "Kabirian College", short_name "Kabirian", `display: standalone`, `start_url: /`, theme/background colours from the design tokens, 192/512 px + maskable icons, shortcuts (Attendance, Timetable, Notices). |
 | Icons | `public/icons/` generated from the college logo (placeholder until the official logo is supplied); `apple-touch-icon` + iOS meta tags. |
-| Service worker | Serwist (`app/sw.ts`), registered after load; "New version available — Reload" prompt on update. |
-| Caching strategy | `/_next/static/**` (hashed): precache + CacheFirst · fonts/icons/logo: CacheFirst (30 d) · HTML navigations: NetworkFirst → offline fallback page · **`/api/**`: NetworkOnly — never cached by the SW** (sensitive, per-user). Document content relies only on the browser's private HTTP cache. |
+| Service worker | Serwist via `@serwist/turbopack` (`app/sw.ts`, served from `/serwist/sw.js`), registered by `PwaProvider`; "A new version is ready — Reload" prompt on update (no `skipWaiting`). |
+| Caching strategy | `/_next/static/**` (hashed), icons, logo: CacheFirst (30 d, capped) with the stylesheet, icons and offline page precached · HTML navigations: **NetworkOnly** → precached offline page (amended from NetworkFirst in ADR-161: a cached page would outlive a sign-out) · **`/api/**`: NetworkOnly — never cached by the SW** (sensitive, per-user). Document content relies only on the browser's private HTTP cache. |
 | Offline-capable | Installing/launching the app, the app shell, the offline page, static assets, data already on screen. |
 | Online-required (clearly shown in UI) | Login, every read from the database, attendance/marks submission, uploads, downloads. A global offline banner appears; submit buttons disable with an explanation; requests fail fast with a friendly message. |
 | Not in v1 | Offline queuing of attendance/marks (Background Sync) — deliberately deferred because of conflict/consistency risk. Push notifications — future. |
@@ -738,7 +738,7 @@ Everything else in §20 will proceed on the stated defaults.
 
 ## 22. Progress tracker
 
-**Current phase:** 14 — complete. Next: Phase 15, PWA and offline. The college's further requests (§23A) begin after Phase 17.
+**Current phase:** 15 — complete. Next: Phase 16, testing and QA. The college's further requests (§23A) begin after Phase 17.
 
 | Phase | Status | Notes |
 |---|---|---|
@@ -757,7 +757,8 @@ Everything else in §20 will proceed on the stated defaults.
 | 12 Dashboards & KPIs | ✅ Done (2026-09-08) | Operations figures for the office, today's registers and open mark sheets for teachers, attendance / results / next paper for students; quick actions for every module. See §22.40 |
 | 13 Reports & exports | ✅ Done (2026-09-08) | Report centre with structure filters and grouping; print via the browser; CSV from the same query. See §22.41 |
 | 14 Audit UI & security | ✅ Done (2026-09-08) | Audit viewer with redacted detail and CSV; CSP with a nonce per request; signed-in devices; account rate limits; log redaction by shape; CI + audit gate. See §22.42 |
-| 15 – 17 | ⏳ Not started | Next: PWA & offline |
+| 15 PWA & offline | ✅ Done (2026-09-08) | Serwist worker (build files only), offline page, offline banner and guarded submits, update prompt, install entry with iOS steps, shortcuts via `/go/*`. See §22.43 |
+| 16 – 17 | ⏳ Not started | Next: testing & QA |
 
 **Live database:** the college's Neon PostgreSQL instance is connected and holds the real academic structure (2026-27, 20 groups, 20 sections). All **ten** migrations are applied to it, along with the reference data (12 designations, 10 departments, **8 document types**, and the confirmed **grading scale**).
 
@@ -1821,6 +1822,18 @@ One tidy-up: the target index is now declared in the Prisma model under the migr
 **Verified through the production build against a throwaway PostgreSQL — the Phase 11–13 harness (158 checks) plus a new security harness (77 checks), all passing**: the CSP and nonce on the sign-in, a signed-in and the 404 page, every script stamped, a fresh nonce per request; the audit list without a snapshot, the detail with "Title" before and after and no identifier, sign-ins hidden and shown on request, every filter, the CSV equal to the screen, every non-admin refused everything; a teacher unable to end anyone else's session by either route, an administrator ending one device of a teacher and that device refused at once, "sign out others" leaving exactly one; the sixth password change, the thirty-first export and the thirty-first upload each a 429.
 
 **Tests: 51 new — 14 for the redaction rules, 5 for the filters, 10 for the viewer, 2 for the device names, 5 for log redaction, 5 for the limiter, 6 for the device list, 5 for the policy. 1,158 in total across 52 files.** Lint, typecheck and build clean.
+
+### 22.43 Phase 15, PWA and offline (2026-09-08)
+
+**Installing.** User menu → **Install app**: Chrome, Edge and Samsung Internet show their own install prompt; on an iPhone or iPad the entry opens the Share → *Add to Home Screen* steps (Safari has no prompt). The entry disappears once the app is installed. The manifest gained an id, categories and four home-screen shortcuts — Attendance, Timetable, Notices, Results — that go through `/go/<target>` and land on the signed-in role's page.
+
+**Offline.** A banner appears the moment the connection drops and goes when it is back. The three submits that must reach the server — attendance (office and teacher) and marks — are disabled while offline with a sentence, so nothing is lost and nothing is tried in vain; every other API call fails at once with "You are offline". Opening the app with no connection shows the offline page, which is precached and needs nothing from the server.
+
+**The service worker** (`src/app/sw.ts`, ADR-161) keeps hashed build files, the icons and the offline page — never a page, never the API. A new version waits for the person to choose **Reload** from the prompt. It is served from `/serwist/sw.js`, never cached, and allowed to control the whole site.
+
+**Verified through the production build against a throwaway PostgreSQL — the Phase 11–14 harness (235 checks) plus a new PWA harness (29 checks), all passing**: the worker as JavaScript with the right scope header and no caching, precaching the offline page, the stylesheet and the icons but no JavaScript chunk, network-only for the rest, no `skipWaiting`; the offline page with no session and the CSP; the manifest with a maskable icon and `/go` shortcuts; every icon a PNG; the page linking the manifest and the iOS icon; each shortcut resolving per role and 404 otherwise; the API still `no-store`.
+
+**Tests: 13 new — 9 for the caching rules, shortcuts, manifest and iOS detection, 3 for the banner, the guarded submit and the offline API client, 1 for the worker under the CSP. 1,171 in total across 54 files.** Lint, typecheck and build clean. Note: Lighthouse dropped its PWA category in v12, so the roadmap's "Lighthouse PWA pass" is replaced by Chrome's installability criteria, each verified by the harness; the acceptance test "installs on Android & iOS" needs a real phone — see the checklist in the Phase 15 report.
 
 ### 22.7 What Phase 4 delivered
 

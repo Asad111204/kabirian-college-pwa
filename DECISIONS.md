@@ -2689,3 +2689,21 @@ Two small things made the list worth reading. `lastActiveAt` had only been updat
 `@googleapis/drive` stays on 21: the advisory it was blamed for was in `qs`, which updated in place, and the Drive integration is working and verified — a major bump of a working integration for no security gain is exactly the kind of churn this project avoids.
 
 **Consequences.** Through the production build the sixth password change was a 429 with `Retry-After`, the thirty-first export was a 429 even for a caller the report refuses, and the thirty-first upload was a 429. The audit gate passes with two named exceptions and flags an exception that stops matching, so the allowlist cannot silently rot.
+
+---
+
+## ADR-161 · The service worker keeps build files and the offline page — never a page, never the API
+
+**Status:** Accepted · 2026-09-08 · amends ADR-021
+
+**Context.** ADR-021 chose Serwist and ruled that the worker must never cache `/api/**`. It also proposed NetworkFirst for page navigations, which keeps a copy of the last HTML of every page visited. Every page in this system is personal — a register, a mark sheet, a student's record — and a phone in a college is often shared or lost. A cached page is the one thing that would survive a sign-out.
+
+**Decision.** Navigations are network-only. When a page cannot be fetched, the worker answers with the precached offline page (`/~offline`), which reads no session and shows no data. The only things the worker keeps are hashed build files under `/_next/static/`, the icons and the logo (cache-first, thirty days, capped), and that offline page. Precaching at install is deliberately small — the stylesheet, the icons, the offline page — so installing the app does not pull every page's JavaScript over a phone's data; chunks are cached as they are used. The worker is built without `skipWaiting`: a new version waits until the person chooses "Reload" from a prompt, so a half-entered sheet is never refreshed away.
+
+Serwist's Turbopack integration (`@serwist/turbopack`) bundles `app/sw.ts` with esbuild and serves it from `/serwist/sw.js` with `Service-Worker-Allowed: /`; `next.config.ts` adds `no-store` so the worker itself is never stale, and the CSP's `worker-src 'self'` lets the page start it. The caching rules are pure functions in `src/lib/pwa/sw-rules.ts` with tests, so what the worker may keep is pinned down without a browser.
+
+On screen: a banner the moment the connection drops, the three "submit" buttons that must reach the server (attendance twice, marks once) disabled with a sentence while offline, and an API client that fails at once with "You are offline" rather than after a timeout. Installing: "Install app" in the user menu replays the browser's own prompt where there is one (Chrome, Edge, Samsung Internet) and shows the Share → Add to Home Screen steps on iOS, where no prompt exists. Home-screen shortcuts go through `/go/<target>`, which resolves the page for the signed-in role, so one manifest serves three portals.
+
+The roadmap asked for a "Lighthouse PWA pass". Lighthouse removed its PWA category in version 12 (2024); what remains is Chrome's installability check — a manifest with icons, a service worker with a fetch handler, HTTPS — which this build meets, and the harness verifies each piece over HTTP.
+
+**Consequences.** Through the production build the worker was served as JavaScript with `Service-Worker-Allowed: /`, never cached, precaching the offline page, the stylesheet and the icons and not one JavaScript chunk; the offline page rendered with no session; the manifest carried a maskable icon and four shortcuts; each shortcut sent a student, a teacher and the office to their own page, and a signed-out visitor to sign in. Offline queuing of attendance and marks remains out (ADR-021).

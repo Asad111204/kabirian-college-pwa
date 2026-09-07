@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Toaster } from 'sonner'
 import { env } from '@/server/config/env'
+import { PwaProvider } from '@/components/pwa/pwa-provider'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -14,6 +15,10 @@ export const metadata: Metadata = {
     capable: true,
     statusBarStyle: 'default',
     title: env.APP_COLLEGE_NAME,
+  },
+  icons: {
+    icon: [{ url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' }],
+    apple: [{ url: '/icons/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
   },
   formatDetection: { telephone: false },
   robots: { index: false, follow: false }, // a private college system — keep it out of search engines
@@ -33,7 +38,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
-        {children}
+        <PwaProvider>{children}</PwaProvider>
         <Toaster position="top-center" richColors closeButton />
       </body>
     </html>

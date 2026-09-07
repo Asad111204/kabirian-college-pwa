@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next'
+import { withSerwist } from '@serwist/turbopack'
 
 const isProduction = process.env.NODE_ENV === 'production'
 
@@ -36,8 +37,12 @@ const nextConfig: NextConfig = {
       { source: '/:path*', headers: securityHeaders },
       // API responses are personal and momentary: no cache anywhere may keep them.
       { source: '/api/:path*', headers: [{ key: 'Cache-Control', value: 'private, no-store, max-age=0' }] },
+      // The service worker itself must never be served stale, or an update
+      // could take a day to reach a phone.
+      { source: '/serwist/:path*', headers: [{ key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' }] },
     ]
   },
 }
 
-export default nextConfig
+// Serwist bundles the service worker with esbuild at build time (ADR-021, ADR-161).
+export default withSerwist(nextConfig)

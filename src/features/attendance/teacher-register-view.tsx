@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { ArrowLeft, Check, Keyboard, Save, Search, Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { OnlineOnlyButton } from '@/components/pwa/online-only-button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/field'
 import { Alert, EmptyState } from '@/components/ui/feedback'
@@ -448,9 +449,9 @@ export function TeacherRegisterView({
             <Button variant="secondary" onClick={() => setSubmitOpen(false)}>
               Keep marking
             </Button>
-            <Button onClick={submit} loading={submitting}>
+            <OnlineOnlyButton onClick={submit} loading={submitting}>
               Submit attendance
-            </Button>
+            </OnlineOnlyButton>
           </DialogFooter>
         </DialogContent>
       </Dialog>

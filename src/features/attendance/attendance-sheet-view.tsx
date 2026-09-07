@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { ArrowLeft, CircleSlash, Pencil, Save, Search, Send, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { OnlineOnlyButton } from '@/components/pwa/online-only-button'
 import { Card } from '@/components/ui/card'
 import { Input, Textarea } from '@/components/ui/field'
 import { Alert, EmptyState } from '@/components/ui/feedback'
@@ -524,9 +525,9 @@ export function AttendanceSheetView({
             <Button variant="secondary" onClick={() => setSubmitOpen(false)}>
               Keep editing
             </Button>
-            <Button onClick={handleSubmit} loading={submitting}>
+            <OnlineOnlyButton onClick={handleSubmit} loading={submitting}>
               Submit attendance
-            </Button>
+            </OnlineOnlyButton>
           </DialogFooter>
         </DialogContent>
       </Dialog>

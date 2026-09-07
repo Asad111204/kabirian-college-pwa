@@ -29,6 +29,12 @@ export class ApiError extends Error {
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   let response: Response
 
+  // Fail fast while offline rather than waiting for a fetch to time out. The
+  // service worker never answers for the API, so there is nothing to try.
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    throw new ApiError('You are offline. Connect to the internet and try again.', 0, 'OFFLINE')
+  }
+
   try {
     response = await fetch(path, {
       method,

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Check, CircleSlash, Loader2, Search, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { OnlineOnlyButton } from '@/components/pwa/online-only-button'
 import { Card } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/field'
@@ -466,9 +467,9 @@ export function MarkSheetView({ sheet: initialSheet }: { sheet: MarkSheetDetail 
               <Button variant="secondary" onClick={() => setSubmitOpen(false)}>
                 Keep working
               </Button>
-              <Button onClick={submit} loading={submitting}>
+              <OnlineOnlyButton onClick={submit} loading={submitting}>
                 Submit marks
-              </Button>
+              </OnlineOnlyButton>
             </DialogFooter>
           </div>
         </DialogContent>
