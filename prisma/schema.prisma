@@ -254,6 +254,52 @@ enum DayOfWeek {
   @@map("day_of_week")
 }
 
+enum NoticeCategory {
+  GENERAL
+  ACADEMIC
+  EXAM
+  EVENT
+  EMERGENCY
+  HOLIDAY
+
+  @@map("notice_category")
+}
+
+enum PublishStatus {
+  /// Being written. Visible to the office only.
+  DRAFT
+  /// Visible to its audience from `publish_at` until `expires_at`.
+  PUBLISHED
+  /// Withdrawn from every feed, kept for the record.
+  ARCHIVED
+
+  @@map("publish_status")
+}
+
+/// Who a notice or event is for. The first three are whole populations; the
+/// rest name one part of the academic structure, held in `notice_targets`.
+enum Audience {
+  ALL
+  STUDENTS
+  STAFF
+  CLASS
+  DIVISION
+  PROGRAM
+  GROUP
+  SECTION
+
+  @@map("audience")
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  /// Still shown to its audience, marked as cancelled, so nobody turns up.
+  CANCELLED
+
+  @@map("event_status")
+}
+
 // ---------------------------------------------------------------------------
 // Identity & access
 // ---------------------------------------------------------------------------
@@ -364,6 +410,7 @@ model Class {
   academicGroups     AcademicGroup[]
   curriculumSubjects CurriculumSubject[]
   examPapers         ExamPaper[]
+  noticeTargets      NoticeTarget[]
 
   @@index([level])
   @@map("classes")
@@ -379,6 +426,7 @@ model Division {
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   academicGroups AcademicGroup[]
+  noticeTargets  NoticeTarget[]
 
   @@map("divisions")
 }
@@ -396,6 +444,7 @@ model Program {
   academicGroups     AcademicGroup[]
   curriculumSubjects CurriculumSubject[]
   examPapers         ExamPaper[]
+  noticeTargets      NoticeTarget[]
 
   @@map("programs")
 }
@@ -491,6 +540,7 @@ model AcademicGroup {
   division        Division        @relation(fields: [divisionId], references: [id])
   program         Program         @relation(fields: [programId], references: [id])
   sections        Section[]
+  noticeTargets   NoticeTarget[]
 
   @@unique([academicSessionId, classId, divisionId, programId])
   @@unique([id, academicSessionId])
@@ -523,6 +573,7 @@ model Section {
   attendanceSheets   AttendanceSheet[]
   examMarkSheets     ExamMarkSheet[]
   timetableSlots     TimetableSlot[]
+  noticeTargets      NoticeTarget[]
 
   @@unique([academicGroupId, name])
   @@unique([id, academicSessionId])
@@ -831,9 +882,13 @@ model Document {
   id              String @id @default(uuid()) @db.Uuid
   documentTypeKey String @map("document_type_key") @db.VarChar(50)
 
-  /// Exactly one owner column is set, enforced by a check constraint.
+  /// At most one owner column is set, enforced by a check constraint. All
+  /// four null is a COLLEGE document (none exist yet); the service keeps the
+  /// owner column in step with the document type's `ownerType`.
   studentId String? @map("student_id") @db.Uuid
   staffId   String? @map("staff_id") @db.Uuid
+  noticeId  String? @map("notice_id") @db.Uuid
+  eventId   String? @map("event_id") @db.Uuid
 
   storageProvider String  @default("google_drive") @map("storage_provider") @db.VarChar(30)
   storageFileId   String  @map("storage_file_id") @db.VarChar(256)
@@ -860,6 +915,10 @@ model Document {
   documentType DocumentType @relation(fields: [documentTypeKey], references: [key])
   student      Student?     @relation(fields: [studentId], references: [id], onDelete: Cascade)
   staff        Staff?       @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  notice       Notice?      @relation(fields: [noticeId], references: [id], onDelete: Cascade)
+  event        Event?       @relation("EventAttachments", fields: [eventId], references: [id], onDelete: Cascade)
+  /// The event this document is the cover picture of, if any.
+  coverOf      Event[]      @relation("EventCover")
   uploadedBy   User         @relation("DocumentUploader", fields: [uploadedByUserId], references: [id])
   replacedBy   Document?    @relation("DocumentReplacement", fields: [replacedByDocumentId], references: [id], onDelete: SetNull)
   replaces     Document[]   @relation("DocumentReplacement")
@@ -874,6 +933,8 @@ model Document {
   @@unique([storageProvider, storageFileId])
   @@index([studentId, documentTypeKey, status])
   @@index([staffId, documentTypeKey, status])
+  @@index([noticeId])
+  @@index([eventId])
   @@index([status])
   @@map("documents")
 }
@@ -1349,4 +1410,109 @@ model TimetableSlot {
   /// Backs the room lookup across every section in the session.
   @@index([academicSessionId, dayOfWeek, period])
   @@map("timetable_slots")
+}
+
+// ---------------------------------------------------------------------------
+// Communication
+// ---------------------------------------------------------------------------
+
+/// An announcement from the college to some or all of its people.
+///
+/// Who sees it is a set of `NoticeTarget` rows, not a column: one notice can
+/// go to "all 1st Year" and "the Girls Pre-Medical group" at once. When it is
+/// seen is a window -- `publishAt` to `expiresAt` -- so the office can write
+/// Monday's notice on Friday and let it appear by itself.
+model Notice {
+  id String @id @default(uuid(7)) @db.Uuid
+
+  title    String         @db.VarChar(200)
+  /// Plain text. Line breaks are kept; nothing is rendered as markup.
+  body     String
+  category NoticeCategory @default(GENERAL)
+  status   PublishStatus  @default(DRAFT)
+
+  /// Visible from this moment, if PUBLISHED. Defaults to "now".
+  publishAt DateTime  @default(now()) @map("publish_at") @db.Timestamptz(3)
+  /// Hidden from this moment. Null means it stays until archived.
+  expiresAt DateTime? @map("expires_at") @db.Timestamptz(3)
+  /// Kept at the top of every feed it appears in.
+  isPinned  Boolean   @default(false) @map("is_pinned")
+
+  createdByUserId String?  @map("created_by_user_id") @db.Uuid
+  updatedByUserId String?  @map("updated_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  targets     NoticeTarget[]
+  attachments Document[]
+
+  @@index([status, publishAt(sort: Desc)])
+  @@index([expiresAt])
+  @@map("notices")
+}
+
+/// One audience of a notice.
+///
+/// `audience` says which kind of target this is, and exactly one of the id
+/// columns is set to say which one -- or none, for the whole-population
+/// audiences. The migration enforces that with a CHECK, and a unique index
+/// over every column (NULLS NOT DISTINCT) stops the same target being added
+/// twice.
+model NoticeTarget {
+  id       String   @id @default(uuid(7)) @db.Uuid
+  noticeId String   @map("notice_id") @db.Uuid
+  audience Audience
+
+  classId         String? @map("class_id") @db.Uuid
+  divisionId      String? @map("division_id") @db.Uuid
+  programId       String? @map("program_id") @db.Uuid
+  academicGroupId String? @map("academic_group_id") @db.Uuid
+  sectionId       String? @map("section_id") @db.Uuid
+
+  notice        Notice         @relation(fields: [noticeId], references: [id], onDelete: Cascade)
+  class         Class?         @relation(fields: [classId], references: [id], onDelete: Restrict)
+  division      Division?      @relation(fields: [divisionId], references: [id], onDelete: Restrict)
+  program       Program?       @relation(fields: [programId], references: [id], onDelete: Restrict)
+  academicGroup AcademicGroup? @relation(fields: [academicGroupId], references: [id], onDelete: Restrict)
+  section       Section?       @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+
+  /// NOTE: the migration creates the uniqueness over all seven columns with
+  /// NULLS NOT DISTINCT, which Prisma cannot express, and a CHECK that the id
+  /// columns match the audience. These indexes serve the visibility query.
+  @@index([noticeId])
+  @@index([sectionId])
+  @@index([academicGroupId])
+  @@index([classId])
+  @@index([divisionId])
+  @@index([programId])
+  @@map("notice_targets")
+}
+
+/// Something happening on a date: a sports day, a parents' meeting, a holiday
+/// gathering. Simpler than a notice -- its audience is a whole population, not
+/// a part of the structure -- and it has a picture.
+model Event {
+  id String @id @default(uuid(7)) @db.Uuid
+
+  title       String      @db.VarChar(200)
+  description String?
+  startsAt    DateTime    @map("starts_at") @db.Timestamptz(3)
+  endsAt      DateTime?   @map("ends_at") @db.Timestamptz(3)
+  location    String?     @db.VarChar(200)
+  /// Only ALL, STUDENTS or STAFF -- a CHECK in the migration keeps it so.
+  audience    Audience    @default(ALL)
+  status      EventStatus @default(DRAFT)
+
+  coverDocumentId String? @map("cover_document_id") @db.Uuid
+
+  createdByUserId String?  @map("created_by_user_id") @db.Uuid
+  updatedByUserId String?  @map("updated_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  cover       Document?  @relation("EventCover", fields: [coverDocumentId], references: [id], onDelete: SetNull)
+  attachments Document[] @relation("EventAttachments")
+
+  @@index([status, startsAt])
+  @@map("events")
 }

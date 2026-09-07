@@ -2484,3 +2484,66 @@ The room index is functional so `Lab 1`, `lab 1` and ` Lab 1 ` are one room — 
 **Decision.** Lessons are keyed by cell — `day-period` in the week, `period` in today's list. A teacher holds one lesson per cell (ADR-143), so the key is unique without being an identifier. Ids stay in the API response, where they are needed, and out of rendered pages, where they are not.
 
 **Consequences.** The page-body check for internal ids is part of the standing production verification for every portal page from here on.
+
+---
+
+## ADR-147 · A notice's audience is rows, not a column
+
+**Status:** Accepted · 2026-09-07
+
+**Context.** "Who is this notice for" is rarely one answer. The office sends the same circular to all 1st Year and to the Girls Pre-Medical group; a column holding one audience would force two notices, or a free-text field nobody could query.
+
+**Decision.** `notice_targets`: one row per audience. `audience` says the kind — everyone, all students, all staff, or one class, division, programme, group or section — and exactly one id column says which. A reader sees the notice when *any* row reaches them. Two rules keep the table honest, both hand-written in the migration because Prisma cannot express them:
+
+- a unique index over all seven columns **`NULLS NOT DISTINCT`**, so `ALL` cannot be added to one notice twice (five of the seven columns are NULL on every row, and PostgreSQL's default would treat each NULL as different);
+- a CHECK, `notice_targets_audience_matches_columns`, that a target names exactly what its audience needs and nothing else — a `CLASS` target with a section on it is a mistake, not a more specific class.
+
+The five structural references are `ON DELETE RESTRICT`: a nulled id would violate the CHECK, and the college deactivates structure rather than deleting it anyway.
+
+**Alternatives.** *One audience per notice* — the example above. *A JSON column of targets* — unqueryable for "which notices reach section A", which is the only question the feeds ask.
+
+**Consequences.** A notice with no targets reaches nobody but the office; "for everyone" is said by adding `ALL`, never assumed. The same rules live in `notice-policy.ts` (`checkTarget`, `findDuplicateTargets`) so the office gets a sentence; the database is the backstop.
+
+---
+
+## ADR-148 · Who sees a notice is a pure function, and a teacher sees their classes' notices
+
+**Status:** Accepted · 2026-09-07
+
+**Context.** Visibility combines four things — status, a publish window, a set of targets, and where the reader stands in the structure. Spread across queries it would be re-implemented, slightly differently, by every feed.
+
+**Decision.** `src/server/notices/notice-policy.ts` decides, with no database access. The service resolves a **student's placement** (current enrollment → section, group, class, division, programme) or a **teacher's scope** (active assignments and in-charge roles → the sections they teach and everything those roll up to), and `decideNoticeVisible(notice, viewer, now)` answers. Rules the tests pin from both sides:
+
+- the window opens *at* `publishAt` and closes *at* `expiresAt`;
+- drafts and archived notices show to nobody but the office, and the reason reported is the state, never "not for you";
+- a student is reached through where they are enrolled, a teacher through where they teach — "notices for assigned classes only" is exactly this;
+- a student not enrolled this session, or a staff login with no assignments, is reached only by `ALL` and their population's audience;
+- an administrator is reached by everything, in every state, because a notice they could not see is one they could not fix.
+
+**Consequences.** 46 tests. The feed queries in Step 2 do the same thing in SQL for efficiency, and the policy is what they are checked against.
+
+---
+
+## ADR-149 · A document has at most one owner
+
+**Status:** Accepted · 2026-09-07 · amends ADR-071's "exactly one"
+
+**Context.** Phase 6 required every document to belong to exactly one person. Notices and events carry attachments now, and the `document_owner` enum has allowed for a `COLLEGE` document belonging to nobody in particular since Phase 6.
+
+**Decision.** `documents` gains nullable `notice_id` and `event_id`, and `documents_exactly_one_owner` becomes `documents_at_most_one_owner`: `num_nonnulls(student_id, staff_id, notice_id, event_id) <= 1`. Which owner column a document type may use is the service's job, checked against `document_types.owner_type` exactly as it is today. Attachments cascade with their notice or event; an event's cover picture is a `SET NULL` reference to one of its own attachments.
+
+This is the only statement in the Phase 11 migration that alters something already in the database. It removes a rule, not data: both documents that exist name exactly one owner and were verified to satisfy the new rule before the migration was written.
+
+**Consequences.** The schema tests assert the old constraint is gone, the new one refuses two owners, and a notice-owned, event-owned, student-owned and ownerless document are each accepted.
+
+---
+
+## ADR-150 · Events are for populations, and a cancelled event stays visible
+
+**Status:** Accepted · 2026-09-07
+
+**Context.** An event is a date, a place and a picture. Targeting it at one section would make it a notice with a date on it.
+
+**Decision.** `events.audience` is `ALL`, `STUDENTS` or `STAFF`, kept so by a CHECK; the structural audiences belong to notices. A cancelled event is still shown to its audience, marked cancelled — the point of cancelling is that people find out — and only a draft is the office's alone. `ends_at` may equal `starts_at` (a moment) but not precede it.
+
+**Consequences.** The Step 2 feeds show cancelled events with a badge rather than dropping them; the tests pin that a students' event is not seen by staff and vice versa.

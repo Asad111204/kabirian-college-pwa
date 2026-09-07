@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | **Phase 10 complete: the timetable.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). The whole examination cycle works end to end, students can print an official result card, and now the office builds the master timetable one section at a time, teachers see their own week and today's classes, and every clash is refused before it is written and again by the database. Next: Phase 11, notices and events. |
-| **Last updated** | 2026-09-07 (rev. 24 — Phase 10 complete) |
+| **Last updated** | 2026-09-07 (rev. 25 — Phase 11 begun: the notices and events foundation) |
 | **Companion docs** | [DECISIONS.md](DECISIONS.md) · [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) · [README.md](README.md) |
 
 ---
@@ -738,7 +738,7 @@ Everything else in §20 will proceed on the stated defaults.
 
 ## 22. Progress tracker
 
-**Current phase:** 10 — complete. Next: Phase 11, notices and events; the college's further requests (§23A) begin after Phase 17.
+**Current phase:** 11 — notices and events. Step 1 (schema, migration, pure policy) done; the migration is **not yet applied to Neon**. Steps 2–4: service and API, admin screens, portal feeds and widgets. The college's further requests (§23A) begin after Phase 17.
 
 | Phase | Status | Notes |
 |---|---|---|
@@ -1735,6 +1735,16 @@ Five subjects used to spill onto a second page. An intermediate programme is six
 **Verified through the production build against a throwaway PostgreSQL — 55 checks, all passing.** Teacher A sees both their classes (1st Year A Biology period 2; 2nd Year B Biology period 4) and nothing of Teacher B's; B sees one; `?staffId=`, `?sectionId=` and `?academicSessionId=` cannot widen either; today's classes are today's only, in period order; student, admin, unlinked staff and signed-out are refused as designed; no stack, Prisma name or internal id reaches a page; `/student/timetable` is 404. Zero errors in the server log.
 
 **Tests: 953 across 37 files.** The two lessons in the live database were created by the college's admin account through the builder on 1 and 4 September; no verification data was written to Neon.
+
+### 22.35 Phase 11, step 1: the notices and events foundation (2026-09-07)
+
+**Schema.** Four enums (`notice_category`, `publish_status`, `audience`, `event_status`) and three tables. `notices` carry a title, plain-text body, category, status and a publish window (`publish_at`, optional `expires_at`) plus a pin. `notice_targets` hold one audience each — everyone, all students, all staff, or one class / division / programme / group / section — with a **NULLS NOT DISTINCT** unique index so no target repeats and a CHECK that the id columns match the audience (ADR-147). `events` carry a date range, a location, a population audience and a status, and may point at a cover picture. `documents` gains `notice_id` and `event_id`; its owner rule becomes *at most one* (ADR-149).
+
+**Migration.** `20260906000000_notices_and_events` — 4 enums, 3 tables, 11 indexes, 1 unique index, 9 foreign keys, 5 CHECKs, and one `DROP CONSTRAINT` / `ADD CONSTRAINT` pair on `documents`. No table dropped, no row touched; the two existing documents were verified (read-only) to satisfy the widened rule. **Not yet applied to Neon** — that is a deliberate step with its own confirmation, as in Phase 10.
+
+**Policy.** `src/server/notices/notice-policy.ts`: target validation and duplicate detection, who a target reaches (student by placement, teacher by teaching scope, admin always), the publish window with exact boundaries, the whole visibility decision, and event visibility (ADR-148, ADR-150).
+
+**Tests: 72 new — 46 policy, 26 schema against a throwaway PostgreSQL replaying the full migration history. 1,025 in total across 39 files.** Lint and typecheck clean.
 
 ### 22.7 What Phase 4 delivered
 

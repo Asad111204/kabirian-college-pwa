@@ -612,7 +612,7 @@ Index `(status, publish_at DESC)`, `(expires_at)`.
 | academic_group_id | uuid | for `GROUP` (e.g. all 1st Year Girls Pre-Medical) |
 | section_id | uuid | for `SECTION` |
 
-**[SQL]** unique `(notice_id, audience, class_id, division_id, program_id, academic_group_id, section_id) NULLS NOT DISTINCT`; check that exactly the columns required by `audience` are set. A student sees a notice when any target matches `ALL`, `STUDENTS`, or their current enrollment's section / group / group's class / division / program.
+**[SQL]** unique `notice_targets_one_per_notice_key` over `(notice_id, audience, class_id, division_id, program_id, academic_group_id, section_id) NULLS NOT DISTINCT`; CHECK `notice_targets_audience_matches_columns` that exactly the columns required by `audience` are set. The five structural FKs are `ON DELETE RESTRICT` (a nulled id would break the CHECK). Indexes on `notice_id` and on each id column serve the visibility query. *(Built in Phase 11 — ADR-147.)* A student sees a notice when any target matches `ALL`, `STUDENTS`, or their current enrollment's section / group / group's class / division / program.
 
 ### `events`
 | Column | Type | Notes |
@@ -624,11 +624,11 @@ Index `(status, publish_at DESC)`, `(expires_at)`.
 | ends_at | timestamptz | |
 | location | varchar(200) | |
 | audience | enum `audience` ✱ | `ALL`, `STUDENTS`, `STAFF` |
-| status | enum `event_status` ✱ | `DRAFT`, `PUBLISHED`, `CANCELLED` |
+| status | enum `event_status` ✱ | `DRAFT`, `PUBLISHED`, `CANCELLED` — a cancelled event stays visible, marked (ADR-150) |
 | cover_document_id | uuid | FK → documents (image) |
 | created_by_user_id | uuid ✱ | FK → users |
 
-Index `(status, starts_at)`.
+Index `(status, starts_at)`. CHECKs: `events_audience_is_population` (`ALL`/`STUDENTS`/`STAFF` only) and `events_end_after_start`. Notices likewise carry `notices_expiry_after_publish`.
 
 ---
 
@@ -670,7 +670,7 @@ Index `(status, starts_at)`.
 | created_at / updated_at | timestamptz ✱ | |
 | deleted_at | timestamptz | |
 
-**[SQL]** check: at most one of `student_id / staff_id / notice_id / event_id` is non-null (all null only for `COLLEGE` documents). `unique(storage_provider, storage_file_id)`. Indexes `(student_id, document_type_key, status)`, `(staff_id, document_type_key, status)`, `(notice_id)`, `(event_id)`, `(status)`.
+**[SQL]** CHECK `documents_at_most_one_owner`: at most one of `student_id / staff_id / notice_id / event_id` is non-null (all null only for `COLLEGE` documents); the service keeps the owner column in step with `document_types.owner_type`. Phase 6 shipped the stricter `documents_exactly_one_owner`; Phase 11 replaced it (ADR-149). `unique(storage_provider, storage_file_id)`. Indexes `(student_id, document_type_key, status)`, `(staff_id, document_type_key, status)`, `(notice_id)`, `(event_id)`, `(status)`.
 
 Checklist query (students missing a required type):
 ```sql
