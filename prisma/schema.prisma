@@ -1476,9 +1476,12 @@ model NoticeTarget {
   academicGroup AcademicGroup? @relation(fields: [academicGroupId], references: [id], onDelete: Restrict)
   section       Section?       @relation(fields: [sectionId], references: [id], onDelete: Restrict)
 
-  /// NOTE: the migration creates the uniqueness over all seven columns with
-  /// NULLS NOT DISTINCT, which Prisma cannot express, and a CHECK that the id
-  /// columns match the audience. These indexes serve the visibility query.
+  /// NOTE: the migration creates this index with `NULLS NOT DISTINCT`, which
+  /// Prisma cannot express -- declared here under the migration's name so
+  /// `migrate diff` sees no drift, exactly as attendance_sheets does. A CHECK
+  /// that the id columns match the audience is hand-written there too.
+  @@unique([noticeId, audience, classId, divisionId, programId, academicGroupId, sectionId], map: "notice_targets_one_per_notice_key")
+  /// These indexes serve the visibility query.
   @@index([noticeId])
   @@index([sectionId])
   @@index([academicGroupId])
