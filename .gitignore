@@ -61,3 +61,6 @@ Thumbs.db
 /test-results
 /playwright-report
 /coverage
+
+# local database backups (npm run backup:export) — sensitive, never committed
+/backups

@@ -2723,3 +2723,47 @@ The browser tests are Playwright on two projects, a Pixel 5 and a 1280-pixel des
 The load check's budgets are loose on purpose (PGlite is slower than Neon, and a CI runner slower still); what it exists to catch is a query that grows with the college — an unpaginated list, an N+1, a report that reads what it does not show. It reports its timings so a regression is a number, not a feeling.
 
 **Consequences.** One command now proves the whole system from a clean database, on any machine, and CI does it on every push. The vitest suite gained tests for the last untested pure modules (display formatting, the shared validators, the sign-in and password-change schemas, Argon2id hashing), and `npm run test:coverage` reports where the gaps still are. What stays manual: installing on a real Android and iOS device, and the Google Drive connection — both need something a CI runner does not have.
+
+---
+
+## ADR-163 · Hosting: Vercel first with a 4 MB upload cap; the Docker image is the second door
+
+**Status:** Accepted · 2026-09-08 · settles ADR-024's provisional choice
+
+**Context.** ADR-024 left hosting open: a Node container on Railway, Render or a VPS, with Vercel viable only if uploads were capped at 4 MB. Since then the free tiers of the container hosts have shrunk or gone, the college is already deploying to Vercel from GitHub, and the project's rule is free-first. The one hard limit on Vercel is the 4.5 MB request body; everything else in this system — the Node-runtime proxy that sets the CSP, the service worker built at build time, Prisma over a pooled Neon connection — runs there as it does anywhere.
+
+**Decision.** Vercel is the recommended host, with `UPLOAD_MAX_SIZE_MB=4` and PDF document types capped at 4 MB in Settings; `DATABASE_POOL_MAX=3` because many small instances share Neon's connection limit; migrations, backups and restores run from the administrator's computer with the direct connection string, never from the host. The in-memory rate limiter's per-account limits reset when Vercel starts a new instance — the account lockout in the database, which is the real defence, does not.
+
+The `Dockerfile` builds the Next.js standalone server as a non-root user with a health check, for the day 4 MB is not enough or the college wants its own machine; CI builds the image and starts it on every push, so the second door is never found rusted shut. `output: 'standalone'` is switched on by `NEXT_OUTPUT=standalone` only inside that build, because `next start` — which the harness and Vercel use — does not run a standalone build.
+
+A least-privilege role (`scripts/db-least-privilege.sql`) separates what the server may do (read and write rows) from what the owner role may do (change the schema); it is applied by hand in Neon and needs the user's confirmation, as every change to Neon does.
+
+**Consequences.** `docs/DEPLOYMENT.md` is the step-by-step for both doors, the variables, the domain, monitoring and the go-live checklist. Moving from one door to the other is a change of host variables and a redeploy; nothing in the code knows which it is on.
+
+---
+
+## ADR-164 · Backups the college holds itself, and a restore drill the machine performs
+
+**Status:** Accepted · 2026-09-08
+
+**Context.** Neon keeps point-in-time history — hours on the free tier — which answers "undo this afternoon" but not "the account is gone" or "we want a copy on our own disk". `pg_dump` is not on the office's computer and cannot be assumed. The roadmap asked for a periodic export and a restore drill before go-live; a restore procedure nobody has run is not a procedure.
+
+**Decision.** `npm run backup:export` reads every table in one repeatable-read transaction and writes one JSON file per table plus a manifest; `npm run backup:restore -- --from <dir>` is a dry run that says what it would do, and with `--yes` empties every table and puts the rows back in one transaction, triggers paused so order does not matter, refusing outright when the database's migrations differ from the backup's. Both use `pg` and the same Node the app runs on. The export contains everything, password hashes included, because a restore must; the documentation says where to keep it and never to commit it.
+
+The harness performs the drill on every CI run (`--backup-drill`): export, delete every notice and rename a student, restore, compare every table's count, sign in, read the restored notices. Before go-live the same drill is done by a person on a Neon branch of the real database — the one step no machine can take for the college.
+
+**Consequences.** The college owns a copy of its data on a schedule it controls, and the restore path is exercised more often than it will ever be needed. Google Drive files are not in the export; Drive's own trash and versions cover them.
+
+---
+
+## ADR-165 · Real data comes in through the application, not around it
+
+**Status:** Accepted · 2026-09-08
+
+**Context.** A new intake is hundreds of students in a spreadsheet. Typing them into the admission form one by one is how mistakes are made; writing rows straight into the database is how rules are skipped — student codes, admission-number uniqueness, the audit trail, the enrolment's consistency checks all live in the services.
+
+**Decision.** `npm run import:students` reads a CSV (`src/lib/csv-read.ts`, the tested counterpart of the report writer), validates every row with the very schema the admission form uses, matches class, division, programme and section by name against the current session's structure, and — only with `--apply` — sends each row to `POST /api/v1/students` as the signed-in administrator. Without `--apply` it reports every problem and creates nothing. Every student it creates is therefore made exactly as the form would make it, appears in the audit log under the person who ran it, and gets its code from the system. Portal logins are created afterwards from the student's page, one by one, so temporary passwords are handed over in person.
+
+The harness runs the drill (`--import-drill`): a four-row CSV with a quoted name, a "Section B" spelling, a section that does not exist and a CNIC that is not one — the dry run must create nothing and name both problems; `--apply` must create exactly two, refuse the same two, and leave two `student.created` entries under the administrator.
+
+**Consequences.** There is one path for a student to enter the system. The spreadsheet's column names are forgiving ("Full Name", "full_name"); the values are not — a wrong CNIC is refused with the same sentence the form would use.

@@ -25,6 +25,10 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   reactStrictMode: true,
 
+  // The Dockerfile builds a self-contained server (ADR-163). Everywhere else
+  // — Vercel, `next start`, the harness — the normal output is what runs.
+  ...(process.env.NEXT_OUTPUT === 'standalone' ? { output: 'standalone' as const } : {}),
+
   // Nothing about the server's software belongs in a response header.
   poweredByHeader: false,
 

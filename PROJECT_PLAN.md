@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | **Phase 16 complete: testing and QA.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Every module through reports, the audit viewer, security hardening and the PWA are live on Neon. The production harness now lives in the repository (`npm run e2e`), with Playwright browser tests on a phone and a desktop (`npm run e2e:browser`), a 5,000-student load check with timings (`npm run e2e:load`), and a CI workflow that runs all of it on every push against an in-memory database. Next: Phase 17, deployment. |
-| **Last updated** | 2026-09-08 (rev. 34 — Phase 16 complete) |
+| **Status** | **Phase 17 complete: deployment.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Every module is live on Neon. The system now has a deployment guide for Vercel (recommended, free, 4 MB uploads) and for Docker (standalone image, built and started by CI), a least-privilege database role script, backups the college holds itself with a restore that the harness drills on every push, a CSV import that goes through the application, an administrator's handover guide, monitoring instructions and a go-live checklist. What remains is in the college's hands: the host variables, the domain, the Google production redirect, the Neon role, one restore drill on a Neon branch, the real intake, and installing on two phones. Next: the college's own requests, Phases 18–26 (§23A). |
+| **Last updated** | 2026-09-08 (rev. 35 — Phase 17 complete) |
 | **Companion docs** | [DECISIONS.md](DECISIONS.md) · [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) · [README.md](README.md) |
 
 ---
@@ -77,7 +77,7 @@ Non-negotiables: security first (CNIC / B-Form / marks are sensitive), server-si
 | Logging | **pino** | Structured server logs; secrets/PII redaction. |
 | Testing | **Vitest** (unit + integration) · **Playwright** (E2E, responsive, PWA) | Fast, TypeScript-native; Playwright drives real browsers on phone and desktop viewports. |
 | Tooling | ESLint, Prettier, **npm** (already installed), Husky pre-commit (lint + typecheck) | Consistency without extra installs. |
-| Hosting (provisional) | Next.js **standalone build in Docker** on Railway / Render / a VPS; Neon Postgres | Document uploads need request bodies > 4.5 MB, which rules out Vercel's serverless functions unless we cap uploads at 4 MB. Final choice in Phase 17. |
+| Hosting | **Vercel** (free, uploads capped at 4 MB) with a **Docker standalone image** as the second door; Neon Postgres | Decided in Phase 17 (ADR-163): the college already deploys to Vercel from GitHub; the image is built and started by CI so the alternative stays real. |
 
 Exact versions will be checked and **pinned** at Phase 1 setup time (the ecosystem moves fast — Next 16, Prisma 7, Tailwind 4, Zod 4).
 
@@ -624,8 +624,8 @@ Tests are written *with* each phase, not only in Phase 16.
 - [x] Security headers (CSP, HSTS, frame, referrer, permissions) — CSP with a nonce per request (ADR-157)
 - [x] Audit log for all sensitive actions; audit visible to Admin only — viewer with redacted detail (ADR-158)
 - [x] Dependency audit (`npm audit`) in CI; pinned versions — `scripts/audit-check.mjs` with a reviewed allowlist, GitHub Actions (ADR-160)
-- [ ] TLS to DB; DB encrypted at rest (Neon); least-privilege DB user
-- [ ] Backups: DB automated (PITR) + periodic Drive export script; restore drill before go-live
+- [x] TLS to DB; DB encrypted at rest (Neon); least-privilege DB user — `scripts/db-least-privilege.sql`, applied by the college in Neon (ADR-163)
+- [x] Backups: DB automated (PITR) + periodic export script; restore drill before go-live — `backup:export` / `backup:restore`, drilled by the harness on every push; one drill on a Neon branch is on the go-live checklist (ADR-164)
 - [x] Logging redaction of PII — by key and by shape (national IDs)
 
 ---
@@ -691,7 +691,7 @@ Each phase ends with: verification, tests, `PROJECT_PLAN.md` progress update, `D
 |---|---|---|
 | Google account access lost (password/2FA issue, token revoked) → uploads/downloads stop | High | Prefer Workspace + Shared Drive if available; otherwise a dedicated college Google account with 2FA + recovery options; health check + admin alert; "Reconnect Drive" flow; nightly DB backup + periodic Drive export script |
 | Google API limits/latency; Drive is not a CDN | Medium | Thumbnails in DB; private browser caching; retries with backoff; uploads are async-friendly |
-| Hosting body-size limits (Vercel 4.5 MB) | Medium | Deploy as a Node container (Railway/Render/VPS) or cap uploads at 4 MB — decided in Phase 17 |
+| Hosting body-size limits (Vercel 4.5 MB) | Low | Uploads capped at 4 MB on Vercel (`UPLOAD_MAX_SIZE_MB`, PDF types); the Docker image lifts the cap if it ever matters (ADR-163) |
 | Custom auth maintained by a beginner | High if wrong | Small, documented, tested code following the well-known Lucia patterns; security review in Phase 14; `better-auth` is the fallback library |
 | Sensitive PII (CNICs) leakage | High | Role DTOs, IDOR tests, audit, redaction, TLS, encrypted-at-rest DB; application-level field encryption considered post-v1 |
 | Timezone bugs (attendance dated wrong day) | Medium | `DATE` columns; all "today" logic in `Asia/Karachi`; tests around midnight |
@@ -738,7 +738,7 @@ Everything else in §20 will proceed on the stated defaults.
 
 ## 22. Progress tracker
 
-**Current phase:** 16 — complete. Next: Phase 17, deployment. The college's further requests (§23A) begin after Phase 17.
+**Current phase:** 17 — complete (the roadmap's last phase). Next: the college's further requests, Phases 18–26 (§23A), starting with Phase 18.
 
 | Phase | Status | Notes |
 |---|---|---|
@@ -759,7 +759,7 @@ Everything else in §20 will proceed on the stated defaults.
 | 14 Audit UI & security | ✅ Done (2026-09-08) | Audit viewer with redacted detail and CSV; CSP with a nonce per request; signed-in devices; account rate limits; log redaction by shape; CI + audit gate. See §22.42 |
 | 15 PWA & offline | ✅ Done (2026-09-08) | Serwist worker (build files only), offline page, offline banner and guarded submits, update prompt, install entry with iOS steps, shortcuts via `/go/*`. See §22.43 |
 | 16 Testing & QA | ✅ Done (2026-09-08) | Harness in the repo, Playwright on phone + desktop, responsive matrix, 5k-student load check, coverage gaps closed, CI runs all of it. See §22.44 |
-| 17 | ⏳ Not started | Next: deployment |
+| 17 Deployment & go-live | ✅ Done (2026-09-08) | Vercel + Docker guides, least-privilege role, backups + restore drill, CSV import, handover guide, monitoring, go-live checklist. See §22.45 |
 
 **Live database:** the college's Neon PostgreSQL instance is connected and holds the real academic structure (2026-27, 20 groups, 20 sections). All **ten** migrations are applied to it, along with the reference data (12 designations, 10 departments, **8 document types**, and the confirmed **grading scale**).
 
@@ -1847,6 +1847,20 @@ One tidy-up: the target index is now declared in the Prisma model under the migr
 **Coverage gaps closed**: display formatting, the shared validators, the sign-in and password-change schemas, Argon2id hashing (22 new tests). `npm run test:coverage` is available. **1,193 tests in total across 58 files.** CI now runs lint, typecheck, tests, the audit gate, the build, the harness, the browser tests and the load check on every push.
 
 **Still manual**: installing on a real Android and iOS phone, and the Google Drive connection — see the Phase 15 and Phase 6 checklists.
+
+### 22.45 Phase 17, deployment and go-live (2026-09-08)
+
+**Two doors, both documented** (`docs/DEPLOYMENT.md`, ADR-163): Vercel (free; uploads capped at 4 MB; `DATABASE_POOL_MAX=3`; migrations from the administrator's computer) and Docker (a standalone image, non-root, with a health check — CI builds it and starts it on every push). The database: Neon, with `scripts/db-least-privilege.sql` giving the server a role that can read and write rows but never change the schema.
+
+**Backups** (ADR-164): `npm run backup:export` writes every table to JSON with a manifest; `npm run backup:restore` is a dry run until `--yes`, refuses a schema mismatch, and restores in one transaction. **The restore drill** runs in the harness on every push — export, damage, restore, counts, sign-in, restored data served (10 checks, all passing).
+
+**Real data** (ADR-165): `npm run import:students` takes the intake spreadsheet as CSV, validates with the admission form's own schema, matches the structure by name, and creates through the API as the signed-in administrator — dry run by default. **The import drill** in the harness: a quoted name, a "Section B" spelling, a missing section and a bad CNIC (8 checks, all passing).
+
+**For the administrator**: `docs/HANDOVER.md` — accounts and passwords, the academic year, importing students, the daily routine, documents, what to do when something goes wrong, what the system does not do yet. **Monitoring**: the health endpoint with a free uptime monitor, the redacted JSON logs, the audit log. **Go-live checklist** in `docs/DEPLOYMENT.md`.
+
+**Tests: 1,198 across 59 files** (5 new for the CSV reader and its round trip with the writer). Lint, typecheck and build clean. Docker is not installed on the development machine, so the image build is verified by CI, not here.
+
+**In the college's hands** (nothing here can be done from this side): the host variables and domain; the production Google redirect URI and reconnecting Drive; applying the least-privilege role in Neon; one restore drill on a Neon branch; the real intake through the import; installing on one Android phone and one iPhone.
 
 ### 22.7 What Phase 4 delivered
 

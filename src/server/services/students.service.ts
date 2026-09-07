@@ -1124,6 +1124,8 @@ export interface EnrollmentOptionGroup {
   academicGroupId: string
   classId: string
   className: string
+  /** The class's plain name when `className` is a display name. */
+  classShortName: string
   classLevel: number
   divisionId: string
   divisionName: string
@@ -1170,6 +1172,8 @@ export async function getEnrollmentOptions(
     academicGroupId: group.id,
     classId: group.classId,
     className: group.class.displayName ?? group.class.name,
+    // The plain name too ("1st Year"), so a spreadsheet can say either.
+    classShortName: group.class.name,
     classLevel: group.class.level,
     divisionId: group.divisionId,
     divisionName: group.division.name,

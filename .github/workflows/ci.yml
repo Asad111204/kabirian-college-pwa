@@ -49,8 +49,8 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run build
-      - name: API, page, browser and load checks against a throwaway database
-        run: node tests/harness/run.mjs --playwright --load
+      - name: API, page, browser, load, import and backup-restore checks against a throwaway database
+        run: node tests/harness/run.mjs --playwright --load --import-drill --backup-drill
         env:
           CI: 'true'
       - uses: actions/upload-artifact@v4
@@ -59,3 +59,28 @@ jobs:
           name: playwright-report
           path: playwright-report
           retention-days: 7
+
+  docker-image:
+    # Proves the Dockerfile builds a working standalone server (ADR-163). The
+    # image is not pushed anywhere; a host that wants it builds it itself.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t kabirian-college:ci .
+      - name: The image starts and answers the health check (database absent → 503 with a body, not a crash)
+        run: |
+          docker run -d --name kc -p 3000:3000 \
+            -e DATABASE_URL=postgresql://nobody:nobody@127.0.0.1:5432/none \
+            -e APP_URL=http://localhost:3000 -e APP_TIMEZONE=Asia/Karachi \
+            -e APP_ENCRYPTION_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= \
+            kabirian-college:ci
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /tmp/health.json -w '%{http_code}' http://localhost:3000/api/v1/health || true)
+            [ "$code" = "503" ] && break
+            sleep 2
+          done
+          cat /tmp/health.json; echo
+          test "$code" = "503" && grep -q '"database":"unreachable"' /tmp/health.json
+          docker logs kc | tail -20
+          docker rm -f kc

@@ -5,6 +5,8 @@
  *   node tests/harness/run.mjs                 API + page checks (Phases 10-15)
  *   node tests/harness/run.mjs --playwright    …and the browser tests in tests/e2e
  *   node tests/harness/run.mjs --load          …and 5,000 students with timings
+ *   node tests/harness/run.mjs --import-drill  …and the student CSV import, dry run then for real
+ *   node tests/harness/run.mjs --backup-drill  …and a backup, damage, restore, verify cycle
  *   node tests/harness/run.mjs --keep          leave the server up for a manual look
  *
  * What it does, in order: starts an in-memory PostgreSQL (PGlite) on a local
@@ -164,6 +166,18 @@ try {
     if (run('node', [join(HERE, 'seed-load.mjs')], { env: harnessEnv }) !== 0) throw new Error('load seed failed')
     console.log('\n--- verify-load.mjs')
     if (run('node', [join(HERE, 'verify-load.mjs')], { env: harnessEnv }) !== 0) failures += 1
+  }
+
+  // The import drill: a CSV through scripts/import-students.ts, dry run then for real.
+  if (args.has('--import-drill')) {
+    log('student import drill')
+    if (run('node', [join(HERE, 'verify-import.mjs')], { env: harnessEnv }) !== 0) failures += 1
+  }
+
+  // The restore drill: export, damage, restore, and prove the app still works.
+  if (args.has('--backup-drill')) {
+    log('backup and restore drill')
+    if (run('node', [join(HERE, 'verify-backup.mjs')], { env: harnessEnv }) !== 0) failures += 1
   }
 
   const errors = nextLog.join('').split('\n').filter((l) => /"level":"error"/.test(l))

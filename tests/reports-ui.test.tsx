@@ -40,6 +40,7 @@ const options = {
       academicGroupId: '33333333-3333-4333-8333-333333333331',
       classId: CLASS,
       className: '1st Year',
+      classShortName: '1st Year',
       classLevel: 1,
       divisionId: '22222222-2222-4222-8222-222222222222',
       divisionName: 'Boys',
