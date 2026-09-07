@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import Link from 'next/link'
 import { AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -34,7 +35,7 @@ export default function ErrorPage({ error, reset }: { error: Error & { digest?: 
       <div className="mt-6 flex gap-2">
         <Button onClick={reset}>Try again</Button>
         <Button variant="secondary" asChild>
-          <a href="/">Start page</a>
+          <Link href="/">Start page</Link>
         </Button>
       </div>
     </main>

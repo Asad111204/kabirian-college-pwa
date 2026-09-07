@@ -1,5 +1,6 @@
 import { clientIp, jsonOk, withAuth } from '@/server/api/handler'
 import { parseDocumentUpload } from '@/server/api/upload'
+import { ACCOUNT_LIMITS, assertRateLimit } from '@/server/auth/rate-limit'
 import { uploadDocument } from '@/server/services/documents.service'
 
 /**
@@ -11,6 +12,8 @@ import { uploadDocument } from '@/server/services/documents.service'
  * which lets exactly the people who see the notice see its files.
  */
 export const POST = withAuth(async ({ request, ctx, params }) => {
+  // Counted before the file is read: every upload costs an attempt, accepted or not.
+  assertRateLimit(`upload:user:${ctx.userId}`, ACCOUNT_LIMITS.upload)
   const upload = await parseDocumentUpload(request)
   const document = await uploadDocument(
     ctx,

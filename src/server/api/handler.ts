@@ -10,7 +10,7 @@
 import 'server-only'
 import { NextResponse, type NextRequest } from 'next/server'
 import { z } from 'zod'
-import { AppError, ValidationError, type FieldErrors } from './errors'
+import { AppError, TooManyRequestsError, ValidationError, type FieldErrors } from './errors'
 import { requireAuthContext, type AuthContext } from '../auth/context'
 import { env, isProduction } from '../config/env'
 import { logger } from '../logger'
@@ -72,7 +72,11 @@ export function errorResponse(error: unknown, requestInfo?: Record<string, unkno
 
     return NextResponse.json(
       { error: { code: error.code, message: error.message, ...(error.fields ? { fields: error.fields } : {}) } },
-      { status: error.status },
+      {
+        status: error.status,
+        // A rate-limited caller is told how long to wait, the standard way.
+        ...(error instanceof TooManyRequestsError ? { headers: { 'Retry-After': String(error.retryAfterSeconds) } } : {}),
+      },
     )
   }
 

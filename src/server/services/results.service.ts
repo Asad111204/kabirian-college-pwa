@@ -768,7 +768,7 @@ export async function generateResults(
       ctx,
       {
         action: existing.length > 0 ? 'result.corrected' : 'result.generated',
-        entityType: 'Exam',
+        entityType: 'exam',
         entityId: exam.id,
         entityLabel: exam.name,
         before:
@@ -980,7 +980,7 @@ export async function setResultsPublished(
       ctx,
       {
         action: 'result.published',
-        entityType: 'Exam',
+        entityType: 'exam',
         entityId: exam.id,
         entityLabel: exam.name,
         after: {

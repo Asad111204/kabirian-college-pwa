@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | **Phase 13 complete: reports and exports.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Every module through dashboards is live on Neon, and the office now has a report centre — students, staff, missing documents, exam mark sheets and results, filtered and grouped by class, division, programme, group or section, printed through the browser or downloaded as CSV that matches the screen by construction. Next: Phase 14, the audit viewer and security hardening. |
-| **Last updated** | 2026-09-08 (rev. 31 — Phase 13 complete) |
+| **Status** | **Phase 14 complete: audit viewer and security hardening.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Every module through reports is live on Neon. The office now has an audit viewer (who changed what, when — with a redacted change list per entry and a CSV), every page carries a per-request Content Security Policy, every account can see and end its own signed-in devices (and an administrator can end one device of any account), the expensive endpoints are rate-limited, the logger hides national IDs by shape, and a CI workflow runs lint, typecheck, tests and a dependency audit with named exceptions. Next: Phase 15, PWA and offline. |
+| **Last updated** | 2026-09-08 (rev. 32 — Phase 14 complete) |
 | **Companion docs** | [DECISIONS.md](DECISIONS.md) · [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) · [README.md](README.md) |
 
 ---
@@ -613,20 +613,20 @@ Tests are written *with* each phase, not only in Phase 16.
 
 ## 16. Security checklist (tracked through the project)
 
-- [ ] Argon2id, DB sessions, HttpOnly/Secure cookies, sliding expiry, revocation
-- [ ] Rate limiting + lockout on login; generic errors
-- [ ] `authorize()` + scope check in **every** service function; matrix tests
-- [ ] Role-based DTO projection (staff never receive CNICs)
-- [ ] IDOR tests for every `/{id}` endpoint
-- [ ] Zod on every input; magic-byte sniffing on every upload; size limits
-- [ ] Drive IDs & credentials server-only; no public sharing; proxy downloads
-- [ ] Encrypted refresh token; env-only secrets; `.env` git-ignored; secret scanning in pre-commit
-- [ ] Security headers (CSP, HSTS, frame, referrer, permissions)
-- [ ] Audit log for all sensitive actions; audit visible to Admin only
-- [ ] Dependency audit (`npm audit`) in CI; pinned versions
+- [x] Argon2id, DB sessions, HttpOnly/Secure cookies, sliding expiry, revocation — per device since Phase 14 (ADR-159)
+- [x] Rate limiting + lockout on login; generic errors — and per-account limits on password change, uploads and exports (ADR-160)
+- [x] `authorize()` + scope check in **every** service function; matrix tests — policy modules with both-sides tests, and the production harness per phase
+- [x] Role-based DTO projection (staff never receive CNICs)
+- [x] IDOR tests for every `/{id}` endpoint — cross-access checks in the production harness, extended each phase (Phase 14: audit and session routes)
+- [x] Zod on every input; magic-byte sniffing on every upload; size limits
+- [x] Drive IDs & credentials server-only; no public sharing; proxy downloads
+- [x] Encrypted refresh token; env-only secrets; `.env` git-ignored — pre-commit secret scanning is still to add (Phase 17)
+- [x] Security headers (CSP, HSTS, frame, referrer, permissions) — CSP with a nonce per request (ADR-157)
+- [x] Audit log for all sensitive actions; audit visible to Admin only — viewer with redacted detail (ADR-158)
+- [x] Dependency audit (`npm audit`) in CI; pinned versions — `scripts/audit-check.mjs` with a reviewed allowlist, GitHub Actions (ADR-160)
 - [ ] TLS to DB; DB encrypted at rest (Neon); least-privilege DB user
 - [ ] Backups: DB automated (PITR) + periodic Drive export script; restore drill before go-live
-- [ ] Logging redaction of PII
+- [x] Logging redaction of PII — by key and by shape (national IDs)
 
 ---
 
@@ -738,7 +738,7 @@ Everything else in §20 will proceed on the stated defaults.
 
 ## 22. Progress tracker
 
-**Current phase:** 13 — complete. Next: Phase 14, audit UI and security hardening. The college's further requests (§23A) begin after Phase 17.
+**Current phase:** 14 — complete. Next: Phase 15, PWA and offline. The college's further requests (§23A) begin after Phase 17.
 
 | Phase | Status | Notes |
 |---|---|---|
@@ -756,7 +756,8 @@ Everything else in §20 will proceed on the stated defaults.
 | 11 Notices & events | ✅ Done (2026-09-08) | Targets as rows, publish windows, attachments through Drive, office screens, portal feeds and dashboard cards. Migration live on Neon. See §22.35–§22.38 |
 | 12 Dashboards & KPIs | ✅ Done (2026-09-08) | Operations figures for the office, today's registers and open mark sheets for teachers, attendance / results / next paper for students; quick actions for every module. See §22.40 |
 | 13 Reports & exports | ✅ Done (2026-09-08) | Report centre with structure filters and grouping; print via the browser; CSV from the same query. See §22.41 |
-| 14 – 17 | ⏳ Not started | Next: audit UI & security hardening |
+| 14 Audit UI & security | ✅ Done (2026-09-08) | Audit viewer with redacted detail and CSV; CSP with a nonce per request; signed-in devices; account rate limits; log redaction by shape; CI + audit gate. See §22.42 |
+| 15 – 17 | ⏳ Not started | Next: PWA & offline |
 
 **Live database:** the college's Neon PostgreSQL instance is connected and holds the real academic structure (2026-27, 20 groups, 20 sections). All **ten** migrations are applied to it, along with the reference data (12 designations, 10 departments, **8 document types**, and the confirmed **grading scale**).
 
@@ -1806,6 +1807,20 @@ One tidy-up: the target index is now declared in the Prisma model under the migr
 **Verified through the production build against a throwaway PostgreSQL — 158 checks, all passing**: JSON rows equal CSV rows for students, staff and missing documents; the CSV is `text/csv`, an attachment, never cached, with the byte-order mark on the wire; grouping labels the group in full; a missing exam is 404, a missing exam id 400, an unwritable format 400; students, teachers, an unlinked staff login and a visitor are refused the JSON and the CSV alike; the report centre page renders for the office and sends everyone else away.
 
 **Tests: 31 new — 13 for the CSV rules, 12 for the filters, 7 for the report centre (including that the CSV link is the loaded query plus `format=csv`, and that only the report area prints). 1,107 in total across 44 files.** Lint, typecheck and build clean.
+
+### 22.42 Phase 14, audit viewer and security hardening (2026-09-08)
+
+**Admin → Audit Log** (`/admin/audit`): who changed what and when, newest first, filtered by person, module, action, record type and date, with sign-ins hidden unless asked for. Each row is a sentence ("corrected marks for STU-0001 Ali Raza"), linked to the record where it has a page. **Details** opens the fields that changed, before and after — after the redaction rules of ADR-158 — and the facts recorded with it ("Sessions revoked: 3"). **Download CSV** is the same query as the screen. ADMIN and `audit.view`.
+
+**Security headers.** A Content Security Policy with a fresh nonce per page view (`src/proxy.ts`, ADR-157): scripts only with the nonce, no framing, no plugins, no foreign form targets; HSTS in production; `no-store` on every API response; no `X-Powered-By`. A 404 page and an error page that say nothing technical.
+
+**Signed-in devices.** Everyone: **user menu → Signed-in devices** (`/account/devices`) lists the browsers and phones where the account is signed in, with "sign out" per device and "sign out all other devices". Administrators: the same list on a user's page, with "sign out" per device (ADR-159). `Last active` now means what it says.
+
+**Rate limits** for signed-in accounts (ADR-160): five password changes, thirty uploads, thirty exports in a short window, each refused with a 429 and `Retry-After`. **Logging** redacts a national ID by its shape wherever it appears, on top of the by-key list. **Dependencies:** `npm run audit` with a reviewed allowlist, and a GitHub Actions workflow (`.github/workflows/ci.yml`) running lint, typecheck, tests and the audit on every push.
+
+**Verified through the production build against a throwaway PostgreSQL — the Phase 11–13 harness (158 checks) plus a new security harness (77 checks), all passing**: the CSP and nonce on the sign-in, a signed-in and the 404 page, every script stamped, a fresh nonce per request; the audit list without a snapshot, the detail with "Title" before and after and no identifier, sign-ins hidden and shown on request, every filter, the CSV equal to the screen, every non-admin refused everything; a teacher unable to end anyone else's session by either route, an administrator ending one device of a teacher and that device refused at once, "sign out others" leaving exactly one; the sixth password change, the thirty-first export and the thirty-first upload each a 429.
+
+**Tests: 51 new — 14 for the redaction rules, 5 for the filters, 10 for the viewer, 2 for the device names, 5 for log redaction, 5 for the limiter, 6 for the device list, 5 for the policy. 1,158 in total across 52 files.** Lint, typecheck and build clean.
 
 ### 22.7 What Phase 4 delivered
 

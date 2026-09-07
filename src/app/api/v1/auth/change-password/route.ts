@@ -1,9 +1,12 @@
 import { clientIp, jsonOk, parseJsonBody, withAuth } from '@/server/api/handler'
 import { changeOwnPassword } from '@/server/services/auth.service'
 import { createSession, setSessionCookie } from '@/server/auth/session'
+import { ACCOUNT_LIMITS, assertRateLimit } from '@/server/auth/rate-limit'
 import { changePasswordSchema } from '@/validation/auth'
 
 export const POST = withAuth(async ({ request, ctx }) => {
+  // Counted before the body is read: a wrong current password still costs an attempt.
+  assertRateLimit(`password-change:user:${ctx.userId}`, ACCOUNT_LIMITS.passwordChange)
   const input = await parseJsonBody(request, changePasswordSchema)
 
   const requestInfo = {

@@ -418,7 +418,7 @@ export async function createAttendanceSheet(
           ctx,
           {
             action: 'attendance.sheet_created',
-            entityType: 'AttendanceSheet',
+            entityType: 'attendance_sheet',
             entityId: sheet.id,
             entityLabel: `${target.sectionName} · ${input.date} · period ${input.period}`,
             after: {
@@ -603,7 +603,7 @@ export async function updateAttendanceEntry(
         ctx,
         {
           action: 'attendance.corrected',
-          entityType: 'AttendanceEntry',
+          entityType: 'attendance_entry',
           entityId: entry.id,
           entityLabel: `${entry.student.studentCode} · ${sheet.sectionName} · ${storageToCollegeDate(sheet.date)}`,
           before: { status: entry.status },
@@ -666,7 +666,7 @@ export async function markAttendance(
         ctx,
         {
           action: 'attendance.corrected',
-          entityType: 'AttendanceSheet',
+          entityType: 'attendance_sheet',
           entityId: sheet.id,
           entityLabel: `${sheet.sectionName} · ${storageToCollegeDate(sheet.date)} · period ${sheet.period}`,
           after: { correctedCount: changed.length },
@@ -743,7 +743,7 @@ export async function submitAttendanceSheet(
       ctx,
       {
         action: 'attendance.submitted',
-        entityType: 'AttendanceSheet',
+        entityType: 'attendance_sheet',
         entityId: sheet.id,
         entityLabel: `${sheet.sectionName} · ${storageToCollegeDate(sheet.date)} · period ${sheet.period}`,
         after: { studentCount: entries.length },
@@ -797,7 +797,7 @@ export async function cancelAttendanceSheet(
       ctx,
       {
         action: 'attendance.sheet_cancelled',
-        entityType: 'AttendanceSheet',
+        entityType: 'attendance_sheet',
         entityId: sheet.id,
         entityLabel: `${sheet.sectionName} · ${storageToCollegeDate(sheet.date)} · period ${sheet.period}`,
         before: { status: sheet.status },

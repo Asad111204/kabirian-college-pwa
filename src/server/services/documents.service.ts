@@ -571,7 +571,7 @@ export async function uploadDocument(
         ctx,
         {
           action: existing ? 'document.replaced' : 'document.uploaded',
-          entityType: 'Document',
+          entityType: 'document',
           entityId: row.id,
           entityLabel: `${documentType.label} — ${owner.code} ${owner.fullName}`,
           ...(existing ? { before: { originalFileName: existing.originalFileName } } : {}),
@@ -734,7 +734,7 @@ export async function deleteDocument(
       ctx,
       {
         action: 'document.deleted',
-        entityType: 'Document',
+        entityType: 'document',
         entityId: document.id,
         entityLabel: `${document.documentType.label} — ${ownerLabel}`,
         before: { originalFileName: document.originalFileName },

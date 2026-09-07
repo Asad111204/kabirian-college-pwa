@@ -1,0 +1,34 @@
+name: CI
+
+# Runs on every push and pull request: the same four checks a developer runs
+# before committing, plus the dependency audit. No database is needed — the
+# tests that touch PostgreSQL start their own in-memory one.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # Placeholders so env.ts validates; nothing here connects to Neon.
+      DATABASE_URL: postgresql://localhost:5432/kabirian_ci
+      APP_URL: http://localhost:3000
+      APP_TIMEZONE: Asia/Karachi
+      # 32 zero bytes, base64 — a placeholder that satisfies the format check only.
+      APP_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run db:generate
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - name: Dependency audit (production dependencies, high and above)
+        run: npm run audit

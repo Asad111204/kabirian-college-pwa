@@ -1,0 +1,19 @@
+{
+  "$comment": "Advisories reviewed and accepted, each with a reason and a date to look again. Checked by scripts/audit-check.mjs; anything not listed here at high or above fails the build.",
+  "advisories": [
+    {
+      "id": "GHSA-3f6p-5ww8-9rcr",
+      "package": "mysql2",
+      "reason": "Pulled in by the Prisma CLI (a dev tool) for its MySQL driver. This app talks to PostgreSQL only; mysql2 is never loaded at build time or at runtime. Fixed upstream in Prisma 8, which is not yet adopted.",
+      "reviewed": "2026-09-08",
+      "reviewAgainBy": "2026-12-01"
+    },
+    {
+      "id": "GHSA-ggr8-5vv4-36mx",
+      "package": "deepmerge-ts",
+      "reason": "Used by @prisma/config to merge the CLI's configuration file, on the developer's machine only. Never runs on the server. Fixed upstream in Prisma 8, which is not yet adopted.",
+      "reviewed": "2026-09-08",
+      "reviewAgainBy": "2026-12-01"
+    }
+  ]
+}

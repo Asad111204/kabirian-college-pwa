@@ -41,24 +41,54 @@ const REDACTED_KEYS = new Set([
   'cnic_bform_number',
   'fathercnic',
   'father_cnic',
+  'bform',
+  'bformnumber',
+  'b_form_number',
+  'drivefileid',
+  'drive_file_id',
+  'drivefolderid',
+  'drive_folder_id',
+  'encryptedrefreshtoken',
+  'encrypted_refresh_token',
+  'sessiontoken',
+  'session_token',
 ])
 
-function redact(value: unknown, depth = 0): unknown {
+/**
+ * A national ID by its shape, whatever it is called: 13 digits with or
+ * without the dashes. Catches a CNIC that arrives inside a message, an error
+ * string or a field with an unexpected name.
+ */
+const NATIONAL_ID_PATTERN = /\b\d{5}-\d{7}-\d\b|\b\d{13}\b/g
+
+/** Redacts sensitive values inside a string. */
+export function redactText(text: string): string {
+  return text.replace(NATIONAL_ID_PATTERN, '[redacted-id]')
+}
+
+/**
+ * Redacts a log context: by key, then by value. Exported for its tests; the
+ * logger is the only production caller.
+ */
+export function redactForLog(value: unknown, depth = 0): unknown {
   if (depth > 6) return '[deep]'
   if (value === null || value === undefined) return value
+  if (typeof value === 'string') return redactText(value)
   if (value instanceof Error) {
-    return { name: value.name, message: value.message, stack: value.stack }
+    return { name: value.name, message: redactText(value.message), stack: value.stack ? redactText(value.stack) : undefined }
   }
-  if (Array.isArray(value)) return value.map((v) => redact(v, depth + 1))
+  if (Array.isArray(value)) return value.map((v) => redactForLog(v, depth + 1))
   if (typeof value === 'object') {
     const out: Record<string, unknown> = {}
     for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
-      out[key] = REDACTED_KEYS.has(key.toLowerCase()) ? '[redacted]' : redact(val, depth + 1)
+      out[key] = REDACTED_KEYS.has(key.toLowerCase()) ? '[redacted]' : redactForLog(val, depth + 1)
     }
     return out
   }
   return value
 }
+
+const redact = redactForLog
 
 function write(level: Level, message: string, context?: Record<string, unknown>) {
   if (LEVEL_ORDER[level] < MIN_LEVEL) return
@@ -66,7 +96,7 @@ function write(level: Level, message: string, context?: Record<string, unknown>)
   const entry = {
     time: new Date().toISOString(),
     level,
-    message,
+    message: redactText(message),
     ...(context ? (redact(context) as Record<string, unknown>) : {}),
   }
 

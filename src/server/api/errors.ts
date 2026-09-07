@@ -55,6 +55,16 @@ export class ForbiddenError extends AppError {
   }
 }
 
+/** 429 — this account or address has done that too many times in a short window. */
+export class TooManyRequestsError extends AppError {
+  readonly retryAfterSeconds: number
+
+  constructor(message: string, retryAfterSeconds: number, logContext?: Record<string, unknown>) {
+    super(message, { status: 429, code: 'RATE_LIMITED', logContext })
+    this.retryAfterSeconds = retryAfterSeconds
+  }
+}
+
 /** 404 — the record does not exist (or is not visible to this user). */
 export class NotFoundError extends AppError {
   constructor(what = 'record') {

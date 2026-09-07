@@ -261,7 +261,7 @@ export async function completeConnection(args: {
     folders = await ensureRootFolders()
     await writeAuditLog(ctx, {
       action: 'storage.folders_created',
-      entityType: 'Setting',
+      entityType: 'setting',
       entityId: SETTING_CONNECTION,
       entityLabel: 'Kabirian College folders',
       after: { rootFolderId: folders.rootFolderId },
@@ -277,7 +277,7 @@ export async function completeConnection(args: {
   // It must never contain the token, the code, or the client secret.
   await writeAuditLog(ctx, {
     action: 'storage.connected',
-    entityType: 'Setting',
+    entityType: 'setting',
     entityId: SETTING_CONNECTION,
     entityLabel: account.email ?? 'Google Drive',
     after: { accountEmail: account.email, scope: grantedScope },
@@ -311,7 +311,7 @@ export async function disconnectDrive(
 
   await writeAuditLog(ctx, {
     action: 'storage.disconnected',
-    entityType: 'Setting',
+    entityType: 'setting',
     entityId: SETTING_CONNECTION,
     entityLabel: previous?.accountEmail ?? 'Google Drive',
     before: { accountEmail: previous?.accountEmail ?? null },

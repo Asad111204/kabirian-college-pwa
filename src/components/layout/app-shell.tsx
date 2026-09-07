@@ -4,7 +4,7 @@ import * as React from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
-import { ChevronDown, LogOut, Menu, X, KeyRound } from 'lucide-react'
+import { ChevronDown, LogOut, Menu, MonitorSmartphone, X, KeyRound } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { api } from '@/lib/api-client'
 import { Button } from '@/components/ui/button'
@@ -243,6 +243,16 @@ function UserMenu({ user }: { user: AppShellUser }) {
             >
               <KeyRound className="h-4 w-4" />
               Change password
+            </Link>
+          </DropdownMenu.Item>
+
+          <DropdownMenu.Item asChild>
+            <Link
+              href="/account/devices"
+              className="flex cursor-pointer items-center gap-2 rounded-[var(--radius-control)] px-2 py-2 text-sm text-foreground outline-none hover:bg-surface-muted"
+            >
+              <MonitorSmartphone className="h-4 w-4" />
+              Signed-in devices
             </Link>
           </DropdownMenu.Item>
 

@@ -616,7 +616,7 @@ export async function openMarkSheet(
       ctx,
       {
         action: 'mark_sheet.opened',
-        entityType: 'ExamMarkSheet',
+        entityType: 'exam_mark_sheet',
         entityId: sheet.id,
         entityLabel: `${target.paper.examName} · ${target.paper.subjectName} · ${target.paper.className} ${target.sectionName}`,
         after: { studentCount: roster.length },
@@ -969,7 +969,7 @@ export async function saveMarks(
                 : newlyFilled > 0
                   ? 'marks.entered'
                   : 'marks.updated',
-            entityType: 'ExamMarkSheet',
+            entityType: 'exam_mark_sheet',
             entityId: sheet.id,
             entityLabel: `${target.paper.examName} · ${target.paper.subjectName} · ${target.paper.className} ${target.sectionName}`,
             after: { changedCount: changes.length, changes },
@@ -1054,7 +1054,7 @@ export async function submitMarkSheet(
       ctx,
       {
         action: 'marks.submitted',
-        entityType: 'ExamMarkSheet',
+        entityType: 'exam_mark_sheet',
         entityId: sheet.id,
         entityLabel: `${target.paper.examName} · ${target.paper.subjectName} · ${target.paper.className} ${target.sectionName}`,
         after: {

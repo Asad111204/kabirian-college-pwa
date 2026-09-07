@@ -79,6 +79,20 @@ function requireAuditViewer(ctx: AuthContext): void {
   authorize(ctx, 'audit.view')
 }
 
+/**
+ * Entity types are written in snake_case (`attendance_sheet`). Rows written
+ * before Phase 14 by a few services used the model name (`AttendanceSheet`);
+ * they are read as the same type, and a filter matches both spellings.
+ */
+export function normaliseEntityType(value: string): string {
+  return value.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase()
+}
+
+function entityTypeVariants(key: string): string[] {
+  const pascal = key.replace(/(^|_)([a-z])/g, (_m, _sep, c: string) => c.toUpperCase())
+  return [...new Set([key, pascal])]
+}
+
 function toItem(row: ListRow): AuditListItem {
   return {
     id: row.id,
@@ -86,7 +100,7 @@ function toItem(row: ListRow): AuditListItem {
     module: moduleOfAction(row.action),
     description: describeAction(row.action),
     tone: toneFor(row.action),
-    entityType: row.entityType,
+    entityType: normaliseEntityType(row.entityType),
     entityId: row.entityId,
     entityLabel: row.entityLabel,
     actor: row.actor
@@ -118,7 +132,7 @@ function whereFor(query: AuditListQuery): Prisma.AuditLogWhereInput {
   const action = actionFilter(query)
   return {
     ...(action !== undefined ? { action } : {}),
-    ...(query.entityType ? { entityType: query.entityType } : {}),
+    ...(query.entityType ? { entityType: { in: entityTypeVariants(query.entityType) } } : {}),
     ...(query.entityId ? { entityId: query.entityId } : {}),
     ...(query.actor
       ? {
@@ -199,6 +213,6 @@ export async function getAuditFilterOptions(ctx: AuthContext): Promise<AuditFilt
   return {
     modules: modules.map((key) => ({ key, label: describeModule(key) })),
     actions: actions.map((a) => ({ key: a.action, label: describeAction(a.action), module: moduleOfAction(a.action) })),
-    entityTypes: entityTypes.map((e) => e.entityType),
+    entityTypes: [...new Set(entityTypes.map((e) => normaliseEntityType(e.entityType)))].sort(),
   }
 }

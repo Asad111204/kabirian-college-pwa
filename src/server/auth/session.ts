@@ -22,6 +22,8 @@ export const SESSION_COOKIE_NAME = 'kc_session'
 const SESSION_MAX_AGE_MS = env.SESSION_MAX_AGE_DAYS * 24 * 60 * 60 * 1000
 /** When less than this is left, sliding expiry extends the session. */
 const RENEW_THRESHOLD_MS = SESSION_MAX_AGE_MS / 2
+/** How stale `lastActiveAt` may be before a request refreshes it. */
+const ACTIVITY_TOUCH_MS = 15 * 60 * 1000
 
 function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex')
@@ -37,6 +39,10 @@ export async function createSession(
 ): Promise<{ token: string; expiresAt: Date }> {
   const token = generateSessionToken()
   const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_MS)
+
+  // A sign-in is a good moment to drop sessions that expired without ever
+  // being used again; nothing else in the app would otherwise remove them.
+  await prisma.session.deleteMany({ where: { expiresAt: { lte: new Date() } } }).catch(() => undefined)
 
   await prisma.session.create({
     data: {
@@ -99,7 +105,9 @@ export async function validateSessionToken(token: string): Promise<SessionUser |
     return null
   }
 
-  // Sliding expiry: extend a session that is being used.
+  // Sliding expiry: extend a session that is being used. Otherwise note that
+  // it was used, at most once every fifteen minutes, so the signed-in devices
+  // list can say "last active" without a write on every request.
   const remaining = session.expiresAt.getTime() - Date.now()
   if (remaining < RENEW_THRESHOLD_MS) {
     await prisma.session
@@ -108,6 +116,8 @@ export async function validateSessionToken(token: string): Promise<SessionUser |
         data: { expiresAt: new Date(Date.now() + SESSION_MAX_AGE_MS), lastActiveAt: new Date() },
       })
       .catch(() => undefined)
+  } else if (Date.now() - session.lastActiveAt.getTime() > ACTIVITY_TOUCH_MS) {
+    await prisma.session.update({ where: { id: session.id }, data: { lastActiveAt: new Date() } }).catch(() => undefined)
   }
 
   const { user } = session

@@ -434,7 +434,7 @@ export async function createNotice(ctx: AuthContext, input: NoticeInput): Promis
   const detail = toDetail(created, ctx.fullName)
   await writeAuditLog(ctx, {
     action: 'notice.created',
-    entityType: 'Notice',
+    entityType: 'notice',
     entityId: created.id,
     entityLabel: created.title,
     after: {
@@ -504,7 +504,7 @@ export async function updateNotice(ctx: AuthContext, id: string, input: NoticeIn
   if (Object.keys(changed).length > 0) {
     await writeAuditLog(ctx, {
       action: 'notice.updated',
-      entityType: 'Notice',
+      entityType: 'notice',
       entityId: id,
       entityLabel: after.title,
       before: Object.fromEntries(Object.entries(changed).map(([k, v]) => [k, v.from])),
@@ -540,7 +540,7 @@ export async function setNoticeStatus(
 
   await writeAuditLog(ctx, {
     action: 'notice.status_changed',
-    entityType: 'Notice',
+    entityType: 'notice',
     entityId: id,
     entityLabel: updated.title,
     before: { status: existing.status },
@@ -577,7 +577,7 @@ export async function deleteNotice(ctx: AuthContext, id: string): Promise<void> 
       ctx,
       {
         action: 'notice.deleted',
-        entityType: 'Notice',
+        entityType: 'notice',
         entityId: id,
         entityLabel: existing.title,
         before: { title: existing.title, status: existing.status, attachments: files.length },

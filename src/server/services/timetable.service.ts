@@ -647,7 +647,7 @@ export async function createTimetableSlot(
   const row = toSlotRow(created)
   await writeAuditLog(ctx, {
     action: 'timetable_slot.created',
-    entityType: 'TimetableSlot',
+    entityType: 'timetable_slot',
     entityId: created.id,
     entityLabel: `${row.subjectName} · ${section.name} · ${row.dayOfWeek} period ${row.period}`,
     after: row,
@@ -713,7 +713,7 @@ export async function updateTimetableSlot(
   if (Object.keys(changed).length > 0) {
     await writeAuditLog(ctx, {
       action: 'timetable_slot.updated',
-      entityType: 'TimetableSlot',
+      entityType: 'timetable_slot',
       entityId: slotId,
       entityLabel: `${after.subjectName} · ${section.name} · ${after.dayOfWeek} period ${after.period}`,
       before: Object.fromEntries(Object.entries(changed).map(([k, v]) => [k, v.from])),
@@ -748,7 +748,7 @@ export async function deactivateTimetableSlot(ctx: AuthContext, slotId: string):
 
   await writeAuditLog(ctx, {
     action: 'timetable_slot.deactivated',
-    entityType: 'TimetableSlot',
+    entityType: 'timetable_slot',
     entityId: slotId,
     entityLabel: `${existing.subject.name} · ${existing.dayOfWeek} period ${existing.period}`,
     before: toSlotRow(existing),

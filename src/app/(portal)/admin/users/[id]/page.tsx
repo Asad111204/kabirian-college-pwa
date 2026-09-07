@@ -4,6 +4,8 @@ import { notFound } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import { requirePortalAccess, can } from '@/server/auth/context'
 import { getUser, getUserPermissions } from '@/server/services/users.service'
+import { listUserSessions } from '@/server/services/sessions.service'
+import { SessionList } from '@/features/sessions/session-list'
 import { prisma } from '@/server/db/prisma'
 import { NotFoundError } from '@/server/api/errors'
 import { PageHeader } from '@/components/layout/app-shell'
@@ -35,10 +37,11 @@ export default async function UserDetailPage({
     throw error
   }
 
-  const [permissions, activeAdminCount, rawUser] = await Promise.all([
+  const [permissions, activeAdminCount, rawUser, sessions] = await Promise.all([
     getUserPermissions(ctx, id),
     prisma.user.count({ where: { role: 'ADMIN', status: 'ACTIVE' } }),
     prisma.user.findUnique({ where: { id }, select: { fullName: true } }),
+    listUserSessions(ctx, id),
   ])
 
   const isSelf = ctx.userId === user.id
@@ -143,6 +146,25 @@ export default async function UserDetailPage({
           canManagePermissions={can(ctx, 'permissions.manage')}
         />
       </div>
+
+      <Card className="mt-4">
+        <CardHeader>
+          <CardTitle>Signed-in devices</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <SessionList
+            sessions={sessions.map((s) => ({
+              ...s,
+              createdAt: s.createdAt.toISOString(),
+              lastActiveAt: s.lastActiveAt.toISOString(),
+              expiresAt: s.expiresAt.toISOString(),
+            }))}
+            self={isSelf}
+            canRevoke={can(ctx, 'users.manage')}
+            revokeBase={`/api/v1/users/${user.id}/sessions`}
+          />
+        </CardContent>
+      </Card>
 
       <div className="mt-4">
         <PermissionsEditor

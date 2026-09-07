@@ -2631,3 +2631,61 @@ The staff dashboard adds today's registers against the sections taught and the m
 The CSV is `src/server/reports/csv.ts`, forty lines with a test for each rule: quoting, doubled quotes, CRLF, the UTF-8 byte-order mark Excel needs for Urdu names, and a leading quote on any cell that starts with `=`, `+`, `-` or `@` so a name can never be run as a formula. "PDF" is the browser's print dialogue over the `print-area` stylesheet, exactly as the result card (ADR-138) — no library, no headless browser.
 
 **Consequences.** Through the production build the JSON row count and the CSV row count were equal for every report checked, the byte-order mark was present on the wire (and, as the harness had to learn, invisible to `fetch().text()`, which strips it by spec), and every non-admin was refused the JSON and the CSV alike. Grouping by class, division, programme, group or section is done once, in the service, so "Girls Pre-Medical 1st Year" is a filter and a heading, not a second report.
+
+---
+
+## ADR-157 · A Content Security Policy with a nonce per request, and inline styles allowed
+
+**Status:** Accepted · 2026-09-08
+
+**Context.** Every page in this system is a form over personal data. A Content Security Policy limits the damage of the bug we have not found yet: if an attacker ever gets markup into a page, the browser refuses to run any script that was not ours. Next.js supports the strict form of this — a random nonce per request, stamped on every script tag it emits — through `proxy.ts`, provided pages render per request. Every page here already does, because every page reads the session.
+
+**Decision.** `src/proxy.ts` generates a nonce for each page request and sets `script-src 'self' 'nonce-…' 'strict-dynamic'`, `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`, `frame-ancestors 'none'`, `default-src 'self'`; `upgrade-insecure-requests` in production; `'unsafe-eval'` only in development, where React needs it for its error overlay. The 404 page calls `connection()` so that it, too, renders per request and carries the nonce. The API is excluded from the policy — it returns JSON and files, not pages — and instead gets `Cache-Control: private, no-store` on every response from `next.config.ts`, alongside HSTS in production, `Cross-Origin-Opener-Policy: same-origin`, and no `X-Powered-By`.
+
+Styles are the accepted exception: `style-src 'self' 'unsafe-inline'`. The toast library injects a `<style>` tag and the menu library positions its popovers with `style` attributes; neither can be given the nonce without forking them. An inline style cannot run code or send data anywhere on its own, so the exposure is cosmetic. When those libraries support nonces, the exception goes.
+
+**Consequences.** Through the production build the sign-in page, a signed-in page and the 404 page each carried the policy; every `<script>` tag on each carried that request's nonce; two requests got two nonces; the API carried no policy and `no-store`. Nothing on any page needed changing: the project had never used an inline script.
+
+---
+
+## ADR-158 · The audit viewer shows the sentence, never the snapshot — and the snapshot only after redaction
+
+**Status:** Accepted · 2026-09-08
+
+**Context.** The audit table stores a `before` and `after` snapshot with many entries. The services choose what goes in them and, by design, never put a password, a hash or a token there. But "by design" is not a guarantee against a future service recording more than it should, and the viewer is the one screen that would show it.
+
+**Decision.** The list (`GET /api/v1/audit`, and the CSV) is built from the action, the actor, the record label and the time — the same columns the dashboard reads; the snapshot columns are not selected at all. The detail (`GET /api/v1/audit/:id`) does read the snapshots, but returns only what `src/server/audit/audit-redaction.ts` lets through: a key that names a secret, a national ID or a Drive file is shown as `[hidden]`; a key that is an internal reference (`id`, `sectionId`, `actor_user_id`) is dropped; a value shaped like a CNIC is hidden whatever its key; a value shaped like a UUID is dropped whatever its key; and only fields that differ between the two redacted snapshots are listed. Those rules are tested one by one. Viewing needs the ADMIN role and `audit.view`; viewing is not itself audited.
+
+The action vocabulary is shared with the dashboard: every one of the 122 audited actions now has a sentence ("corrected marks for", "signed out one device for") and a tone, so a raw key never reaches a screen. Entity types are written in `snake_case` from this phase on; the handful of earlier rows that carried a model name (`AttendanceSheet`) are read as the same type and matched by either spelling, so no data migration was needed.
+
+**Consequences.** Through the production build the list carried no snapshot and no metadata; a notice's edit showed "Title" before and after and no identifier of any kind; a sign-in entry showed no changes and did not pretend to; the CSV row count equalled the screen's; students, teachers, an unlinked login and a visitor were refused list, options, detail and CSV alike.
+
+---
+
+## ADR-159 · A session is a device, and either side of it can end one
+
+**Status:** Accepted · 2026-09-08
+
+**Context.** Since Phase 2 an administrator could sign a user out of every device at once. Nobody could see the devices, and a person who had left themselves signed in on a shared computer had one blunt option: change their password. The rows were there all along — one per sign-in, with the address and the browser — but nothing read them.
+
+**Decision.** `sessions.service.ts` lists an account's live sessions and ends one at a time: for the person themselves (`/api/v1/me/sessions`, reading `ctx.userId` and nothing from the address) and for an administrator with `users.manage` looking at an account (`/api/v1/users/:id/sessions/:sessionId`). A session that belongs to somebody else is "not found", not "forbidden" — the caller learns nothing. "Sign out all other devices" ends every session but the one making the request. Every revocation is audited with the device named as a fact, never the token. Ending one's own current session also clears the cookie, so the browser lands on the sign-in page cleanly.
+
+Two small things made the list worth reading. `lastActiveAt` had only been updated when sliding expiry renewed a session, weeks apart; it is now refreshed on use, at most once every fifteen minutes, so "last active" means what it says without a write per request. Expired rows, which nothing had ever removed, are swept on each sign-in. The browser is described from the User-Agent by a dozen substring checks ("Safari on iPhone") rather than a parsing library — the answer only has to be recognisable.
+
+**Consequences.** Through the production build a phone showed as a phone; a teacher could not end an administrator's session through either route (404 through their own, 403 through the admin's); an administrator ended one device of a teacher and that device was refused on its next request; "sign out others" left exactly the requesting session; every case reached the audit trail.
+
+---
+
+## ADR-160 · Rate limits for signed-in accounts, and a dependency audit that names its exceptions
+
+**Status:** Accepted · 2026-09-08
+
+**Context.** Only the sign-in endpoint was rate-limited. A signed-in account could change its password, upload files to Google Drive or download CSV exports as fast as a script could ask — the expensive endpoints, and the ones that touch other systems. Separately, `npm audit` reported four "high" advisories that were all inside the Prisma CLI's MySQL driver and configuration merger — code that never runs on this PostgreSQL system — and there is no way to tell `npm audit` so.
+
+**Decision.** `ACCOUNT_LIMITS` in `rate-limit.ts`: five password changes, thirty uploads and thirty exports per account in a short window, counted before the body is read so a refused attempt still costs one; a spent limit is a 429 with `Retry-After` and a sentence. The limiter stays in memory (ADR-036) — these are per-account limits and a restart merely forgives them.
+
+`npm run audit` runs `scripts/audit-check.mjs`: production dependencies only, failing on anything at "high" or above that is not listed in `.audit-allowlist.json`, where each accepted advisory carries its reason and a date to look again. The two Prisma-CLI advisories are listed; the `qs` advisory was simply fixed. A GitHub Actions workflow runs lint, typecheck, the tests and this audit on every push — the free tier is more than enough for a college.
+
+`@googleapis/drive` stays on 21: the advisory it was blamed for was in `qs`, which updated in place, and the Drive integration is working and verified — a major bump of a working integration for no security gain is exactly the kind of churn this project avoids.
+
+**Consequences.** Through the production build the sixth password change was a 429 with `Retry-After`, the thirty-first export was a 429 even for a caller the report refuses, and the thirty-first upload was a 429. The audit gate passes with two named exceptions and flags an exception that stops matching, so the allowlist cannot silently rot.

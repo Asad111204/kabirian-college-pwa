@@ -218,7 +218,7 @@ export async function createEvent(ctx: AuthContext, input: EventInput): Promise<
   const detail = toDetail(created, ctx.fullName)
   await writeAuditLog(ctx, {
     action: 'event.created',
-    entityType: 'Event',
+    entityType: 'event',
     entityId: created.id,
     entityLabel: created.title,
     after: {
@@ -267,7 +267,7 @@ export async function updateEvent(ctx: AuthContext, id: string, input: EventInpu
   if (Object.keys(changed).length > 0) {
     await writeAuditLog(ctx, {
       action: 'event.updated',
-      entityType: 'Event',
+      entityType: 'event',
       entityId: id,
       entityLabel: after.title,
       before: Object.fromEntries(Object.entries(changed).map(([k, v]) => [k, v.from])),
@@ -292,7 +292,7 @@ export async function setEventStatus(ctx: AuthContext, id: string, status: Event
 
   await writeAuditLog(ctx, {
     action: 'event.status_changed',
-    entityType: 'Event',
+    entityType: 'event',
     entityId: id,
     entityLabel: updated.title,
     before: { status: existing.status },
@@ -336,7 +336,7 @@ export async function setEventCover(ctx: AuthContext, id: string, documentId: st
   if (existing.coverDocumentId !== documentId) {
     await writeAuditLog(ctx, {
       action: 'event.updated',
-      entityType: 'Event',
+      entityType: 'event',
       entityId: id,
       entityLabel: updated.title,
       before: { cover: existing.coverDocumentId ? 'set' : 'none' },
@@ -370,7 +370,7 @@ export async function deleteEvent(ctx: AuthContext, id: string): Promise<void> {
       ctx,
       {
         action: 'event.deleted',
-        entityType: 'Event',
+        entityType: 'event',
         entityId: id,
         entityLabel: existing.title,
         before: { title: existing.title, status: existing.status, attachments: files.length },

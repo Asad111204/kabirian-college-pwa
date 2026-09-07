@@ -211,8 +211,9 @@ describe('describeAuditEntry', () => {
   })
 
   it('stays readable for an action added in a future phase', () => {
-    const item = describeAuditEntry(auditEntry({ action: 'attendance.corrected' }))
-    expect(item.description).toBe('corrected')
+    // Fees arrive in a later phase; until then this key has no sentence of its own.
+    const item = describeAuditEntry(auditEntry({ action: 'fee_voucher.issued' }))
+    expect(item.description).toBe('issued')
   })
 
   /**

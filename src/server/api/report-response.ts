@@ -2,6 +2,7 @@ import 'server-only'
 import { NextResponse, type NextRequest } from 'next/server'
 import type { z } from 'zod'
 import { requireAuthContext, type AuthContext } from '../auth/context'
+import { ACCOUNT_LIMITS, assertRateLimit } from '../auth/rate-limit'
 import { ValidationError } from './errors'
 import { errorResponse, jsonOk, zodFieldErrors } from './handler'
 import { csvFileName, toCsv, type CsvColumn } from '../reports/csv'
@@ -37,6 +38,9 @@ export function reportRoute<Q extends { format: 'json' | 'csv' }, Out, Row>(defi
         throw new ValidationError('Those filters are not valid.', zodFieldErrors(parsed.error))
       }
       const query = parsed.data
+      // A file is dearer than a page: one account gets a generous handful of
+      // exports in ten minutes, not an unbounded stream of them.
+      if (query.format === 'csv') assertRateLimit(`export:user:${ctx.userId}`, ACCOUNT_LIMITS.export)
       const out = await definition.load(ctx, query)
 
       if (query.format !== 'csv') return jsonOk(out)
