@@ -2575,3 +2575,17 @@ This is the only statement in the Phase 11 migration that alters something alrea
 Attachments are filed in Drive under `Notices/<year>` and `Events/<year>`, found or made on each upload rather than remembered — one cheap lookup for something done a few times a week.
 
 **Consequences.** Verified through the production build: a student opens their section's attachment (the check passes and the request reaches storage), gets 404 for a draft's and for a staff event's; a teacher's real upload to a notice is 403; a student document type cannot be attached to a notice. Deleting an attachment also clears it as an event's cover, because the row is kept and the foreign key's `SET NULL` never fires.
+
+---
+
+## ADR-153 · Publishing is a confirmed action on the notice's page, never a field on the form
+
+**Status:** Accepted · 2026-09-08
+
+**Context.** A status dropdown on the editor is the obvious design. It is also how a draft reaches a thousand students because somebody's cursor slipped while fixing a typo.
+
+**Decision.** The notice and event editors have no status control; they save drafts and edit content. Publish, archive, cancel and return-to-draft are separate buttons on the item's own page, each behind a confirmation that says who will see it and from when. Delete exists for drafts only — a notice that has been published is archived and an event cancelled, and the screens say so rather than hiding the button silently.
+
+The attachments panel is one component for notices and events, built on the Phase 6 upload pipeline: a multipart POST to the owner's endpoint, viewing through `/documents/[id]/content`, removal to the Drive trash with a confirmation. When Drive is not connected it explains that instead of offering a button that would fail.
+
+**Consequences.** The UI tests assert the editor's payload carries no status and no zone, that publishing is PATCHed only after the dialog is confirmed, and that a published notice offers Archive and no Delete. The harness renders every office page through the production build and sends students, teachers and visitors away from all of them.

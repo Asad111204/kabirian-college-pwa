@@ -1,4 +1,5 @@
 import {
+  Megaphone,
   BadgeCheck,
   BookOpen,
   Building2,
@@ -71,6 +72,13 @@ export const NAVIGATION: Record<UserRole, NavSection[]> = {
         { label: 'Exams', href: '/admin/exams', icon: FileText },
         { label: 'Timetable', href: '/admin/timetable', icon: CalendarDays },
         { label: 'Results', href: '/admin/results', icon: ScrollText, comingSoon: true, phase: 9 },
+      ],
+    },
+    {
+      title: 'Communication',
+      items: [
+        { label: 'Notices', href: '/admin/notices', icon: Megaphone },
+        { label: 'Events', href: '/admin/events', icon: CalendarDays },
       ],
     },
     {

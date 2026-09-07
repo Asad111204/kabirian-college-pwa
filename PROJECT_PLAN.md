@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | **Phase 10 complete: the timetable.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). The whole examination cycle works end to end, students can print an official result card, and now the office builds the master timetable one section at a time, teachers see their own week and today's classes, and every clash is refused before it is written and again by the database. Next: Phase 11, notices and events. |
-| **Last updated** | 2026-09-08 (rev. 26 — Phase 11 step 2: notices and events service and API) |
+| **Last updated** | 2026-09-08 (rev. 27 — Phase 11 step 3: the office's notice and event screens) |
 | **Companion docs** | [DECISIONS.md](DECISIONS.md) · [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) · [README.md](README.md) |
 
 ---
@@ -738,7 +738,7 @@ Everything else in §20 will proceed on the stated defaults.
 
 ## 22. Progress tracker
 
-**Current phase:** 11 — notices and events. Steps 1–2 done (schema, migration, policy; validation, services, API); the migration is **not yet applied to Neon**. Steps 3–4: admin screens, portal feeds and widgets. The college's further requests (§23A) begin after Phase 17.
+**Current phase:** 11 — notices and events. Steps 1–3 done (schema, migration, policy; validation, services, API; the office's screens); the migration is **not yet applied to Neon**. Step 4: portal feeds and dashboard widgets, then the migration. The college's further requests (§23A) begin after Phase 17.
 
 | Phase | Status | Notes |
 |---|---|---|
@@ -1759,6 +1759,18 @@ Five subjects used to spill onto a second page. An intermediate programme is six
 **A finding.** The harness's PGlite inherits the machine's +05:00 zone and read Prisma's zone-less timestamp parameters five hours early, emptying every feed. Neon's session zone is GMT, so production is unaffected; the harness now pins UTC (ADR-151).
 
 **Tests: 29 new — 24 validation, 5 wall-clock conversion. 1,054 in total across 40 files.** Lint, typecheck and build clean.
+
+### 22.37 Phase 11, step 3: the office's notice and event screens (2026-09-08)
+
+**Admin → Notices** (`/admin/notices`, `/admin/notices/[id]`): a filtered, paged list (status tabs, category, search); an editor that builds the audience from rows — everyone, all students, all staff, or a class / division / programme / group / section chosen from the current session — with times typed on the college's clock; a notice page with the body as written, who it is for, the attachments panel, and the confirmed actions: Publish, Archive, Return to draft, Delete draft (ADR-153).
+
+**Admin → Events** (`/admin/events`, `/admin/events/[id]`): the same shape for a population audience, with pictures and files attached and one picture chosen as the cover.
+
+A **Communication** group in the office's navigation carries both. Nothing was added to the staff or student navigation yet — that is step 4.
+
+**Tests: 18 new component tests** — the editor's exact payload (targets from rows, no status, no zone), a 400 landing on its field with the typed values kept, PUT on edit, server-side filtering through the URL, confirmed publish by PATCH, delete for drafts only, the cover picker by PUT, and the navigation. **1,072 in total across 41 files.**
+
+**Verified through the production build against a throwaway PostgreSQL — 103 checks, all passing**, the 85 from step 2 plus every office page rendering for the admin, a 404 page for a missing notice, no storage or user id in any page, and students, teachers and visitors sent away from all of them.
 
 ### 22.7 What Phase 4 delivered
 
