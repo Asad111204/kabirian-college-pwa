@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | **Phase 12 complete: dashboards and KPIs.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Every module through notices and events is live on Neon, and the three dashboards now show what is happening: today's registers and this month's attendance, exams in progress and results awaiting publication, timetable coverage, missing documents, notices and events — all as database counts, under a tenth of a second. Next: Phase 13, reports and exports. |
-| **Last updated** | 2026-09-08 (rev. 30 — Phase 12 complete) |
+| **Status** | **Phase 13 complete: reports and exports.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Every module through dashboards is live on Neon, and the office now has a report centre — students, staff, missing documents, exam mark sheets and results, filtered and grouped by class, division, programme, group or section, printed through the browser or downloaded as CSV that matches the screen by construction. Next: Phase 14, the audit viewer and security hardening. |
+| **Last updated** | 2026-09-08 (rev. 31 — Phase 13 complete) |
 | **Companion docs** | [DECISIONS.md](DECISIONS.md) · [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) · [README.md](README.md) |
 
 ---
@@ -738,7 +738,7 @@ Everything else in §20 will proceed on the stated defaults.
 
 ## 22. Progress tracker
 
-**Current phase:** 12 — complete. Next: Phase 13, reports and exports. The college's further requests (§23A) begin after Phase 17.
+**Current phase:** 13 — complete. Next: Phase 14, audit UI and security hardening. The college's further requests (§23A) begin after Phase 17.
 
 | Phase | Status | Notes |
 |---|---|---|
@@ -755,7 +755,8 @@ Everything else in §20 will proceed on the stated defaults.
 | 10 Timetable | ✅ Done (2026-09-07) | Fixed period grid in code, master timetable builder, teacher week and today's classes, three clash rules backed by partial unique indexes. No student timetable, by decision. See §22.34 |
 | 11 Notices & events | ✅ Done (2026-09-08) | Targets as rows, publish windows, attachments through Drive, office screens, portal feeds and dashboard cards. Migration live on Neon. See §22.35–§22.38 |
 | 12 Dashboards & KPIs | ✅ Done (2026-09-08) | Operations figures for the office, today's registers and open mark sheets for teachers, attendance / results / next paper for students; quick actions for every module. See §22.40 |
-| 13 – 17 | ⏳ Not started | Next: reports & exports |
+| 13 Reports & exports | ✅ Done (2026-09-08) | Report centre with structure filters and grouping; print via the browser; CSV from the same query. See §22.41 |
+| 14 – 17 | ⏳ Not started | Next: audit UI & security hardening |
 
 **Live database:** the college's Neon PostgreSQL instance is connected and holds the real academic structure (2026-27, 20 groups, 20 sections). All **ten** migrations are applied to it, along with the reference data (12 designations, 10 departments, **8 document types**, and the confirmed **grading scale**).
 
@@ -1795,6 +1796,16 @@ One tidy-up: the target index is now declared in the Prisma model under the migr
 **Student.** Attendance this session, published results, and the next paper on a published date sheet for their class and programme — identity from the session only.
 
 **Verified through the production build against a throwaway PostgreSQL — 131 checks, all passing**, including the operations block's exact counts against the seeded data, the student and teacher refused the admin dashboard API, and the roadmap's criterion: the dashboard API answered in **74–94 ms** over five runs and the three pages in **101–114 ms**. **4 new unit tests; 1,076 in total across 41 files.** Lint, typecheck and build clean.
+
+### 22.41 Phase 13, reports and exports (2026-09-08)
+
+**Admin → Reports** (`/admin/reports`): five reports on one screen — students, staff, missing documents, exam mark sheets, results — each filtered by academic session, class, division, programme and section (or department, designation and type for staff; one exam for exams and results) and grouped by any level of the structure. Print uses the browser and the existing print stylesheet; **Download CSV** is a link to the same query as the screen with `format=csv` (ADR-156). Attendance keeps its own report page and gains a CSV export route with the same filters.
+
+**API.** `GET /api/v1/reports/{students|staff|missing-documents|exams|results|attendance}` — JSON or CSV by `format`; ADMIN and `reports.generate` for every one. The CSV is hand-written (`src/server/reports/csv.ts`): quoting, CRLF, a UTF-8 byte-order mark for Excel, and formula-safe cells.
+
+**Verified through the production build against a throwaway PostgreSQL — 158 checks, all passing**: JSON rows equal CSV rows for students, staff and missing documents; the CSV is `text/csv`, an attachment, never cached, with the byte-order mark on the wire; grouping labels the group in full; a missing exam is 404, a missing exam id 400, an unwritable format 400; students, teachers, an unlinked staff login and a visitor are refused the JSON and the CSV alike; the report centre page renders for the office and sends everyone else away.
+
+**Tests: 31 new — 13 for the CSV rules, 12 for the filters, 7 for the report centre (including that the CSV link is the loaded query plus `format=csv`, and that only the report area prints). 1,107 in total across 44 files.** Lint, typecheck and build clean.
 
 ### 22.7 What Phase 4 delivered
 

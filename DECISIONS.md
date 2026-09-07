@@ -2617,3 +2617,17 @@ The admin dashboard's "Not built yet" card, which had listed every module since 
 The staff dashboard adds today's registers against the sections taught and the mark sheets the teacher has opened and not submitted, both from their own assignments. The student dashboard adds their attendance for the session, their published results and the next paper on a published date sheet for their class and programme — the identity for all three coming from the session, as everywhere else. The quick actions now cover every built module and are still filtered by permission.
 
 **Consequences.** The roadmap's acceptance criterion was "loads under a second with seeded data": through the production build against the throwaway database the dashboard API answered five consecutive calls in 74–94 ms and the three dashboard pages rendered in 101–114 ms. The `describeAuditEntry` fallback means every new audit action reads as a sentence on the activity list without a mapping being added.
+
+---
+
+## ADR-156 · A report is one query with two renderings, and the CSV is written by hand
+
+**Status:** Accepted · 2026-09-08
+
+**Context.** The roadmap's acceptance test for reports was "exports match on-screen data". The usual way to fail it is to have the page and the export computed by different code. The usual way to bloat the project is to add a CSV library and a PDF engine for what is, respectively, a page of RFC 4180 and a print stylesheet the project already has.
+
+**Decision.** Every report route is built by `reportRoute()`: it parses one query schema, calls one service function, and then either returns the result as JSON for the screen or writes the CSV columns from the same rows. The CSV button on the report centre is a plain link to the query the page loaded with `format=csv` appended — the export matches the screen by construction, not by care. Reports require the ADMIN role and `reports.generate`; the report services call the modules' own queries (attendance, mark sheets, results) rather than restating them.
+
+The CSV is `src/server/reports/csv.ts`, forty lines with a test for each rule: quoting, doubled quotes, CRLF, the UTF-8 byte-order mark Excel needs for Urdu names, and a leading quote on any cell that starts with `=`, `+`, `-` or `@` so a name can never be run as a formula. "PDF" is the browser's print dialogue over the `print-area` stylesheet, exactly as the result card (ADR-138) — no library, no headless browser.
+
+**Consequences.** Through the production build the JSON row count and the CSV row count were equal for every report checked, the byte-order mark was present on the wire (and, as the harness had to learn, invisible to `fetch().text()`, which strips it by spec), and every non-admin was refused the JSON and the CSV alike. Grouping by class, division, programme, group or section is done once, in the service, so "Girls Pre-Medical 1st Year" is a filter and a heading, not a second report.
