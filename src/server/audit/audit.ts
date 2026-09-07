@@ -151,6 +151,10 @@ export type AuditAction =
   | 'event.status_changed'
   | 'event.deleted'
   | 'result.corrected'
+  // sessions (Phase 14)
+  | 'user.session_revoked'
+  | 'auth.session_revoked'
+  | 'auth.other_sessions_revoked'
 
 export interface AuditInput {
   action: AuditAction

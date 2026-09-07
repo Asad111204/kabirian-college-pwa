@@ -85,7 +85,7 @@ export const NAVIGATION: Record<UserRole, NavSection[]> = {
       title: 'System',
       items: [
         { label: 'Reports', href: '/admin/reports', icon: FileText },
-        { label: 'Audit Log', href: '/admin/audit', icon: ScrollText, comingSoon: true, phase: 14 },
+        { label: 'Audit Log', href: '/admin/audit', icon: ScrollText },
         { label: 'Settings', href: '/admin/settings', icon: Settings },
       ],
     },

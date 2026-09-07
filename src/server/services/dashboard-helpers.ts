@@ -167,7 +167,8 @@ export function buildStructureTree(groups: FlatGroup[]): StructureClassNode[] {
  * Only the action name, who did it, which record, and when are ever shown. The
  * stored before/after snapshots are NOT rendered here — they can contain
  * personal details, and the dashboard is a summary, not an inspection tool.
- * The full audit viewer arrives in Phase 14.
+ * The audit viewer (Phase 14) uses the same sentences, and shows a snapshot
+ * only after `audit-redaction.ts` has been over it.
  */
 const ACTION_DESCRIPTIONS: Record<string, string> = {
   // accounts
@@ -245,26 +246,150 @@ const ACTION_DESCRIPTIONS: Record<string, string> = {
   'section.activated': 'activated the section',
   'section.deactivated': 'removed the section',
   'curriculum.updated': 'updated the curriculum for',
+  // account linking
+  'auth.password_reset': 'had their password reset',
+  'user.profile_linked': 'linked a record to',
+  'user.profile_unlinked': 'unlinked the record from',
+  // storage and documents
+  'storage.connected': 'connected Google Drive',
+  'storage.disconnected': 'disconnected Google Drive',
+  'storage.folders_created': 'created the Drive folders',
+  'document.uploaded': 'uploaded a document for',
+  'document.replaced': 'replaced a document for',
+  'document.deleted': 'deleted a document for',
+  'document_type.created': 'created the document type',
+  'document_type.updated': 'updated the document type',
+  'document_type.activated': 'activated the document type',
+  'document_type.deactivated': 'deactivated the document type',
+  // attendance
+  'attendance.sheet_created': 'opened an attendance sheet for',
+  'attendance.submitted': 'submitted attendance for',
+  'attendance.corrected': 'corrected attendance for',
+  'attendance.sheet_cancelled': 'cancelled an attendance sheet for',
+  // exams, marks and results
+  'exam_type.created': 'created the exam type',
+  'exam_type.updated': 'updated the exam type',
+  'exam_type.activated': 'activated the exam type',
+  'exam_type.deactivated': 'deactivated the exam type',
+  'exam.created': 'created the exam',
+  'exam.updated': 'updated the exam',
+  'exam.status_changed': 'changed the status of the exam',
+  'exam.deleted': 'deleted the exam',
+  'exam_paper.created': 'added a paper to',
+  'exam_paper.updated': 'updated a paper of',
+  'exam_paper.deleted': 'removed a paper from',
+  'date_sheet.published': 'published the date sheet for',
+  'date_sheet.withdrawn': 'withdrew the date sheet for',
+  'mark_sheet.opened': 'opened the mark sheet for',
+  'marks.entered': 'entered marks for',
+  'marks.updated': 'updated marks for',
+  'marks.submitted': 'submitted marks for',
+  'marks.corrected': 'corrected marks for',
+  'result.generated': 'generated results for',
+  'result.published': 'published results for',
+  'result.corrected': 'corrected a result for',
+  // timetable
+  'timetable_slot.created': 'added a timetable period for',
+  'timetable_slot.updated': 'changed a timetable period for',
+  'timetable_slot.deactivated': 'removed a timetable period from',
+  // communication
+  'notice.created': 'created the notice',
+  'notice.updated': 'updated the notice',
+  'notice.status_changed': 'changed the status of the notice',
+  'notice.deleted': 'deleted the notice',
+  'event.created': 'created the event',
+  'event.updated': 'updated the event',
+  'event.status_changed': 'changed the status of the event',
+  'event.deleted': 'deleted the event',
+  // sessions (Phase 14)
+  'user.session_revoked': 'signed out one device for',
+  'auth.session_revoked': 'signed out one of their own devices',
+  'auth.other_sessions_revoked': 'signed out their other devices',
+}
+
+/** "created the account" for a known action; a readable form of the key otherwise. */
+export function describeAction(action: string): string {
+  return ACTION_DESCRIPTIONS[action] ?? action.replace(/^[a-z_]+\./, '').replace(/_/g, ' ')
+}
+
+/** The module an action belongs to is the part before the dot. */
+export function moduleOfAction(action: string): string {
+  return action.split('.')[0] ?? action
+}
+
+/** Human names for the modules the audit filter offers. */
+export const AUDIT_MODULE_LABELS: Record<string, string> = {
+  auth: 'Sign-ins and passwords',
+  user: 'User accounts',
+  permission: 'Permissions',
+  academic_session: 'Academic sessions',
+  class: 'Classes',
+  division: 'Divisions',
+  program: 'Programmes',
+  subject: 'Subjects',
+  academic_group: 'Session structure',
+  section: 'Sections',
+  curriculum: 'Curriculum',
+  student: 'Students',
+  enrollment: 'Enrolments',
+  staff: 'Staff',
+  assignment: 'Teaching assignments',
+  incharge: 'Section in-charges',
+  designation: 'Designations',
+  department: 'Departments',
+  storage: 'Google Drive',
+  document: 'Documents',
+  document_type: 'Document types',
+  attendance: 'Attendance',
+  exam_type: 'Exam types',
+  exam: 'Exams',
+  exam_paper: 'Exam papers',
+  date_sheet: 'Date sheets',
+  mark_sheet: 'Mark sheets',
+  marks: 'Marks',
+  result: 'Results',
+  timetable_slot: 'Timetable',
+  notice: 'Notices',
+  event: 'Events',
+}
+
+export function describeModule(module: string): string {
+  return AUDIT_MODULE_LABELS[module] ?? module.replace(/_/g, ' ')
 }
 
 export type ActivityTone = 'neutral' | 'positive' | 'warning' | 'danger'
 
 /** Colour of the dot next to each entry, so destructive actions stand out. */
-function toneFor(action: string): ActivityTone {
-  if (action.endsWith('.created') || action.endsWith('.activated') || action === 'permission.granted') {
+export function toneFor(action: string): ActivityTone {
+  if (
+    action.endsWith('.created') ||
+    action.endsWith('.activated') ||
+    action.endsWith('.published') ||
+    action.endsWith('.submitted') ||
+    action.endsWith('.uploaded') ||
+    action.endsWith('.generated') ||
+    action === 'storage.connected' ||
+    action === 'permission.granted'
+  ) {
     return 'positive'
   }
   if (
     action.endsWith('.deactivated') ||
+    action.endsWith('.deleted') ||
+    action.endsWith('.cancelled') ||
+    action.endsWith('.withdrawn') ||
+    action === 'storage.disconnected' ||
     action === 'permission.revoked' ||
     action === 'auth.login_failed'
   ) {
     return 'danger'
   }
   if (
-    action === 'user.password_reset' ||
-    action === 'user.role_changed' ||
-    action === 'user.sessions_revoked' ||
+    action.endsWith('.corrected') ||
+    action.endsWith('.status_changed') ||
+    action.endsWith('.password_reset') ||
+    action.endsWith('.role_changed') ||
+    action.endsWith('_revoked') ||
     action === 'permission.override_removed'
   ) {
     return 'warning'
@@ -304,11 +429,9 @@ export interface ActivityItem {
  * stored in the audit row.
  */
 export function describeAuditEntry(entry: AuditEntryInput): ActivityItem {
-  const description =
-    ACTION_DESCRIPTIONS[entry.action] ??
-    // Unknown future action: fall back to a readable version of its name
-    // rather than showing a raw key or hiding the event entirely.
-    entry.action.replace(/^[a-z_]+\./, '').replace(/_/g, ' ')
+  // An unknown future action falls back to a readable version of its name
+  // rather than showing a raw key or hiding the event entirely.
+  const description = describeAction(entry.action)
 
   return {
     id: entry.id,
