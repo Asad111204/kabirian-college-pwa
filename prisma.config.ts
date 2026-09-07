@@ -20,14 +20,31 @@ if (existsSync('.env')) {
   loadEnvFile('.env')
 }
 
+/**
+ * Which variable holds the URL the CLI should connect through, or `null` when
+ * neither is set.
+ *
+ * `prisma generate` needs no database at all -- it only reads the schema and
+ * writes TypeScript -- so a build machine that has no database credentials must
+ * still be able to run it. Declaring `datasource` unconditionally made
+ * `defineConfig` resolve the variable while the config file was being loaded,
+ * which failed the whole build on a host where it is absent
+ * (`PrismaConfigEnvError: Cannot resolve environment variable: DATABASE_URL`).
+ *
+ * The commands that genuinely need a connection -- `migrate`, `studio`, `db
+ * execute` -- still fail loudly, because without a datasource they have nothing
+ * to connect to.
+ */
+const migrationUrlVariable = process.env.DATABASE_DIRECT_URL?.trim()
+  ? 'DATABASE_DIRECT_URL'
+  : process.env.DATABASE_URL?.trim()
+    ? 'DATABASE_URL'
+    : null
+
 export default defineConfig({
   schema: 'prisma/schema.prisma',
   migrations: {
     path: 'prisma/migrations',
   },
-  datasource: {
-    url: process.env.DATABASE_DIRECT_URL?.trim()
-      ? env('DATABASE_DIRECT_URL')
-      : env('DATABASE_URL'),
-  },
+  ...(migrationUrlVariable ? { datasource: { url: env(migrationUrlVariable) } } : {}),
 })
