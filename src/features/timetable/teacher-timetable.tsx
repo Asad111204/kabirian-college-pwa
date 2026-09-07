@@ -44,8 +44,11 @@ export function TeacherTimetableGrid({ timetable }: { timetable: TeacherTimetabl
               {DAY_LABEL[day]}
             </h3>
             <ul className="divide-y divide-border rounded-[var(--radius-control)] border border-border">
+              {/* Keyed by cell, not by id: a React key is serialised into the page,
+                  and a database id has no business there. A teacher holds one
+                  lesson per cell. */}
               {lessons.map((lesson) => (
-                <li key={lesson.id} className="p-3">
+                <li key={`${day}-${lesson.period}`} className="p-3">
                   <div className="flex items-baseline justify-between gap-3">
                     <p className="min-w-0 truncate text-sm font-medium text-foreground">
                       {lesson.subjectName}

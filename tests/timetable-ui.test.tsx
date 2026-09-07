@@ -551,6 +551,55 @@ describe('a teacher’s own timetable', () => {
     expect(screen.getByText(/No lessons timetabled yet/i)).toBeTruthy()
     expect(screen.queryByRole('table')).toBeNull()
   })
+
+  it('renders exactly the lessons it was given, and nothing else', () => {
+    render(
+      <TeacherTimetableGrid
+        timetable={week({
+          lessons: [
+            lesson(),
+            lesson({ id: 'lesson-2', dayOfWeek: 'TUESDAY', period: 4, subjectName: 'Chemistry' }),
+          ],
+        })}
+      />,
+    )
+    const table = screen.getByRole('table')
+    expect(within(table).getByText('Biology')).toBeTruthy()
+    expect(within(table).getByText('Chemistry')).toBeTruthy()
+    // Nothing invented: no third subject, and the free cells say so quietly.
+    expect(within(table).queryByText('Physics')).toBeNull()
+    expect(within(table).getAllByText('Free').length).toBeGreaterThan(0)
+  })
+
+  it('leaves the room out when the college has not named one', () => {
+    render(<TeacherTimetableGrid timetable={week({ lessons: [lesson({ room: null })] })} />)
+    expect(screen.queryAllByText(/Lab 1/)).toHaveLength(0)
+    // The class line does not end in a dangling separator either.
+    const table = screen.getByRole('table')
+    expect(within(table).getByText(/1st Year · Section A$/)).toBeTruthy()
+  })
+
+  it('shows every period with its number and its configured time', () => {
+    render(<TeacherTimetableGrid timetable={week()} />)
+    const table = screen.getByRole('table')
+    for (const period of PERIODS) {
+      expect(within(table).getByText(`${period.start}–${period.end}`)).toBeTruthy()
+      expect(within(table).getAllByText(String(period.period)).length).toBeGreaterThan(0)
+    }
+  })
+
+  it('never shows a database id', () => {
+    const { container } = render(<TeacherTimetableGrid timetable={week()} />)
+    expect(container.innerHTML).not.toContain('lesson-1')
+    expect(container.innerHTML).not.toContain('subject-1')
+    expect(container.innerHTML).not.toContain('section-1')
+  })
+
+  it('reads day by day on a phone, with the day named', () => {
+    render(<TeacherTimetableGrid timetable={week()} />)
+    // The phone stack is the md:hidden block; the day heading is only there.
+    expect(screen.getByRole('heading', { level: 3, name: 'Monday' })).toBeTruthy()
+  })
 })
 
 /* -------------------------------------------------------------------------- */
@@ -594,6 +643,40 @@ describe('today’s classes on the teacher dashboard', () => {
     const links = screen.getAllByRole('link')
     expect(links).toHaveLength(1)
     expect(links[0]!.getAttribute('href')).toBe('/staff/timetable')
+  })
+
+  it('orders lessons by period even if they arrive out of order', () => {
+    render(
+      <TodayClassesCard
+        today={today({
+          lessons: [
+            lesson({ id: 'late', period: 8, startTime: '12:10', endTime: '12:40', subjectName: 'Physics' }),
+            lesson({ id: 'early', period: 2, startTime: '08:30', endTime: '09:00', subjectName: 'Biology' }),
+          ],
+        })}
+      />,
+    )
+    const items = screen.getAllByRole('listitem')
+    expect(within(items[0]!).getByText('Biology')).toBeTruthy()
+    expect(within(items[1]!).getByText('Physics')).toBeTruthy()
+  })
+
+  it('shows the room when there is one, and leaves it out when there is not', () => {
+    render(
+      <TodayClassesCard
+        today={today({ lessons: [lesson(), lesson({ id: 'lesson-2', period: 7, room: null })] })}
+      />,
+    )
+    const items = screen.getAllByRole('listitem')
+    expect(within(items[0]!).getByText(/Lab 1/)).toBeTruthy()
+    expect(within(items[1]!).queryByText(/Lab 1/)).toBeNull()
+    expect(within(items[1]!).getByText(/Section A$/)).toBeTruthy()
+  })
+
+  it('never shows a database id', () => {
+    const { container } = render(<TodayClassesCard today={today()} />)
+    expect(container.innerHTML).not.toContain('lesson-1')
+    expect(container.innerHTML).not.toContain('section-1')
   })
 })
 

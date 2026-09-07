@@ -67,8 +67,8 @@ export default async function StudentDashboardPage() {
       </Card>
 
       <Alert variant="info" className="mt-4">
-        Your attendance, timetable, exam schedule and results appear here as those parts of the
-        system are completed (Phases 7–10).
+        Your attendance, exam date sheets and published results are in the menu. Your class
+        timetable is kept by the college office.
       </Alert>
     </>
   )

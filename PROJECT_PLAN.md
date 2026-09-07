@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | **Phase 8 complete, plus the official result card in its final form.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). The whole examination cycle now works: exam types, exams, papers and date sheets; teacher marks entry; result generation, review and publication; and the student and staff result portals. A printable official result card is now available to students from their own result page. PDF generation, exports and notifications are not built. Awaiting confirmation for the next phase. |
-| **Last updated** | 2026-08-31 (rev. 23 — the result card restyled as a college document) |
+| **Status** | **Phase 10 complete: the timetable.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). The whole examination cycle works end to end, students can print an official result card, and now the office builds the master timetable one section at a time, teachers see their own week and today's classes, and every clash is refused before it is written and again by the database. Next: Phase 11, notices and events. |
+| **Last updated** | 2026-09-07 (rev. 24 — Phase 10 complete) |
 | **Companion docs** | [DECISIONS.md](DECISIONS.md) · [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) · [README.md](README.md) |
 
 ---
@@ -738,7 +738,7 @@ Everything else in §20 will proceed on the stated defaults.
 
 ## 22. Progress tracker
 
-**Current phase:** 9 — the official result card is done and styled. Awaiting confirmation for what comes next.
+**Current phase:** 10 — complete. Next: Phase 11, notices and events; the college's further requests (§23A) begin after Phase 17.
 
 | Phase | Status | Notes |
 |---|---|---|
@@ -751,9 +751,11 @@ Everything else in §20 will proceed on the stated defaults.
 | 6 Google Drive & documents | ✅ Done (2026-08-30) | OAuth connection, encrypted token, document model, upload/view/replace, layered access. See §22.14 |
 | 7 Attendance | ✅ Done (2026-08-30) | Database, service/API, Admin, Staff and Student screens, and reports. Export and alerts are deliberately left for later. See §22.20–§22.25 |
 | 8 Exams & results | ✅ Done (2026-08-31) | Architecture, database and calculation, exam and date-sheet screens, marks entry, result generation and publication, and the student and staff result portals. Result cards and exports are deliberately left for later. See §22.26–§22.31 |
-| 9 – 17 | ⏳ Not started | Next: fees |
+| 9 Results | ✅ Done (2026-08-31) | Generation, review, publication, portals and the printable A4 result card. See §22.29–§22.33 |
+| 10 Timetable | ✅ Done (2026-09-07) | Fixed period grid in code, master timetable builder, teacher week and today's classes, three clash rules backed by partial unique indexes. No student timetable, by decision. See §22.34 |
+| 11 – 17 | ⏳ Not started | Next: notices & events |
 
-**Live database:** the college's Neon PostgreSQL instance is connected and holds the real academic structure (2026-27, 20 groups, 20 sections). All **eight** migrations are applied to it, along with the reference data (12 designations, 10 departments, **8 document types**, and the confirmed **grading scale**).
+**Live database:** the college's Neon PostgreSQL instance is connected and holds the real academic structure (2026-27, 20 groups, 20 sections). All **nine** migrations are applied to it, along with the reference data (12 designations, 10 departments, **8 document types**, and the confirmed **grading scale**).
 
 ### 22.1 What Phase 1 delivered
 
@@ -1718,6 +1720,22 @@ Five subjects used to spill onto a second page. An intermediate programme is six
 
 **On the college's own data.** The database now holds **one exam, four marks and one published result** — created by the college itself on 2026-08-31, before this work began. Every row was fingerprinted before the regression and compared afterwards: **exams, papers, marks and results are identical**. The three temporary regression logins were created and removed; the college's five accounts are all that remain.
 
+### 22.34 Phase 10, the timetable (2026-09-01 to 2026-09-07)
+
+**What the college confirmed first.** A fixed daily grid of nine periods, period 6 the break; the office keeps the master timetable; teachers see only their own; **no student timetable**.
+
+**Step 1 — foundation.** `timetable_slots` (migration `20260905000000_timetable_slots`, applied to Neon on 2026-09-01 with row counts verified unchanged before and after), the period grid in `src/server/timetable/periods.ts` (ADR-142), and `timetable-policy.ts`: pure section/teacher/room clash rules, subject-in-curriculum, teacher-holds-active-assignment, and break-period refusal — 45 tests before any screen existed.
+
+**Step 2 — service and API.** `timetable.service.ts` behind `assertAdminArea` + `timetable.manage` for every write; `listTimetable`, `getTimetableSlot`, create, update (changed fields only in the audit), deactivate (never delete); `getMyTimetable` and `getMyClassesToday` for teachers with identity from `ctx.staffId` only (ADR-144). Clashes refused in the service and again by three partial unique indexes, the room one functional over `lower(btrim(room))` (ADR-143).
+
+**Step 3 — the builder.** `/admin/timetable`: session, then section, then a week grid with the break greyed out and labelled; Add Class in an empty cell offering only the section's curriculum, then only teachers with an ACTIVE assignment for that exact section and subject; edit limited to subject, teacher and room; a confirmed deactivate; every 409 turned into a sentence naming the field.
+
+**Step 4 — the teacher.** `/staff/timetable` (day-by-day on a phone, a grid from `md`) and Today's classes on the staff dashboard, sorted by period, dated by the college's own weekday. Read-only: not a button on either. An unlinked staff login is told to get linked rather than shown a blank grid. The student dashboard no longer promises a timetable (ADR-145). Lessons are keyed by cell, not id, after the harness found slot ids in the page source (ADR-146).
+
+**Verified through the production build against a throwaway PostgreSQL — 55 checks, all passing.** Teacher A sees both their classes (1st Year A Biology period 2; 2nd Year B Biology period 4) and nothing of Teacher B's; B sees one; `?staffId=`, `?sectionId=` and `?academicSessionId=` cannot widen either; today's classes are today's only, in period order; student, admin, unlinked staff and signed-out are refused as designed; no stack, Prisma name or internal id reaches a page; `/student/timetable` is 404. Zero errors in the server log.
+
+**Tests: 953 across 37 files.** The two lessons in the live database were created by the college's admin account through the builder on 1 and 4 September; no verification data was written to Neon.
+
 ### 22.7 What Phase 4 delivered
 
 Student records and academic enrollment, built on the Phase 1–3 architecture. Nothing existing was rebuilt.
@@ -1908,27 +1926,28 @@ Two real defects were found by running the application and were fixed:
 
 ---
 
-## 23A. Confirmed scope for phases 11-19 (added 2026-09-07)
+## 23A. Confirmed scope for phases 18-26 (added 2026-09-07)
 
-The college asked for sixteen further features. They are sequenced below by
-dependency: the two that change foundations -- money, and more than one role per
-person -- come after the self-contained ones, so a mistake in them cannot be
-carried into everything else.
+The college asked for sixteen further features. **They begin after the
+original roadmap (§20) is complete** -- Phase 17, deployment, is the last of
+those. They are sequenced below by dependency: the two that change foundations
+-- money, and more than one role per person -- come after the self-contained
+ones, so a mistake in them cannot be carried into everything else.
 
 | Phase | Feature | Notes |
 |---|---|---|
-| 11 | Attendance colour bands | **Done.** Below 75% red, 75-79 amber, 80-89 light green, 90-100 dark green |
-| 11 | Teacher edits attendance | Drafts already editable; correcting a **submitted** register needs `attendance.update_submitted`, which an admin can grant per teacher today |
-| 12 | Profile photos for students and staff | Through the existing Google Drive `StorageProvider` |
-| 13 | Homework and assignments | Teacher uploads per subject and section; students see their own subjects' work |
-| 14 | Marks entry deadline | Set by the admin per exam; after it a teacher needs the admin to reopen the paper |
-| 14 | Marks correction for teachers | Limited to papers they hold an ACTIVE TeacherAssignment for |
-| 15 | Staff attendance | Taken by the admin: Present, Absent, Short Leave, Leave |
-| 16 | Complaints | Student submits an application; the admin reads and responds |
-| 17 | A staff member who is also an admin | One account, both portals, with a switcher |
-| 18 | Fees | Named packages, per-student assignment, a per-student discount, monthly vouchers, late fine |
-| 19 | Finance | Admin records expenses; dashboard shows collection, outstanding and hand-drawn SVG graphs |
-| 19 | Admin delete | Erase only when nothing references the record; otherwise refuse and say why |
+| 18 | Attendance colour bands | **Done.** Below 75% red, 75-79 amber, 80-89 light green, 90-100 dark green |
+| 18 | Teacher edits attendance | Drafts already editable; correcting a **submitted** register needs `attendance.update_submitted`, which an admin can grant per teacher today |
+| 19 | Profile photos for students and staff | Through the existing Google Drive `StorageProvider` |
+| 20 | Homework and assignments | Teacher uploads per subject and section; students see their own subjects' work |
+| 21 | Marks entry deadline | Set by the admin per exam; after it a teacher needs the admin to reopen the paper |
+| 21 | Marks correction for teachers | Limited to papers they hold an ACTIVE TeacherAssignment for |
+| 22 | Staff attendance | Taken by the admin: Present, Absent, Short Leave, Leave |
+| 23 | Complaints | Student submits an application; the admin reads and responds |
+| 24 | A staff member who is also an admin | One account, both portals, with a switcher |
+| 25 | Fees | Named packages, per-student assignment, a per-student discount, monthly vouchers, late fine |
+| 26 | Finance | Admin records expenses; dashboard shows collection, outstanding and hand-drawn SVG graphs |
+| 26 | Admin delete | Erase only when nothing references the record; otherwise refuse and say why |
 
 ### The four decisions behind them (confirmed 2026-09-07)
 

@@ -19,6 +19,11 @@ import { DAY_LABEL } from '@/validation/timetable'
  * it never shows another teacher's lesson.
  */
 export function TodayClassesCard({ today }: { today: TodayClasses }) {
+  // The service already orders by period; sorting again here costs nothing and
+  // means the card cannot show a 12:10 lesson above a 09:10 one whatever it is
+  // handed.
+  const lessons = [...today.lessons].sort((a, b) => a.period - b.period)
+
   return (
     <Card>
       <CardHeader>
@@ -33,7 +38,7 @@ export function TodayClassesCard({ today }: { today: TodayClasses }) {
         </Button>
       </CardHeader>
       <CardContent>
-        {today.lessons.length === 0 ? (
+        {lessons.length === 0 ? (
           <EmptyState
             icon={CalendarDays}
             title="Nothing timetabled today"
@@ -41,8 +46,8 @@ export function TodayClassesCard({ today }: { today: TodayClasses }) {
           />
         ) : (
           <ol className="divide-y divide-border">
-            {today.lessons.map((lesson) => (
-              <li key={lesson.id} className="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0">
+            {lessons.map((lesson) => (
+              <li key={lesson.period} className="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0">
                 <div className="w-20 shrink-0">
                   <p className="text-sm font-semibold text-foreground tabular-nums">
                     {lesson.startTime}

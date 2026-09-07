@@ -2410,3 +2410,77 @@ The size is written in millimetres with **no breakpoint**, so the printed logo i
 **Consequences.** The header is measured, not guessed: a harness drives the copy of Edge that ships with Windows over the DevTools protocol, sets print media at the exact A4 printable area (186 × 273mm) and asserts the artwork lands between 55mm and 75mm, that `object-fit` is still `cover`, that the file is still 1280×960, and that the painted band still contains the whole artwork. If anyone later changes the box ratio far enough to bite into the mark, that check fails.
 
 The colour beside it comes from the same file: `--color-college: #002850`, read off the logo's own navy. It is the only colour the card adds, and nothing else in the app uses it.
+
+---
+
+## ADR-142 · The bell schedule is configuration, not data
+
+**Status:** Accepted · 2026-09-07
+
+**Context.** A timetable row could carry its own start and end time. Nine hundred rows would then all have to be rewritten the day the college moves a bell, and nothing would stop two rows in "period 3" disagreeing about when period 3 is.
+
+**Decision.** `TimetableSlot` stores only a period *number*. The clock times live in `src/server/timetable/periods.ts` as a plain constant — nine periods, one of them the break — and every reader fills the times in from there. The numbering is the one `AttendanceSheet.period` already records, so the register for period 3 is the register for the lesson the timetable puts in period 3.
+
+The break is a period like any other, flagged `isBreak`. It is never a row with a made-up subject and a made-up teacher; the policy refuses to schedule anything in it, the builder greys it out and the teacher's grid labels it.
+
+**Alternatives.** *A periods table* — a screen to maintain a list that changes once a decade. *Times on each row* — see above.
+
+**Consequences.** Moving a bell is one edit in one file. `startTime`/`endTime` are computed on the way out and never accepted on the way in; the validation schemas have no such fields, and the tests assert the model has no such columns.
+
+---
+
+## ADR-143 · Three clash rules, three partial unique indexes
+
+**Status:** Accepted · 2026-09-07
+
+**Context.** A section, a teacher and a room can each be in only one place per period. The service checks all three before writing and reports every clash it finds in one sentence. What a check cannot do is survive two administrators saving conflicting lessons at the same moment.
+
+**Decision.** Each rule is also a unique index in PostgreSQL, restricted to active rows so a removed lesson does not hold its cell for ever:
+
+- section: `(section, session, day, period) WHERE is_active`
+- teacher: `(staff, session, day, period) WHERE is_active`
+- room: `(session, day, period, lower(btrim(room))) WHERE is_active AND room IS NOT NULL AND btrim(room) <> ''`
+
+The room index is functional so `Lab 1`, `lab 1` and ` Lab 1 ` are one room — the same normalisation `roomKey()` applies in the policy. Prisma cannot express any of the three; they are hand-written in the migration under names carrying `_active_` so Prisma does not expect to own them, and the model declares plain `@@index`es on the same columns so `migrate diff` sees no drift.
+
+**Alternatives.** *Serializable transactions or advisory locks* — retry loops for a weaker guarantee than a constraint.
+
+**Consequences.** The service still checks first, because a constraint violation is not a sentence a person can act on; the index is the backstop. Violations are translated into 409 by `withUniqueConstraintHandling` keyed on the index name. Tests insert conflicting rows directly, bypassing the service, and assert the database refuses the second.
+
+---
+
+## ADR-144 · A teacher's timetable is whose session it is, and nothing else
+
+**Status:** Accepted · 2026-09-07
+
+**Context.** The obvious teacher endpoint takes a `staffId`. The obvious endpoint lets any teacher read any colleague's week by changing a number.
+
+**Decision.** `getMyTimetable` and `getMyClassesToday` take no identity parameter. The teacher is `ctx.staffId`, resolved from the session cookie; the query schema for `/api/v1/timetable/my` has no `staffId` field, so one sent in the URL is parsed away. `academicSessionId` and `dayOfWeek` are filters *inside* that teacher's own lessons — they can narrow the week and cannot widen it. A login with no staff record, an admin, and a student are all refused with 403; signed out is 401.
+
+**Alternatives.** *Accept a staffId and check it equals the caller's* — one forgotten check away from the bug the design exists to prevent.
+
+**Consequences.** Verified through the production build against a throwaway database: `?staffId=<other teacher>`, `?sectionId=<their section>` and `?academicSessionId=<other session>` all leave a teacher looking at their own lessons. The teacher is recorded on the slot (`staffId`) rather than derived from assignments at read time, so a teacher's week stays readable after an assignment closes.
+
+---
+
+## ADR-145 · There is no student timetable
+
+**Status:** Accepted · 2026-09-07 (product decision by the college)
+
+**Context.** The original roadmap listed a student timetable view. The college does not want one: the office keeps class timetables, and students are told in person.
+
+**Decision.** No `/student/timetable` route, no student navigation item, no student API, no timetable on the student dashboard. The dashboard tells students where their timetable is kept instead of promising one.
+
+**Consequences.** A test asserts the student navigation contains nothing named or linking to a timetable; the production verification asserts the route is 404 and the dashboard carries no such link. Adding one later is a small, deliberate change rather than something that quietly exists.
+
+---
+
+## ADR-146 · A React key is not a place for a database id
+
+**Status:** Accepted · 2026-09-07
+
+**Context.** The teacher's grid keyed each lesson by its row id. React serialises element keys into the page's flight payload, so every slot's UUID reached the browser — invisible on screen, present in the source. The verification harness caught it.
+
+**Decision.** Lessons are keyed by cell — `day-period` in the week, `period` in today's list. A teacher holds one lesson per cell (ADR-143), so the key is unique without being an identifier. Ids stay in the API response, where they are needed, and out of rendered pages, where they are not.
+
+**Consequences.** The page-body check for internal ids is part of the standing production verification for every portal page from here on.
