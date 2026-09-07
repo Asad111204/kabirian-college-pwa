@@ -1908,6 +1908,58 @@ Two real defects were found by running the application and were fixed:
 
 ---
 
+## 23A. Confirmed scope for phases 11-19 (added 2026-09-07)
+
+The college asked for sixteen further features. They are sequenced below by
+dependency: the two that change foundations -- money, and more than one role per
+person -- come after the self-contained ones, so a mistake in them cannot be
+carried into everything else.
+
+| Phase | Feature | Notes |
+|---|---|---|
+| 11 | Attendance colour bands | **Done.** Below 75% red, 75-79 amber, 80-89 light green, 90-100 dark green |
+| 11 | Teacher edits attendance | Drafts already editable; correcting a **submitted** register needs `attendance.update_submitted`, which an admin can grant per teacher today |
+| 12 | Profile photos for students and staff | Through the existing Google Drive `StorageProvider` |
+| 13 | Homework and assignments | Teacher uploads per subject and section; students see their own subjects' work |
+| 14 | Marks entry deadline | Set by the admin per exam; after it a teacher needs the admin to reopen the paper |
+| 14 | Marks correction for teachers | Limited to papers they hold an ACTIVE TeacherAssignment for |
+| 15 | Staff attendance | Taken by the admin: Present, Absent, Short Leave, Leave |
+| 16 | Complaints | Student submits an application; the admin reads and responds |
+| 17 | A staff member who is also an admin | One account, both portals, with a switcher |
+| 18 | Fees | Named packages, per-student assignment, a per-student discount, monthly vouchers, late fine |
+| 19 | Finance | Admin records expenses; dashboard shows collection, outstanding and hand-drawn SVG graphs |
+| 19 | Admin delete | Erase only when nothing references the record; otherwise refuse and say why |
+
+### The four decisions behind them (confirmed 2026-09-07)
+
+**Deleting people.** An admin may permanently delete a student, staff member or
+account **only when nothing references it** -- no attendance, no marks, no
+results, no documents. Where there is history the delete is refused with a
+reason, and deactivation remains the answer. Nothing cascades: a published
+result card must not stop existing because somebody tidied a list.
+
+**Fee packages.** The admin creates named packages -- "1st Year Pre-Medical --
+Regular", "Scholarship 50%" -- each with its own amount, and assigns one to each
+student. A **per-student discount** sits on top, so an individual concession
+never needs a package of its own.
+
+**Billing.** **Monthly.** One voucher per student per month with a due date, and
+a late fine, set by the admin, applied after it.
+
+**More than one role.** A **staff member may additionally hold admin access**
+and switch portals. Students stay single-role. This is deliberately the narrow
+version: the wide one -- any user holding any combination -- would mean reworking
+every authorization check in the system for a case the college does not have.
+
+### Standing constraints these inherit
+
+Money is counted in **integer paisa**, never floating point, exactly as marks are
+counted in hundredths (ADR-105). Graphs are **hand-drawn SVG**; no chart library.
+Every new permission goes through the existing catalogue, and the service layer
+stays the only authorization boundary (ADR-008).
+
+---
+
 ## 23. Extensibility notes for future features
 
 | Future feature | Hook already in the design |

@@ -11,6 +11,8 @@ import { Table, TableWrapper, TBody, TD, TH, THead, TR } from '@/components/ui/t
 import { api, ApiError } from '@/lib/api-client'
 import { formatDate } from '@/lib/format'
 import { ATTENDANCE_STATUS_LABEL, ATTENDANCE_STATUSES } from '@/validation/attendance'
+import { cn } from '@/lib/cn'
+import { attendanceBand } from './bands'
 import { STATUS_ICON, type AttendanceStatusValue } from './shared'
 
 interface Summary {
@@ -403,12 +405,32 @@ function OverallCard({ summary }: { summary: Summary }) {
           {summary.total === 0 ? (
             <p className="mt-1 text-base font-medium">No attendance recorded yet</p>
           ) : (
-            <p className="mt-1 text-4xl font-semibold tabular-nums">{summary.percentage}%</p>
+            <p
+              className={cn(
+                'mt-1 text-4xl font-semibold tabular-nums',
+                attendanceBand(summary.percentage)?.text,
+              )}
+            >
+              {summary.percentage}%
+              <span className="sr-only"> — {attendanceBand(summary.percentage)?.label}</span>
+            </p>
           )}
           {summary.total > 0 ? (
-            <p className="mt-0.5 text-sm text-foreground-muted">
-              {summary.attended} of {summary.total} classes attended
-            </p>
+            <>
+              <p className="mt-0.5 text-sm text-foreground-muted">
+                {summary.attended} of {summary.total} classes attended
+              </p>
+              {attendanceBand(summary.percentage) ? (
+                <p
+                  className={cn(
+                    'mt-1.5 inline-block rounded-full border px-2 py-0.5 text-xs font-medium',
+                    attendanceBand(summary.percentage)?.chip,
+                  )}
+                >
+                  {attendanceBand(summary.percentage)?.label}
+                </p>
+              ) : null}
+            </>
           ) : null}
         </div>
 
@@ -443,8 +465,17 @@ function SubjectCard({ summary }: { summary: SubjectSummary }) {
             {summary.late} late · {summary.absent} absent · {summary.leave} leave
           </p>
         </div>
-        <p className="shrink-0 text-lg font-semibold tabular-nums">
+        <p
+          className={cn(
+            'shrink-0 text-lg font-semibold tabular-nums',
+            attendanceBand(summary.percentage)?.text,
+          )}
+          title={attendanceBand(summary.percentage)?.label}
+        >
           {summary.percentage === null ? '—' : `${summary.percentage}%`}
+          {attendanceBand(summary.percentage) ? (
+            <span className="sr-only"> — {attendanceBand(summary.percentage)?.label}</span>
+          ) : null}
         </p>
       </div>
     </Card>

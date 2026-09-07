@@ -3,6 +3,8 @@ import { Card } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/feedback'
 import { Table, TableWrapper, TBody, TD, TH, THead, TR } from '@/components/ui/table'
 import { ATTENDANCE_STATUS_LABEL } from '@/validation/attendance'
+import { cn } from '@/lib/cn'
+import { attendanceBand } from './bands'
 
 /**
  * The pieces every attendance report is built from.
@@ -33,6 +35,10 @@ export interface BreakdownRow extends Summary {
  *
  * Zero counted sessions is not 0% — that would read as "never attends" when it
  * means "no classes have been held".
+ *
+ * Coloured by the college's bands (see `bands.ts`). The colour is emphasis
+ * only: the figure is always printed, and the band is named in the title so it
+ * survives a screen reader and a black-and-white printout.
  */
 export function Percentage({
   value,
@@ -42,9 +48,16 @@ export function Percentage({
   className?: string
 }) {
   if (value === null) {
-    return <span className={className ?? 'text-sm text-foreground-muted'}>No attendance yet</span>
+    return <span className={cn('text-sm text-foreground-muted', className)}>No attendance yet</span>
   }
-  return <span className={className ?? 'tabular-nums'}>{value}%</span>
+
+  const band = attendanceBand(value)
+  return (
+    <span className={cn('tabular-nums font-medium', band?.text, className)} title={band?.label}>
+      {value}%
+      {band ? <span className="sr-only"> — {band.label}</span> : null}
+    </span>
+  )
 }
 
 /**
