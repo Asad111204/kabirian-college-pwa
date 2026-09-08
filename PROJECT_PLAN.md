@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | **Phase 23 complete: complaints.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Every module through Phase 22 is live on Neon (thirteen migrations, zero drift); the roadmap is built and the college's own requests (§23A) are under way. A student now writes an application to the office and the office answers it, with nobody else able to read a word of it — not another student, not a teacher. **The Phase 23 migration is written and tested but not yet applied to Neon; it awaits the go-ahead.** Next: Phase 24, a staff member who is also an admin. |
+| **Status** | **Phase 23 complete: complaints.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Every module is live on Neon (fourteen migrations, zero drift); the roadmap is built and the college's own requests (§23A) are under way. A student now writes an application to the office and the office answers it, with nobody else able to read a word of it — not another student, not a teacher. Next: Phase 24, a staff member who is also an admin. |
 | **Last updated** | 2026-09-09 (rev. 41 — Phase 23 complete) |
 | **Companion docs** | [DECISIONS.md](DECISIONS.md) · [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) · [README.md](README.md) |
 
@@ -738,7 +738,7 @@ Everything else in §20 will proceed on the stated defaults.
 
 ## 22. Progress tracker
 
-**Current phase:** 23 — complete, apart from the Neon migration, which is waiting for the go-ahead. Next: Phase 24, a staff member who is also an admin (§23A).
+**Current phase:** 23 — complete and live on Neon. Next: Phase 24, a staff member who is also an admin (§23A).
 
 | Phase | Status | Notes |
 |---|---|---|
@@ -765,7 +765,7 @@ Everything else in §20 will proceed on the stated defaults.
 | 20 Homework | ✅ Done (2026-09-08) | Teachers set homework where assigned, with files; students read their section's; the office sees all. Migration 11 live on Neon. See §22.48 |
 | 21 Marks deadline & corrections | ✅ Done (2026-09-08) | Deadline per exam; teachers correct their own submitted sheets until it passes; the office reopens one paper with a reason. Migration 12 live on Neon. See §22.49 |
 | 22 | ✅ Done (2026-09-08) | Staff attendance taken by the office; live on Neon (thirteen migrations, zero drift) |
-| 23 | ✅ Done (2026-09-09) | Complaints; migration written, not yet on Neon |
+| 23 | ✅ Done (2026-09-09) | Complaints; live on Neon (fourteen migrations, zero drift) |
 | 24 – 26 | ⏳ Not started | The college's requests (§23A). Next: a staff member who is also an admin |
 
 **Live database:** the college's Neon PostgreSQL instance is connected and holds the real academic structure (2026-27, 20 groups, 20 sections). All **ten** migrations are applied to it, along with the reference data (12 designations, 10 departments, **8 document types**, and the confirmed **grading scale**).
@@ -1943,7 +1943,7 @@ The first of the college's own requests (§23A). The **colour bands** were deliv
 
 **The dashboard** gained one tile: applications waiting on the office, emphasised when there are any, linking straight to them.
 
-**Data:** two tables, `complaints` and `complaint_replies`, and two enums — migration `20260909090000_complaints`. **Written, tested against a throwaway PostgreSQL, and not yet applied to Neon: it is waiting for the go-ahead.** Nothing that worked before touches it.
+**Data:** two tables, `complaints` and `complaint_replies`, and two enums — migration `20260909090000_complaints`. Applied to Neon on 2026-09-09 (fourteen migrations, zero drift); the census before and after was identical. Nothing that worked before touches it.
 
 **Verified through the production build (61 new checks, all passing, alongside the 469 existing — 530 in total)**: an application written and refused when too short or in a category the college does not have; the office and a teacher refused the ability to write one; the writer and the office able to read it, another student given a 404 with not one word of it in the reply, a teacher a 403; the office's answer moving it off the "waiting on us" list by itself; the reply reading as the college's to the student and as a named person's to the office; a student refused the office's list and refused the right to resolve their own application; the office refused a withdrawal and refused an action on a state it was already in; after resolving, both sides refused with the reason; the office picking it back up; a withdrawal that the office cannot undo; every audit entry carrying the category and none of the wording; the sixth open application refused; and the three screens rendering, with a teacher, a student and a signed-out visitor all sent away from the office's.
 
