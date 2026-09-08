@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | **Phase 25 complete: fees.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Every module through Phase 24 is live on Neon (fifteen migrations, zero drift); the roadmap is built and the college's own requests (§23A) are under way. The college now has named fee packages, a package and a concession per student, monthly vouchers with a due date and a late fine, payments recorded against them, and a family that can see its own bill. Every amount is whole paisa. **The Phase 25 migration is written and tested but not yet applied to Neon; it awaits the go-ahead.** Next: Phase 26, finance and admin delete. |
+| **Status** | **Phase 25 complete: fees.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Every module is live on Neon (sixteen migrations, zero drift); the roadmap is built and the college's own requests (§23A) are under way. The college now has named fee packages, a package and a concession per student, monthly vouchers with a due date and a late fine, payments recorded against them, and a family that can see its own bill. Every amount is whole paisa. Next: Phase 26, finance and admin delete. |
 | **Last updated** | 2026-09-10 (rev. 43 — Phase 25 complete) |
 | **Companion docs** | [DECISIONS.md](DECISIONS.md) · [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) · [README.md](README.md) |
 
@@ -738,7 +738,7 @@ Everything else in §20 will proceed on the stated defaults.
 
 ## 22. Progress tracker
 
-**Current phase:** 25 — complete, apart from the Neon migration, which is waiting for the go-ahead. Next: Phase 26, finance and admin delete (§23A).
+**Current phase:** 25 — complete and live on Neon. Next: Phase 26, finance and admin delete (§23A).
 
 | Phase | Status | Notes |
 |---|---|---|
@@ -767,7 +767,7 @@ Everything else in §20 will proceed on the stated defaults.
 | 22 | ✅ Done (2026-09-08) | Staff attendance taken by the office; live on Neon (thirteen migrations, zero drift) |
 | 23 | ✅ Done (2026-09-09) | Complaints; live on Neon (fourteen migrations, zero drift) |
 | 24 | ✅ Done (2026-09-09) | A staff member who is also an admin; live on Neon (fifteen migrations, zero drift) |
-| 25 | ✅ Done (2026-09-10) | Fees; migration written, not yet on Neon |
+| 25 | ✅ Done (2026-09-10) | Fees; live on Neon (sixteen migrations, zero drift) |
 | 26 | ⏳ Not started | The last of the college's requests (§23A): finance, and admin delete |
 
 **Live database:** the college's Neon PostgreSQL instance is connected and holds the real academic structure (2026-27, 20 groups, 20 sections). All **ten** migrations are applied to it, along with the reference data (12 designations, 10 departments, **8 document types**, and the confirmed **grading scale**).
@@ -1989,7 +1989,7 @@ The first of the college's own requests (§23A). The **colour bands** were deliv
 
 **The late fine is worked out, not stored.** What is owed today comes from the due date on every read, so the figures are right without a nightly job — this deployment has no scheduler, and a fee system that needs one would be wrong every Monday. Once money is taken against a late voucher the fine is frozen onto it, because from then on it is part of what was charged.
 
-**Data:** three tables and two enums, plus two defaulted columns on `students` — migration `20260910090000_fees`. **Written, tested against a throwaway PostgreSQL, and not yet applied to Neon: it is waiting for the go-ahead.** Nothing that worked before touches it.
+**Data:** three tables and two enums, plus two defaulted columns on `students` — migration `20260910090000_fees`. Applied to Neon on 2026-09-10 (sixteen migrations, zero drift); the census before and after was identical, the three tables, the two student columns, the voucher counter and every CHECK are in place, and no fee data exists yet. Nothing that worked before touches it.
 
 **Verified through the production build (64 new checks, all passing, alongside the 570 existing — 634 in total)**: rupees typed with commas and decimals stored as exact paisa; a duplicate package name, a negative amount and an amount with an extra zero all refused; a student on a package with a concession billed 10,000 where the package is 12,500; nobody put on a retired package; a dry run that wrote nothing, then a run that issued one voucher each on the day the office set, then the same run issuing nothing; a part payment leaving exactly 6,000 and the rest settling it; nothing taken against a settled or cancelled voucher; a voucher with money on it refusing to cancel and saying what to do first; a void restoring the voucher and keeping the record; a payment dated in the future refused; a cancelled voucher reissued by the next run; a family seeing only their own; a teacher refused everything.
 
