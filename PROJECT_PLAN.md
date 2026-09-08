@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | **Phase 22 complete: staff attendance, taken by the office.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Every module is live on Neon (twelve migrations, zero drift); the roadmap is built and the college's own requests (§23A) are under way. The office now takes its own daily register for the whole staff — Present, Absent, Short leave, Leave — with approved leave left out of the worked percentage rather than counted against anyone, and each staff member sees their own month on their profile. **The Phase 22 migration is written and tested but not yet applied to Neon; it awaits the go-ahead.** Next: Phase 23, complaints. |
+| **Status** | **Phase 22 complete: staff attendance, taken by the office.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Every module is live on Neon (thirteen migrations, zero drift); the roadmap is built and the college's own requests (§23A) are under way. The office now takes its own daily register for the whole staff — Present, Absent, Short leave, Leave — with approved leave left out of the worked percentage rather than counted against anyone, and each staff member sees their own month on their profile. Next: Phase 23, complaints. |
 | **Last updated** | 2026-09-08 (rev. 40 — Phase 22 complete) |
 | **Companion docs** | [DECISIONS.md](DECISIONS.md) · [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) · [README.md](README.md) |
 
@@ -738,7 +738,7 @@ Everything else in §20 will proceed on the stated defaults.
 
 ## 22. Progress tracker
 
-**Current phase:** 22 — complete, apart from the Neon migration, which is waiting for the go-ahead. Next: Phase 23, complaints (§23A).
+**Current phase:** 22 — complete and live on Neon. Next: Phase 23, complaints (§23A).
 
 | Phase | Status | Notes |
 |---|---|---|
@@ -764,7 +764,7 @@ Everything else in §20 will proceed on the stated defaults.
 | 19 Profile photos | ✅ Done (2026-09-08) | Thumbnails from the photo document, served under the document rule, faces on lists, pages, registers and the menu; in-memory storage for the harness. See §22.47 |
 | 20 Homework | ✅ Done (2026-09-08) | Teachers set homework where assigned, with files; students read their section's; the office sees all. Migration 11 live on Neon. See §22.48 |
 | 21 Marks deadline & corrections | ✅ Done (2026-09-08) | Deadline per exam; teachers correct their own submitted sheets until it passes; the office reopens one paper with a reason. Migration 12 live on Neon. See §22.49 |
-| 22 | ✅ Done (2026-09-08) | Staff attendance taken by the office; migration written, not yet on Neon |
+| 22 | ✅ Done (2026-09-08) | Staff attendance taken by the office; live on Neon (thirteen migrations, zero drift) |
 | 23 – 26 | ⏳ Not started | The college's requests (§23A). Next: complaints |
 
 **Live database:** the college's Neon PostgreSQL instance is connected and holds the real academic structure (2026-27, 20 groups, 20 sections). All **ten** migrations are applied to it, along with the reference data (12 designations, 10 departments, **8 document types**, and the confirmed **grading scale**).
@@ -1922,7 +1922,7 @@ The first of the college's own requests (§23A). The **colour bands** were deliv
 
 **Only the office**, and only with the new permissions `staff_attendance.view` and `staff_attendance.mark`. Who belongs on a day's register is worked out on the server from joining and leaving dates; a save that names somebody who was not employed that day is refused, not quietly skipped. Any past day may be marked — keying in Monday's paper register is ordinary office work — and the future may not.
 
-**Data:** one table, `staff_attendance`, unique on `(staff_id, date)` — migration `20260908180000_staff_attendance`. **Written, tested against a throwaway PostgreSQL, and not yet applied to Neon: it is waiting for the go-ahead.** Nothing that worked before touches it.
+**Data:** one table, `staff_attendance`, unique on `(staff_id, date)` — migration `20260908180000_staff_attendance`. Applied to Neon on 2026-09-08 (thirteen migrations, zero drift); the census before and after was identical. Nothing that worked before touches it.
 
 **Verified through the production build (33 new checks, all passing, alongside the 435 existing — 468 in total)**: the register opens with everybody on it and nobody marked; a teacher and a student are refused reading it, reading the month and marking it, and are sent away from the page; two people are marked and a remark is kept; a correction is recorded as a correction, with the day and the number of marks moved; tomorrow is refused with a sentence, and tomorrow's register reads as not editable; an id that is not a staff member gives a 404 and an invented status a 400; yesterday's paper register goes in; the month shows one present plus one leave as 100% and one present plus one absent as 50%; each teacher sees their own record and nothing of the other's; a staff login with no staff record is told so.
 
