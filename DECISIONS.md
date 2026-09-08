@@ -2781,3 +2781,29 @@ The harness runs the drill (`--import-drill`): a four-row CSV with a quoted name
 **Alternatives.** *Leave the permission override as the answer* — pushes an ordinary need onto the office one teacher at a time. *No window at all* — the risk Phase 7 named. *A reason field on every correction* — the office's own corrections have never needed one; the audit entry carries who, when and how many marks moved, which is what the college asked to know.
 
 **Consequences.** Through the production build a teacher corrected a mark on a register they had submitted, the correction was audited under them, a teacher of another subject and a student were refused, the office set the window to zero and the same teacher was refused with a sentence naming the office, the office could still correct, and the Settings page showed the rules. Both sides of the window are tested in the policy suite.
+
+---
+
+## ADR-167 · A photograph is a document; the face beside a name is a thumbnail in the database
+
+**Status:** Accepted · 2026-09-08 · Phase 19
+
+**Context.** The college asked for profile photos of students and staff. Since Phase 6 a photograph has been a document type (`STUDENT_PHOTO`, `STAFF_PHOTO`) stored in the college's Google Drive with the rest of a person's file, and the schema has carried a `photo_thumbnail` column on students and staff that nothing ever filled. §15 of the plan said why: a list of forty faces must never touch Drive.
+
+**Decision.** Nothing new is stored in Drive and no new upload exists: the photograph stays the document it always was, uploaded and replaced from the person's documents panel under the same rules. What Phase 19 adds is the small square. When a photograph is uploaded, `sharp` — already a dependency for the app icons — makes a 128×128 JPEG (rotated as the camera meant, cropped to the centre, every byte of metadata dropped) *before* anything is written, so a file that is not really an image fails there; the thumbnail is written in the same transaction as the document row and cleared in the same transaction as a deletion. A photograph uploaded before this phase has no thumbnail: the first request for it downloads the stored file once, makes the thumbnail, keeps it, and serves it.
+
+The thumbnail is served by `GET /api/v1/students/:id/photo` and `/staff/:id/photo` under **exactly the document rule** (`decideDocumentAccess`, ADR-071): a photo is not sensitive, so the office, the person themselves, and a teacher whose section the student is in may see it; a teacher of another section, a colleague, a student looking at a teacher, and anyone signed out may not. The response is a private, cacheable JPEG with an ETag; the URL carries the current photo document's id as its version, so a replaced photo is a new URL and a stale one is never shown. Lists carry `photoId` (one query per page of rows) and the `Avatar` component shows the picture where there is one and the initials where there is not — and the initials again if a picture fails to load, so a list never shows a broken image.
+
+**Consequences.** Faces appear where names are: the student and staff lists and pages, the teacher's register and class list, and the signed-in person's own menu. Through the production build a real PNG upload produced a JPEG of a few kilobytes served to the right five people and refused to the wrong four, a second upload replaced it with a new ETag, and deleting the document made the photo a 404 and the list say so.
+
+---
+
+## ADR-168 · An in-memory storage provider, so the harness exercises real uploads
+
+**Status:** Accepted · 2026-09-08 · Phase 19
+
+**Context.** ADR-032 promised an `InMemoryStorageProvider` so tests would never touch Google Drive. It was never written; the harness ran with `STORAGE_PROVIDER=none`, and every upload check could only prove that a request was validated and then refused with "storage is not configured". Photographs needed the upload to actually happen.
+
+**Decision.** `memory.provider.ts` implements the `StorageProvider` interface over a `Map` for the life of the process — folders, upload, download, trash, permanent delete, health — and `STORAGE_PROVIDER=memory` selects it. The harness runs on it, so attachments, documents and photographs are uploaded, stored, streamed back, replaced and deleted for real through the production build, with no disk and no network. It is not offered for production: `env.ts` accepts the value, the deployment guide never mentions it, and a process restart would lose every file.
+
+**Consequences.** One harness expectation changed from "503, storage off" to "201, stored". The Phase 6 upload path is now verified end to end on every push, which it had not been before.

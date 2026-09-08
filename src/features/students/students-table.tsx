@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ArrowUpDown, GraduationCap, Plus, Search, Settings2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Avatar } from '@/components/ui/avatar'
 import { Card } from '@/components/ui/card'
 import { Input, Select } from '@/components/ui/field'
 import { EmptyState } from '@/components/ui/feedback'
@@ -20,6 +21,7 @@ export interface StudentRow {
   admissionNumber: string
   fullName: string
   fatherName: string
+  photoId: string | null
   status: string
   placement: {
     className: string
@@ -353,6 +355,8 @@ export function StudentsTable({
                 {students.map((student) => (
                   <TR key={student.id} className={pending ? 'opacity-60' : undefined}>
                     <TD>
+                      <div className="flex min-w-0 items-center gap-3">
+                      <Avatar name={student.fullName} src={student.photoId ? `/api/v1/students/${student.id}/photo?v=${student.photoId}` : null} size="sm" />
                       <div className="min-w-0">
                         <Link
                           href={`/admin/students/${student.id}`}
@@ -366,6 +370,7 @@ export function StudentsTable({
                         <p className="truncate font-mono text-xs text-foreground-subtle sm:hidden">
                           {student.studentCode}
                         </p>
+                      </div>
                       </div>
                     </TD>
 

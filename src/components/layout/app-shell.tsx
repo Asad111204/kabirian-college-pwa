@@ -9,6 +9,7 @@ import { cn } from '@/lib/cn'
 import { api } from '@/lib/api-client'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Avatar } from '@/components/ui/avatar'
 import { LogoWordmark } from './logo'
 import { NAVIGATION, PORTAL_LABELS, type NavSection } from './nav-config'
 import { OfflineBanner } from '@/components/pwa/offline-banner'
@@ -19,6 +20,8 @@ export interface AppShellUser {
   fullName: string
   username: string
   role: UserRole
+  /** Their own photo endpoint, when they have a photograph on file. */
+  photoUrl: string | null
 }
 
 /**
@@ -220,9 +223,7 @@ function UserMenu({ user }: { user: AppShellUser }) {
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>
         <button className="flex items-center gap-2 rounded-[var(--radius-control)] px-2 py-1.5 text-sm hover:bg-surface-muted">
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-            {initials(user.fullName)}
-          </span>
+          <Avatar name={user.fullName} src={user.photoUrl} size="sm" />
           <span className="hidden max-w-32 truncate font-medium sm:inline">{user.fullName}</span>
           <ChevronDown className="h-4 w-4 text-foreground-muted" />
         </button>
@@ -294,12 +295,6 @@ function UserMenu({ user }: { user: AppShellUser }) {
   )
 }
 
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  if (parts.length === 0) return '?'
-  if (parts.length === 1) return (parts[0] ?? '?').slice(0, 2).toUpperCase()
-  return `${parts[0]?.[0] ?? ''}${parts[parts.length - 1]?.[0] ?? ''}`.toUpperCase()
-}
 
 /** Standard page heading used by every screen. */
 export function PageHeader({

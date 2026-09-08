@@ -16,6 +16,7 @@
  */
 import 'server-only'
 import { prisma } from '../db/prisma'
+import { currentPhotoIds } from './documents.service'
 import { authorize, type AuthContext } from '../auth/context'
 import { writeAuditLog } from '../audit/audit'
 import { ConflictError, NotFoundError, ValidationError } from '../api/errors'
@@ -62,6 +63,8 @@ export interface StudentListItem {
   admissionNumber: string
   fullName: string
   fatherName: string
+  /** The current photo document's id, when there is one: the photo URL's version. */
+  photoId: string | null
   status: StudentStatus
   admissionDate: Date
   /** Their placement in the session being viewed, if they have one. */
@@ -336,12 +339,14 @@ export async function listStudents(
   }
   counts.ALL = allCount
 
+  const photos = await currentPhotoIds('STUDENT', rows.map((r) => r.id))
   const items: StudentListItem[] = rows.map((student) => ({
     id: student.id,
     studentCode: student.studentCode,
     admissionNumber: student.admissionNumber,
     fullName: student.fullName,
     fatherName: student.fatherName,
+    photoId: photos.get(student.id) ?? null,
     status: student.status,
     admissionDate: student.admissionDate,
     placement: student.enrollments[0] ? toPlacement(student.enrollments[0]) : null,
@@ -391,12 +396,14 @@ export async function getStudent(ctx: AuthContext, id: string): Promise<StudentD
       ).map((entry) => entry.subject)
     : []
 
+  const photos = await currentPhotoIds('STUDENT', [student.id])
   return {
     id: student.id,
     studentCode: student.studentCode,
     admissionNumber: student.admissionNumber,
     fullName: student.fullName,
     fatherName: student.fatherName,
+    photoId: photos.get(student.id) ?? null,
     status: student.status,
     admissionDate: student.admissionDate,
     placement: current,

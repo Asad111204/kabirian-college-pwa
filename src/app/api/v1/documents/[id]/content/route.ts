@@ -2,6 +2,8 @@ import { Readable } from 'node:stream'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireAuthContext } from '@/server/auth/context'
 import { errorResponse } from '@/server/api/handler'
+import { ValidationError } from '@/server/api/errors'
+import { uuid } from '@/validation/common'
 import { getDocumentContent } from '@/server/services/documents.service'
 
 /**
@@ -24,7 +26,9 @@ export async function GET(request: NextRequest, routeContext: { params: Promise<
     const ctx = await requireAuthContext()
     const { id } = await routeContext.params
 
-    const file = await getDocumentContent(ctx, id ?? '')
+    // An id that is not an id is a bad request, not a database error.
+    if (!uuid.safeParse(id).success) throw new ValidationError('That is not a valid document.')
+    const file = await getDocumentContent(ctx, id!)
 
     const asDownload = request.nextUrl.searchParams.get('download') === '1'
     // Quotes and backslashes would break out of the header value.

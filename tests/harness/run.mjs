@@ -117,11 +117,11 @@ try {
       'LOG_LEVEL="warn"',
       `DATABASE_URL="${DB_URL}"`,
       'DATABASE_POOL_MAX="5"',
-      'STORAGE_PROVIDER=none',
+      'STORAGE_PROVIDER=memory',
       '',
     ].join('\n'),
   )
-  const harnessEnv = { ...process.env, DATABASE_URL: DB_URL, APP_URL: BASE, APP_TIMEZONE: 'Asia/Karachi', STORAGE_PROVIDER: 'none', LOG_LEVEL: 'warn' }
+  const harnessEnv = { ...process.env, DATABASE_URL: DB_URL, APP_URL: BASE, APP_TIMEZONE: 'Asia/Karachi', STORAGE_PROVIDER: 'memory', LOG_LEVEL: 'warn' }
   delete harnessEnv.DATABASE_DIRECT_URL
 
   log('migrations')
@@ -150,7 +150,7 @@ try {
   if (code !== 200) throw new Error(`next did not start\n${nextLog.slice(-30).join('')}`)
 
   log('verify')
-  for (const v of ['verify.mjs', 'verify-notices.mjs', 'verify-security.mjs', 'verify-pwa.mjs', 'verify-attendance.mjs']) {
+  for (const v of ['verify.mjs', 'verify-notices.mjs', 'verify-security.mjs', 'verify-pwa.mjs', 'verify-attendance.mjs', 'verify-photos.mjs']) {
     console.log(`\n--- ${v}`)
     if (run('node', [join(HERE, v)], { env: harnessEnv }) !== 0) failures += 1
   }
@@ -181,7 +181,7 @@ try {
   }
 
   const errors = nextLog.join('').split('\n').filter((l) => /"level":"error"/.test(l))
-  console.log(`\nserver log errors: ${errors.length}${errors.length ? ' (storage-not-configured errors are expected with STORAGE_PROVIDER=none)' : ''}`)
+  console.log(`\nserver log errors: ${errors.length}${errors.length ? ' (storage errors are unexpected with the in-memory provider)' : ''}`)
 
   if (args.has('--keep')) {
     console.log(`\nServer left running at ${BASE} (harness.admin / ${JSON.parse(readFileSync(join(HERE, 'ids.json'), 'utf8')).password}). Press Ctrl+C to stop and restore .env.`)

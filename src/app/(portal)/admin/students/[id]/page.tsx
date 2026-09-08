@@ -11,6 +11,7 @@ import { PageHeader } from '@/components/layout/app-shell'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Avatar } from '@/components/ui/avatar'
 import { Alert, EmptyState } from '@/components/ui/feedback'
 import { ENROLLMENT_STATUS_LABEL, STUDENT_STATUS_LABEL } from '@/validation/students'
 import { StudentActions } from '@/features/students/student-actions'
@@ -71,6 +72,7 @@ export default async function StudentProfilePage({
         description={`${student.studentCode} · Admission ${student.admissionNumber}`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <Avatar name={student.fullName} src={student.photoId ? `/api/v1/students/${student.id}/photo?v=${student.photoId}` : null} size="lg" />
             <Badge variant={STATUS_VARIANT[student.status] ?? 'neutral'}>
               {STUDENT_STATUS_LABEL[student.status] ?? student.status}
             </Badge>

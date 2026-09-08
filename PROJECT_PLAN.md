@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | **Phase 18 complete: attendance colour bands and teacher corrections.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Every module is live on Neon; the roadmap (Phases 1–17) is built and the college's own requests (§23A) are under way. Attendance percentages are coloured in the college's bands, and a teacher can now correct a register they have submitted for as long as the office allows — a window set on the Settings page, seven days by default — with every correction audited. Next: Phase 19, profile photos for students and staff. |
-| **Last updated** | 2026-09-08 (rev. 36 — Phase 18 complete) |
+| **Status** | **Phase 19 complete: profile photos.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Every module is live on Neon; the roadmap is built and the college's own requests (§23A) are under way. A photograph uploaded to a student's or staff member's documents now appears as a small face beside their name — on the lists, the pages, the teacher's register and class list, and in their own menu — served only to those allowed to see their documents, from a thumbnail in the database that never touches Drive. The harness now runs on an in-memory storage provider, so uploads are exercised for real on every push. Next: Phase 20, homework and assignments. |
+| **Last updated** | 2026-09-08 (rev. 37 — Phase 19 complete) |
 | **Companion docs** | [DECISIONS.md](DECISIONS.md) · [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) · [README.md](README.md) |
 
 ---
@@ -591,7 +591,7 @@ Real `.env` is git-ignored; secrets only in the host's environment settings in p
 |---|---|---|
 | Unit | Vitest | Grade calculation, percentages, ranking, validators, file naming, permission resolution |
 | Integration | Vitest + Prisma against a test DB (Neon test branch or local) | Services & API handlers; **authorization matrix**: student A ↔ student B, staff vs unassigned section, unpublished results invisible, deactivated user rejected, permission overrides |
-| Storage | `InMemoryStorageProvider` | Upload/replace/delete flows without touching Drive; one opt-in real-Drive smoke test |
+| Storage | `InMemoryStorageProvider` (`STORAGE_PROVIDER=memory`, Phase 19) | Upload/replace/delete flows in the harness without touching Drive; the real-Drive connection test on the Settings page |
 | E2E | `tests/harness/run.mjs` (production build against in-memory PostgreSQL) + Playwright (`tests/e2e/`, Pixel 5 and desktop projects) | API and page checks per module (Phases 10–15); sign-in and portal boundary; one real flow per portal; responsive matrix (no page scrolls sideways; drawer vs sidebar); PWA manifest, service worker, offline banner and offline page; 5,000-student load timings. Lighthouse's PWA category no longer exists (ADR-161) |
 | Manual | Checklists per phase | Real Google Drive connection, install on Android/iOS |
 
@@ -738,7 +738,7 @@ Everything else in §20 will proceed on the stated defaults.
 
 ## 22. Progress tracker
 
-**Current phase:** 18 — complete. Next: Phase 19, profile photos for students and staff (§23A).
+**Current phase:** 19 — complete. Next: Phase 20, homework and assignments (§23A).
 
 | Phase | Status | Notes |
 |---|---|---|
@@ -761,7 +761,8 @@ Everything else in §20 will proceed on the stated defaults.
 | 16 Testing & QA | ✅ Done (2026-09-08) | Harness in the repo, Playwright on phone + desktop, responsive matrix, 5k-student load check, coverage gaps closed, CI runs all of it. See §22.44 |
 | 17 Deployment & go-live | ✅ Done (2026-09-08) | Vercel + Docker guides, least-privilege role, backups + restore drill, CSV import, handover guide, monitoring, go-live checklist. See §22.45 |
 | 18 Attendance bands & teacher corrections | ✅ Done (2026-09-08) | Colour bands (Phase 10); teachers correct submitted registers within an office-set window, audited; Attendance rules on Settings. See §22.46 |
-| 19 – 26 | ⏳ Not started | The college's requests (§23A). Next: profile photos |
+| 19 Profile photos | ✅ Done (2026-09-08) | Thumbnails from the photo document, served under the document rule, faces on lists, pages, registers and the menu; in-memory storage for the harness. See §22.47 |
+| 20 – 26 | ⏳ Not started | The college's requests (§23A). Next: homework and assignments |
 
 **Live database:** the college's Neon PostgreSQL instance is connected and holds the real academic structure (2026-27, 20 groups, 20 sections). All **ten** migrations are applied to it, along with the reference data (12 designations, 10 departments, **8 document types**, and the confirmed **grading scale**).
 
@@ -1872,6 +1873,18 @@ The first of the college's own requests (§23A). The **colour bands** were deliv
 
 **Tests: 13 new** — both sides of the window in the policy suite (inside, past, zero, office exempt, assignment still required, drafts and cancelled untouched, the deadline arithmetic), the rules schema, and the teacher's register (the notice with its deadline, saving a correction without a Submit button, the closed-window message). One Phase 7 assertion that teachers must never hold the permission was retired with a note. **1,211 in total across 60 files.** Lint, typecheck and build clean.
 
+### 22.47 Phase 19, profile photos (2026-09-08)
+
+**What the college sees.** A photograph uploaded under *Documents → Photograph* on a student's or staff member's page (the same upload as before, same limits, same replace-and-delete) now appears as a face beside the name: on the student and staff lists, on their pages, on the teacher's register and class list, and in the signed-in person's own menu. Where there is no photograph, the initials show, as before.
+
+**How** (ADR-167): on upload, `sharp` makes a 128 px square JPEG with the metadata stripped and stores it in the `photo_thumbnail` column the schema has carried since Phase 6, in the same transaction as the document; a deletion clears it; a photo from before this phase gets its thumbnail on first request. `GET /api/v1/students/:id/photo` and `/staff/:id/photo` serve it under exactly the document-access rule — office, self, and a teacher of the student's section — privately cacheable with an ETag, versioned by the photo document's id.
+
+**The harness now runs real uploads** (ADR-168): an in-memory `StorageProvider` (`STORAGE_PROVIDER=memory`) replaces "storage off" in the harness, so Phase 6's upload, replace and delete paths are exercised end to end on every push.
+
+**Verified through the production build (27 new checks, all passing, alongside the 341 existing)**: the list says "no photo" and the endpoint is 404 before an upload; a real PNG upload → 201 and the list carries the photo id; the office gets a small JPEG with ETag and private caching, then a 304; the student, and a teacher of their section, see it; a teacher of another section, an unlinked login and a visitor do not; the teacher's class list and the pages carry it; a staff photo is seen by the person and the office but not a colleague or a student, and shows in the person's own menu; a second upload replaces it with a new ETag; deleting the document makes it a 404 and the list says so.
+
+**Tests: 9 new** — the thumbnail (size, format, no metadata, refuses a non-image), the in-memory provider, and the avatar (photo, initials, fallback on error). **1,221 in total across 63 files.** Lint, typecheck and build clean.
+
 ### 22.7 What Phase 4 delivered
 
 Student records and academic enrollment, built on the Phase 1–3 architecture. Nothing existing was rebuilt.
@@ -2074,7 +2087,7 @@ ones, so a mistake in them cannot be carried into everything else.
 |---|---|---|
 | 18 | Attendance colour bands | **Done.** Below 75% red, 75-79 amber, 80-89 light green, 90-100 dark green |
 | 18 | Teacher edits attendance | **Done.** Teachers correct their own submitted registers within an office-set window (Settings → Attendance rules; 7 days by default, 0 = office only); every correction audited (ADR-166) |
-| 19 | Profile photos for students and staff | Through the existing Google Drive `StorageProvider` |
+| 19 | Profile photos for students and staff | **Done.** The photo document makes a 128 px thumbnail kept in the database and served under the document rule; faces beside names everywhere (ADR-167) |
 | 20 | Homework and assignments | Teacher uploads per subject and section; students see their own subjects' work |
 | 21 | Marks entry deadline | Set by the admin per exam; after it a teacher needs the admin to reopen the paper |
 | 21 | Marks correction for teachers | Limited to papers they hold an ACTIVE TeacherAssignment for |

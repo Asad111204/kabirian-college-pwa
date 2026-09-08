@@ -63,6 +63,8 @@ export default async function StudentsPage({
           admissionNumber: student.admissionNumber,
           fullName: student.fullName,
           fatherName: student.fatherName,
+
+          photoId: student.photoId,
           status: student.status,
           placement: student.placement
             ? {

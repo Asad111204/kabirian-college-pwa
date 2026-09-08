@@ -4,6 +4,7 @@ import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { Search, Users, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Avatar } from '@/components/ui/avatar'
 import { Card } from '@/components/ui/card'
 import { Input, Select } from '@/components/ui/field'
 import { EmptyState } from '@/components/ui/feedback'
@@ -136,7 +137,9 @@ export function MyStudentsView({
                 <TR key={student.id} className={pending ? 'opacity-60' : undefined}>
                   <TD className="tabular-nums">{student.rollNumber ?? '—'}</TD>
                   <TD>
-                    <div className="min-w-0">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <Avatar name={student.fullName} src={student.photoId ? `/api/v1/students/${student.id}/photo?v=${student.photoId}` : null} size="sm" />
+                      <div className="min-w-0">
                       <p className="truncate font-medium text-foreground">{student.fullName}</p>
                       <p className="truncate text-xs text-foreground-muted">
                         s/o {student.fatherName}
@@ -144,6 +147,7 @@ export function MyStudentsView({
                       <p className="truncate font-mono text-xs text-foreground-subtle sm:hidden">
                         {student.studentCode}
                       </p>
+                      </div>
                     </div>
                   </TD>
                   <TD className="hidden sm:table-cell">

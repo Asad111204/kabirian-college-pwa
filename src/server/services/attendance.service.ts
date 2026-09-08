@@ -24,6 +24,7 @@ import { writeAuditLog } from '../audit/audit'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../api/errors'
 import { readSetting } from '../settings/settings-store'
 import { getAttendanceRules } from './settings.service'
+import { currentPhotoIds } from './documents.service'
 import { paginate, paginatedResult, withUniqueConstraintHandling, type PaginatedResult } from './service-utils'
 import {
   collegeDateToStorage,
@@ -104,6 +105,8 @@ export interface AttendanceSheetDetail extends AttendanceSheetListItem {
     fullName: string
     /** Shown on the register so a teacher can tell two same-named students apart. */
     fatherName: string | null
+    /** The student's current photo document id, for a face beside the name. */
+    photoId: string | null
     rollNumber: string | null
     status: AttendanceStatus
     remarks: string | null
@@ -1034,6 +1037,7 @@ export async function getAttendanceSheet(
 
   const counts = countStatuses(entries.map((e) => e.status))
 
+  const photos = await currentPhotoIds('STUDENT', entries.map((e) => e.studentId))
   const rule = await correctionRule()
   const loaded = await loadSheet(sheetId)
   const editDecision = decideCanEditSheet(viewerOf(ctx), await markingContextFor(ctx, loaded), { status: loaded.status, submittedAt: loaded.submittedAt }, rule)
@@ -1055,6 +1059,7 @@ export async function getAttendanceSheet(
       studentCode: entry.student.studentCode,
       fullName: entry.student.fullName,
       fatherName: entry.student.fatherName,
+      photoId: photos.get(entry.studentId) ?? null,
       rollNumber: rollNumbers.get(entry.studentId) ?? null,
       status: entry.status,
       remarks: entry.remarks,

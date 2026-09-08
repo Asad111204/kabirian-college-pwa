@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ArrowUpDown, Plus, Search, Settings2, UserCog, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Avatar } from '@/components/ui/avatar'
 import { Card } from '@/components/ui/card'
 import { Input, Select } from '@/components/ui/field'
 import { EmptyState } from '@/components/ui/feedback'
@@ -18,6 +19,7 @@ export interface StaffRow {
   id: string
   staffCode: string
   fullName: string
+  photoId: string | null
   designation: string
   department: string | null
   staffType: string
@@ -282,6 +284,8 @@ export function StaffTable({
                 {staff.map((member) => (
                   <TR key={member.id} className={pending ? 'opacity-60' : undefined}>
                     <TD>
+                      <div className="flex min-w-0 items-center gap-3">
+                      <Avatar name={member.fullName} src={member.photoId ? `/api/v1/staff/${member.id}/photo?v=${member.photoId}` : null} size="sm" />
                       <div className="min-w-0">
                         <Link
                           href={`/admin/staff/${member.id}`}
@@ -299,6 +303,7 @@ export function StaffTable({
                         ) : (
                           <p className="text-xs text-foreground-subtle">No portal account</p>
                         )}
+                      </div>
                       </div>
                     </TD>
 

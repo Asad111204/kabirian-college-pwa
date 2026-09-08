@@ -14,6 +14,7 @@
  */
 import 'server-only'
 import { prisma } from '../db/prisma'
+import { currentPhotoIds } from './documents.service'
 import { authorize, type AuthContext } from '../auth/context'
 import { writeAuditLog } from '../audit/audit'
 import { ConflictError, NotFoundError, ValidationError } from '../api/errors'
@@ -39,6 +40,8 @@ export interface StaffListItem {
   id: string
   staffCode: string
   fullName: string
+  /** The current photo document's id, when there is one: the photo URL's version. */
+  photoId: string | null
   designation: string
   designationId: string
   department: string | null
@@ -273,10 +276,12 @@ export async function listStaff(
   }
   counts.ALL = all
 
+  const photos = await currentPhotoIds('STAFF', rows.map((r) => r.id))
   const items: StaffListItem[] = rows.map((staff) => ({
     id: staff.id,
     staffCode: staff.staffCode,
     fullName: staff.fullName,
+    photoId: photos.get(staff.id) ?? null,
     designation: staff.designation.name,
     designationId: staff.designationId,
     department: staff.department?.name ?? null,
@@ -325,10 +330,12 @@ export async function getStaff(ctx: AuthContext, id: string): Promise<StaffDetai
 
   if (!staff) throw new NotFoundError('staff member')
 
+  const photos = await currentPhotoIds('STAFF', [staff.id])
   return {
     id: staff.id,
     staffCode: staff.staffCode,
     fullName: staff.fullName,
+    photoId: photos.get(staff.id) ?? null,
     designation: staff.designation.name,
     designationId: staff.designationId,
     department: staff.department?.name ?? null,

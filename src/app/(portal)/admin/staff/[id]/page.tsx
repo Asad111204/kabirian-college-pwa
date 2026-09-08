@@ -11,6 +11,7 @@ import { PageHeader } from '@/components/layout/app-shell'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Avatar } from '@/components/ui/avatar'
 import { Alert, EmptyState } from '@/components/ui/feedback'
 import { EMPLOYMENT_STATUS_LABEL, STAFF_TYPE_LABEL } from '@/validation/staff'
 import { CloseAssignmentButton, StaffActions } from '@/features/staff/staff-actions'
@@ -69,6 +70,7 @@ export default async function StaffProfilePage({ params }: { params: Promise<{ i
         description={`${staff.staffCode} · ${staff.designation}${staff.department ? ` · ${staff.department}` : ''}`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <Avatar name={staff.fullName} src={staff.photoId ? `/api/v1/staff/${staff.id}/photo?v=${staff.photoId}` : null} size="lg" />
             <Badge variant={STATUS_VARIANT[staff.employmentStatus] ?? 'neutral'}>
               {EMPLOYMENT_STATUS_LABEL[staff.employmentStatus] ?? staff.employmentStatus}
             </Badge>

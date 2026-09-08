@@ -64,6 +64,7 @@ export default async function StaffRegisterPage({
             studentCode: entry.studentCode,
             fullName: entry.fullName,
             rollNumber: entry.rollNumber,
+            photoId: entry.photoId,
             status: entry.status,
             remarks: entry.remarks,
           })),

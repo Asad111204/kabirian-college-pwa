@@ -34,7 +34,7 @@ const nextConfig: NextConfig = {
 
   // These packages must stay in Node's own module system: @node-rs/argon2 is a
   // native binary and pg opens real TCP sockets — bundling them would break.
-  serverExternalPackages: ['@node-rs/argon2', 'pg', '@prisma/adapter-pg'],
+  serverExternalPackages: ['@node-rs/argon2', 'pg', '@prisma/adapter-pg', 'sharp'],
 
   async headers() {
     return [

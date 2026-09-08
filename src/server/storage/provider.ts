@@ -15,6 +15,7 @@ import type { Readable } from 'node:stream'
 import { NotConfiguredError } from '../api/errors'
 import { env } from '../config/env'
 import { GoogleDriveProvider } from './google-drive.provider'
+import { InMemoryStorageProvider } from './memory.provider'
 
 export interface StorageUploadInput {
   folderId: string
@@ -88,6 +89,10 @@ export function getStorageProvider(): StorageProvider {
   switch (env.STORAGE_PROVIDER) {
     case 'google_drive':
       cachedProvider = new GoogleDriveProvider()
+      return cachedProvider
+    case 'memory':
+      // Tests and the harness only: files live in this process and vanish with it.
+      cachedProvider = new InMemoryStorageProvider()
       return cachedProvider
     case 'none':
     default:

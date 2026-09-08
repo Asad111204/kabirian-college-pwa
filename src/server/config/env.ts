@@ -44,7 +44,7 @@ const envSchema = z.object({
     ),
 
   // Storage (Phase 6). "none" means no file storage is configured yet.
-  STORAGE_PROVIDER: z.enum(['none', 'google_drive']).default('none'),
+  STORAGE_PROVIDER: z.enum(['none', 'google_drive', 'memory']).default('none'),
   GOOGLE_STORAGE_MODE: z.enum(['oauth', 'service_account']).default('oauth'),
   GOOGLE_CLIENT_ID: z.string().default(''),
   GOOGLE_CLIENT_SECRET: z.string().default(''),

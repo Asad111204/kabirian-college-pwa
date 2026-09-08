@@ -17,6 +17,7 @@
  */
 import 'server-only'
 import { prisma } from '../db/prisma'
+import { currentPhotoIds } from './documents.service'
 import { collegeDateToStorage, todayInCollegeTimezone } from '../time/college-date'
 import { authorize, type AuthContext } from '../auth/context'
 import { ForbiddenError, NotFoundError } from '../api/errors'
@@ -68,6 +69,7 @@ export interface ScopedStudent {
   studentCode: string
   fullName: string
   fatherName: string
+  photoId: string | null
   rollNumber: string | null
   className: string
   divisionName: string
@@ -448,10 +450,12 @@ export async function getMyStudents(
     prisma.studentEnrollment.count({ where }),
   ])
 
+  const photos = await currentPhotoIds('STUDENT', rows.map((r) => r.student.id))
   const items: ScopedStudent[] = rows.map((row) => ({
     id: row.student.id,
     studentCode: row.student.studentCode,
     fullName: row.student.fullName,
+    photoId: photos.get(row.student.id) ?? null,
     fatherName: row.student.fatherName,
     rollNumber: row.rollNumber,
     className: row.section.academicGroup.class.displayName ?? row.section.academicGroup.class.name,

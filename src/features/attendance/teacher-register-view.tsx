@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { ArrowLeft, Check, Keyboard, Save, Search, Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Avatar } from '@/components/ui/avatar'
 import { OnlineOnlyButton } from '@/components/pwa/online-only-button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/field'
@@ -29,6 +30,7 @@ export interface TeacherRegisterEntry {
   studentCode: string
   fullName: string
   rollNumber: string | null
+  photoId: string | null
   status: AttendanceStatusValue
   remarks: string | null
 }
@@ -356,6 +358,7 @@ export function TeacherRegisterView({
                   <span className="w-8 shrink-0 tabular-nums text-sm text-foreground-muted">
                     {entry.rollNumber ?? index + 1}
                   </span>
+                  <Avatar name={entry.fullName} src={entry.photoId ? `/api/v1/students/${entry.studentId}/photo?v=${entry.photoId}` : null} size="sm" className="self-center" />
                   <div className="min-w-0">
                     <p className="truncate font-medium">{entry.fullName}</p>
                     <p className="text-xs text-foreground-muted">{entry.studentCode}</p>

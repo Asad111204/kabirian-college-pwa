@@ -16,6 +16,7 @@
  */
 import 'server-only'
 import { createHash } from 'node:crypto'
+import { isPhotoDocumentType, makePhotoThumbnail, PHOTO_DOCUMENT_TYPE } from '../documents/thumbnail'
 import { prisma } from '../db/prisma'
 import { authorize, can, type AuthContext } from '../auth/context'
 import { writeAuditLog } from '../audit/audit'
@@ -501,6 +502,18 @@ export async function uploadDocument(
     documentTypeLabel: documentType.label,
   })
 
+  // A photograph also becomes the small square kept beside the person (Phase 19).
+  // Made before anything is written, so a file that is not really an image
+  // fails here rather than after it has reached storage.
+  let thumbnail: Uint8Array<ArrayBuffer> | null = null
+  if (isPhotoDocumentType(documentType.key) && isPerson(owner)) {
+    try {
+      thumbnail = await makePhotoThumbnail(input.bytes)
+    } catch {
+      throw new ValidationError('That image could not be read. Please upload a JPEG or PNG photograph.')
+    }
+  }
+
   const checksum = createHash('sha256').update(input.bytes).digest('hex')
   const storedFileName = buildStoredFileName({
     ownerCode: owner.code,
@@ -554,6 +567,11 @@ export async function uploadDocument(
         },
         select: DOCUMENT_SELECT,
       })
+
+      if (thumbnail) {
+        if (owner.studentId) await tx.student.update({ where: { id: owner.studentId }, data: { photoThumbnail: thumbnail } })
+        else if (owner.staffId) await tx.staff.update({ where: { id: owner.staffId }, data: { photoThumbnail: thumbnail } })
+      }
 
       // Now that the replacement exists, the old row can point at it.
       if (existing) {
@@ -701,6 +719,9 @@ export async function deleteDocument(
       storageFileId: true,
       originalFileName: true,
       status: true,
+      documentTypeKey: true,
+      studentId: true,
+      staffId: true,
       documentType: { select: { label: true } },
       student: { select: { studentCode: true, fullName: true } },
       staff: { select: { staffCode: true, fullName: true } },
@@ -726,6 +747,11 @@ export async function deleteDocument(
       where: { id: document.id },
       data: { status: 'DELETED', deletedAt: new Date() },
     })
+    // The person's small photo goes with their photograph.
+    if (isPhotoDocumentType(document.documentTypeKey)) {
+      if (document.studentId) await tx.student.update({ where: { id: document.studentId }, data: { photoThumbnail: null } })
+      else if (document.staffId) await tx.staff.update({ where: { id: document.staffId }, data: { photoThumbnail: null } })
+    }
 
     // The row is kept, so the FK's SET NULL never fires: clear a cover by hand.
     await tx.event.updateMany({ where: { coverDocumentId: document.id }, data: { coverDocumentId: null } })
@@ -766,4 +792,70 @@ export async function isDocumentStorageReady(): Promise<boolean> {
     select: { key: true },
   })
   return token !== null
+}
+
+/* -------------------------------------------------------------------------- */
+/* Photographs (Phase 19)                                                     */
+/* -------------------------------------------------------------------------- */
+
+export type PhotoOwner = 'STUDENT' | 'STAFF'
+
+/**
+ * The current photo document id per person, for lists: the id doubles as the
+ * cache version in the photo URL. One query for a whole page of rows.
+ */
+export async function currentPhotoIds(ownerType: PhotoOwner, ownerIds: string[]): Promise<Map<string, string>> {
+  if (ownerIds.length === 0) return new Map()
+  const rows = await prisma.document.findMany({
+    where: {
+      documentTypeKey: ownerType === 'STUDENT' ? PHOTO_DOCUMENT_TYPE.STUDENT : PHOTO_DOCUMENT_TYPE.STAFF,
+      status: { in: CURRENT_STATUSES },
+      ...(ownerType === 'STUDENT' ? { studentId: { in: ownerIds } } : { staffId: { in: ownerIds } }),
+    },
+    select: { id: true, studentId: true, staffId: true },
+  })
+  return new Map(rows.map((r) => [(ownerType === 'STUDENT' ? r.studentId : r.staffId) as string, r.id]))
+}
+
+export interface PersonPhoto {
+  bytes: Uint8Array
+  /** The photo document's id: a new photo is a new version. */
+  version: string
+}
+
+/**
+ * The small photo of one person, for those allowed to see their documents —
+ * the same rule as the photograph itself (a photo is not sensitive, so a
+ * teacher sees their own students' faces; identity documents stay with the
+ * office). A photo uploaded before Phase 19 has no thumbnail yet: it is made
+ * from the stored file the first time it is asked for, and kept.
+ */
+export async function getPersonPhoto(ctx: AuthContext, ownerType: PhotoOwner, ownerId: string): Promise<PersonPhoto> {
+  await assertCanViewDocument(ctx, {
+    studentId: ownerType === 'STUDENT' ? ownerId : null,
+    staffId: ownerType === 'STAFF' ? ownerId : null,
+    isSensitive: false,
+  })
+
+  const photoId = (await currentPhotoIds(ownerType, [ownerId])).get(ownerId)
+  if (!photoId) throw new NotFoundError('photo')
+
+  const person =
+    ownerType === 'STUDENT'
+      ? await prisma.student.findUnique({ where: { id: ownerId }, select: { photoThumbnail: true } })
+      : await prisma.staff.findUnique({ where: { id: ownerId }, select: { photoThumbnail: true } })
+  if (!person) throw new NotFoundError(ownerType === 'STUDENT' ? 'student' : 'staff member')
+
+  if (person.photoThumbnail) return { bytes: new Uint8Array(person.photoThumbnail), version: photoId }
+
+  // Backfill: a photograph from before thumbnails existed.
+  const document = await prisma.document.findUnique({ where: { id: photoId }, select: { storageFileId: true } })
+  if (!document) throw new NotFoundError('photo')
+  const file = await getStorageProvider().download(document.storageFileId)
+  const chunks: Buffer[] = []
+  for await (const chunk of file.stream) chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : Buffer.from(chunk))
+  const thumbnail = await makePhotoThumbnail(Buffer.concat(chunks))
+  if (ownerType === 'STUDENT') await prisma.student.update({ where: { id: ownerId }, data: { photoThumbnail: thumbnail } })
+  else await prisma.staff.update({ where: { id: ownerId }, data: { photoThumbnail: thumbnail } })
+  return { bytes: thumbnail, version: photoId }
 }
