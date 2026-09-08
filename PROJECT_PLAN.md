@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | **Phase 19 complete: profile photos.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Every module is live on Neon; the roadmap is built and the college's own requests (§23A) are under way. A photograph uploaded to a student's or staff member's documents now appears as a small face beside their name — on the lists, the pages, the teacher's register and class list, and in their own menu — served only to those allowed to see their documents, from a thumbnail in the database that never touches Drive. The harness now runs on an in-memory storage provider, so uploads are exercised for real on every push. Next: Phase 20, homework and assignments. |
-| **Last updated** | 2026-09-08 (rev. 37 — Phase 19 complete) |
+| **Status** | **Phase 20 complete: homework.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Every module is live on Neon (eleven migrations, zero drift); the roadmap is built and the college's own requests (§23A) are under way. A teacher now sets homework for the sections and subjects they are assigned to, with instructions, a due date and attached files; the section's students see it soonest-due first and download the files; the office sees everything and can set or remove any piece. Next: Phase 21, marks deadline and corrections. |
+| **Last updated** | 2026-09-08 (rev. 38 — Phase 20 complete) |
 | **Companion docs** | [DECISIONS.md](DECISIONS.md) · [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) · [README.md](README.md) |
 
 ---
@@ -738,7 +738,7 @@ Everything else in §20 will proceed on the stated defaults.
 
 ## 22. Progress tracker
 
-**Current phase:** 19 — complete. Next: Phase 20, homework and assignments (§23A).
+**Current phase:** 20 — complete. Next: Phase 21, marks entry deadline and marks correction for teachers (§23A).
 
 | Phase | Status | Notes |
 |---|---|---|
@@ -762,7 +762,8 @@ Everything else in §20 will proceed on the stated defaults.
 | 17 Deployment & go-live | ✅ Done (2026-09-08) | Vercel + Docker guides, least-privilege role, backups + restore drill, CSV import, handover guide, monitoring, go-live checklist. See §22.45 |
 | 18 Attendance bands & teacher corrections | ✅ Done (2026-09-08) | Colour bands (Phase 10); teachers correct submitted registers within an office-set window, audited; Attendance rules on Settings. See §22.46 |
 | 19 Profile photos | ✅ Done (2026-09-08) | Thumbnails from the photo document, served under the document rule, faces on lists, pages, registers and the menu; in-memory storage for the harness. See §22.47 |
-| 20 – 26 | ⏳ Not started | The college's requests (§23A). Next: homework and assignments |
+| 20 Homework | ✅ Done (2026-09-08) | Teachers set homework where assigned, with files; students read their section's; the office sees all. Migration 11 live on Neon. See §22.48 |
+| 21 – 26 | ⏳ Not started | The college's requests (§23A). Next: marks deadline and corrections |
 
 **Live database:** the college's Neon PostgreSQL instance is connected and holds the real academic structure (2026-27, 20 groups, 20 sections). All **ten** migrations are applied to it, along with the reference data (12 designations, 10 departments, **8 document types**, and the confirmed **grading scale**).
 
@@ -1885,6 +1886,16 @@ The first of the college's own requests (§23A). The **colour bands** were deliv
 
 **Tests: 9 new** — the thumbnail (size, format, no metadata, refuses a non-image), the in-memory provider, and the avatar (photo, initials, fallback on error). **1,221 in total across 63 files.** Lint, typecheck and build clean.
 
+### 22.48 Phase 20, homework (2026-09-08)
+
+**Staff → Homework**: a teacher sets a piece of work for one of the section+subject pairs they are assigned to — title, instructions, an optional due date — and attaches worksheets or scans (PDF, JPEG, PNG, 10 MB each) filed in the college's Drive under `Homework/<year>`. They see everything set for the sections they teach in, change or remove their own pieces, and cannot touch a colleague's. **Student → Homework**: their section's work, soonest due first ("Due in 3 days", "Was due yesterday"), past pieces on request, files downloaded through the app. **Admin → Homework**: every piece across the college; the office can set homework in the assigned teacher's name and remove any piece. Every action is audited.
+
+**Data** (ADR-169): one new table, `homework`, and a fifth owner column on `documents` — migration `20260908000000_homework`, applied to Neon on 2026-09-08 (eleven migrations, zero drift), zero drift. A removed piece keeps its row (`deleted_at`) and its audit trail.
+
+**Verified through the production build (35 new checks, all passing, alongside the 368 existing)**: the options offered to a teacher are exactly their assignments; setting, refusals for the unassigned teacher, the colleague and the student; a title required; the office setting in the teacher's name; attaching allowed to the setter and refused to a colleague and a student; the student's feed showing their section's piece with its file and not another section's, opening it, downloading the file, 404 for the other section's; the teacher's list scoped; the office seeing all; changing by the setter and the office and not by a colleague; removing by the setter and the office, after which the piece and its file are gone; the pages for all three portals.
+
+**Tests: 18 new** — the policy from both sides (assignment, ownership, the office, visibility per role, the due-date words), the schemas, and the editor, list and feed. **1,239 in total across 66 files.** Lint, typecheck and build clean.
+
 ### 22.7 What Phase 4 delivered
 
 Student records and academic enrollment, built on the Phase 1–3 architecture. Nothing existing was rebuilt.
@@ -2088,7 +2099,7 @@ ones, so a mistake in them cannot be carried into everything else.
 | 18 | Attendance colour bands | **Done.** Below 75% red, 75-79 amber, 80-89 light green, 90-100 dark green |
 | 18 | Teacher edits attendance | **Done.** Teachers correct their own submitted registers within an office-set window (Settings → Attendance rules; 7 days by default, 0 = office only); every correction audited (ADR-166) |
 | 19 | Profile photos for students and staff | **Done.** The photo document makes a 128 px thumbnail kept in the database and served under the document rule; faces beside names everywhere (ADR-167) |
-| 20 | Homework and assignments | Teacher uploads per subject and section; students see their own subjects' work |
+| 20 | Homework and assignments | **Done.** Set where a teacher is assigned, read by the section, files as documents (ADR-169). No student submissions — not asked for |
 | 21 | Marks entry deadline | Set by the admin per exam; after it a teacher needs the admin to reopen the paper |
 | 21 | Marks correction for teachers | Limited to papers they hold an ACTIVE TeacherAssignment for |
 | 22 | Staff attendance | Taken by the admin: Present, Absent, Short Leave, Leave |

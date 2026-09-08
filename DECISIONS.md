@@ -2807,3 +2807,19 @@ The thumbnail is served by `GET /api/v1/students/:id/photo` and `/staff/:id/phot
 **Decision.** `memory.provider.ts` implements the `StorageProvider` interface over a `Map` for the life of the process — folders, upload, download, trash, permanent delete, health — and `STORAGE_PROVIDER=memory` selects it. The harness runs on it, so attachments, documents and photographs are uploaded, stored, streamed back, replaced and deleted for real through the production build, with no disk and no network. It is not offered for production: `env.ts` accepts the value, the deployment guide never mentions it, and a process restart would lose every file.
 
 **Consequences.** One harness expectation changed from "503, storage off" to "201, stored". The Phase 6 upload path is now verified end to end on every push, which it had not been before.
+
+---
+
+## ADR-169 · Homework is set where a teacher is assigned, read by the section, and filed as documents
+
+**Status:** Accepted · 2026-09-08 · Phase 20
+
+**Context.** The college asked for homework: a teacher uploads work per subject and section; students see the work for their own subjects. The system already has the two facts this needs — `teacher_assignments` says who teaches what where, and `student_enrollments` says which section a student is in — and it already has a way to hold files (documents, in the college's Google Drive).
+
+**Decision.** One table, `homework`: section, subject, session, the teacher it is set in the name of, a title, plain-text instructions, an optional due date on the college calendar, and `deleted_at` so a removed piece leaves the lists but never the record. Files are documents with a fifth owner column, `homework_id`, under a new document type `HOMEWORK_ATTACHMENT`, filed in Drive under `Homework/<year>`; the owner rule (`documents_at_most_one_owner`) widens to five columns.
+
+Who may set it is the attendance rule, unchanged: a teacher with an ACTIVE assignment for that section and subject, or the office (which sets it in the assigned teacher's name, so a section always sees a name it knows). A colleague who also teaches the section may read a piece but not change another teacher's — `NOT_OWNER` is its own refusal. Who may read it: the office, every teacher of the section, and every student enrolled in it; a student holds no `documents.view`, so homework files are read under the homework rule rather than the document rule. All of this is `homework-policy.ts`, pure and tested from both sides; the services resolve the facts and never trust an id from the browser. Every set, change and removal is audited.
+
+**Alternatives.** *Submissions* — students handing work back through the app — were not asked for and would need marking, deadlines and storage rules of their own; left for a later request. *Free targeting like notices* — a whole class or programme — would have let a teacher set work for sections they do not teach; the assignment rule is the point.
+
+**Consequences.** Through the production build teacher A set homework for 11-A Biology and attached a worksheet; teacher A was refused for 11-B Chemistry, teacher B for 11-A Biology, and a student for anything; the 11-A student saw A's piece with its file and downloaded it, and could not see 11-B's; teacher B could not see or change A's piece; the office saw all three, changed one and removed one; removing a piece removed its file from reach. The migration was applied to Neon on 2026-09-08 (eleven migrations, zero drift) with zero drift.
