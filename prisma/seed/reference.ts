@@ -292,6 +292,9 @@ const CODE_SEQUENCES = [
   { key: 'STUDENT', prefix: 'STU-', nextValue: 1, padding: 4 },
   { key: 'STAFF', prefix: 'STF-', nextValue: 1, padding: 4 },
   { key: 'ADMISSION', prefix: 'ADM-', nextValue: 1, padding: 5 },
+  // Fee vouchers (Phase 25). The migration creates this row too, so a database
+  // that has migrated can always issue a voucher even if the seed never runs.
+  { key: 'FEE_VOUCHER', prefix: 'FV-', nextValue: 1, padding: 6 },
 ]
 
 async function main() {

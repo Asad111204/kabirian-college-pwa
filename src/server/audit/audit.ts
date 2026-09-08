@@ -171,6 +171,15 @@ export type AuditAction =
   | 'auth.portal_switched'
   | 'user.admin_access_granted'
   | 'user.admin_access_revoked'
+  // fees (Phase 25)
+  | 'fees.rules_updated'
+  | 'fee_package.created'
+  | 'fee_package.updated'
+  | 'student.fee_plan_set'
+  | 'fee_voucher.issued'
+  | 'fee_voucher.cancelled'
+  | 'fee_payment.recorded'
+  | 'fee_payment.voided'
   // complaints (Phase 23)
   | 'complaint.submitted'
   | 'complaint.replied'

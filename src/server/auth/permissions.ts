@@ -69,6 +69,10 @@ export const PERMISSIONS = {
   // Complaints (Phase 23)
   'complaints.view': { module: 'complaints', description: "Read students' applications to the office" },
   'complaints.respond': { module: 'complaints', description: 'Answer applications and change their state' },
+  // Fees (Phase 25)
+  'fees.view': { module: 'fees', description: 'See fee packages, vouchers and payments' },
+  'fees.manage': { module: 'fees', description: 'Set fee packages, plans and rules, and issue vouchers' },
+  'fees.collect': { module: 'fees', description: 'Record and void fee payments' },
 
   // Documents (Phase 6)
   'documents.view': { module: 'documents', description: 'View documents' },

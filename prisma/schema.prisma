@@ -320,6 +320,31 @@ enum EventStatus {
 /// What a student's application is about, so the office can sort a morning's
 /// post. Broad on purpose: a long list nobody reads is worse than seven
 /// headings everybody understands. Adding one is a migration (ADR-172).
+/// What has happened to one month's voucher (Phase 25).
+enum FeeVoucherStatus {
+  /// Issued, nothing received against it yet.
+  UNPAID
+  /// Something has been received, but not all of it.
+  PARTIALLY_PAID
+  /// Settled in full.
+  PAID
+  /// Issued in error and withdrawn. Kept, never deleted.
+  CANCELLED
+
+  @@map("fee_voucher_status")
+}
+
+/// How money reached the college.
+enum FeePaymentMethod {
+  CASH
+  BANK_TRANSFER
+  CHEQUE
+  ONLINE
+  OTHER
+
+  @@map("fee_payment_method")
+}
+
 enum ComplaintCategory {
   ACADEMIC
   ATTENDANCE
@@ -387,6 +412,10 @@ model User {
   staffAttendanceMarked StaffAttendance[] @relation("StaffAttendanceMarkedBy")
   complaintsClosed      Complaint[]       @relation("ComplaintClosedBy")
   complaintReplies      ComplaintReply[]  @relation("ComplaintReplyAuthor")
+  feeVouchersIssued     FeeVoucher[]      @relation("FeeVoucherIssuedBy")
+  feeVouchersCancelled  FeeVoucher[]      @relation("FeeVoucherCancelledBy")
+  feePaymentsReceived   FeePayment[]      @relation("FeePaymentReceivedBy")
+  feePaymentsVoided     FeePayment[]      @relation("FeePaymentVoidedBy")
 
   @@index([role, status])
   @@map("users")
@@ -579,6 +608,7 @@ model AcademicSession {
   exams              Exam[]
   homework           Homework[]
   complaints         Complaint[]
+  feeVouchers        FeeVoucher[]
 
   @@index([status])
   @@map("academic_sessions")
@@ -730,6 +760,10 @@ model Student {
   matricBoard            String?       @map("matric_board") @db.VarChar(100)
   admissionDate          DateTime      @map("admission_date") @db.Date
   admissionSessionId     String        @map("admission_session_id") @db.Uuid
+  /// The fee package this student is on, and their own concession on top of
+  /// it, in paisa (Phase 25). No package means nothing is billed to them yet.
+  feePackageId           String?       @map("fee_package_id") @db.Uuid
+  feeDiscountPaisa       Int           @default(0) @map("fee_discount_paisa")
   status                 StudentStatus @default(ACTIVE)
   photoThumbnail         Bytes?        @map("photo_thumbnail")
   driveFolderId          String?       @map("drive_folder_id") @db.VarChar(128)
@@ -740,12 +774,14 @@ model Student {
 
   user              User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
   admissionSession  AcademicSession     @relation(fields: [admissionSessionId], references: [id])
+  feePackage        FeePackage?         @relation(fields: [feePackageId], references: [id], onDelete: SetNull)
   enrollments       StudentEnrollment[]
   documents         Document[]
   attendanceEntries AttendanceEntry[]
   marks             Mark[]
   results           Result[]
   complaints        Complaint[]
+  feeVouchers       FeeVoucher[]
 
   @@index([status])
   @@index([fullName])
@@ -1065,6 +1101,120 @@ model ComplaintReply {
 
   @@index([complaintId, createdAt])
   @@map("complaint_replies")
+}
+
+// ---------------------------------------------------------------------------
+// Fees (Phase 25)
+//
+// Every amount is a whole number of PAISA, never a floating-point number of
+// rupees: 12,500 rupees is 1_250_000. Integers add and subtract exactly, and a
+// ledger that rounds differently on two screens is a ledger nobody trusts.
+// ---------------------------------------------------------------------------
+
+/// A named fee the college charges, with its monthly amount.
+///
+/// "1st Year Pre-Medical - Regular", "Scholarship 50%". One is assigned to
+/// each student; an individual concession is a discount on the student rather
+/// than a package of their own.
+model FeePackage {
+  id                 String  @id @default(uuid(7)) @db.Uuid
+  name               String  @unique @db.VarChar(120)
+  description        String? @db.VarChar(255)
+  /// What this package costs for one month, in paisa.
+  monthlyAmountPaisa Int     @map("monthly_amount_paisa")
+  isActive           Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  students Student[]
+  vouchers FeeVoucher[]
+
+  @@index([isActive, name])
+  @@map("fee_packages")
+}
+
+/// One student's bill for one month.
+///
+/// The amounts are frozen at the moment it is issued: changing a package's
+/// price next year must not rewrite what a family was asked for last March.
+model FeeVoucher {
+  id                String  @id @default(uuid(7)) @db.Uuid
+  studentId         String  @map("student_id") @db.Uuid
+  academicSessionId String? @map("academic_session_id") @db.Uuid
+  feePackageId      String? @map("fee_package_id") @db.Uuid
+  /// The package's name as it was when the voucher was issued.
+  packageName       String  @map("package_name") @db.VarChar(120)
+  /// What the family quotes over the counter.
+  voucherNumber     String  @unique @map("voucher_number") @db.VarChar(24)
+
+  /// The first day of the month being billed, on the college calendar.
+  month   DateTime @db.Date
+  dueDate DateTime @map("due_date") @db.Date
+
+  /// The package amount, before anything is taken off or added on.
+  grossPaisa    Int @map("gross_paisa")
+  /// The student's own concession, frozen at issue.
+  discountPaisa Int @default(0) @map("discount_paisa")
+  /// The late fine actually charged. Nought until the voucher is settled late;
+  /// what is *owed* today is worked out from the due date, never stored.
+  lateFinePaisa Int @default(0) @map("late_fine_paisa")
+  /// The sum of payments that have not been voided.
+  paidPaisa     Int @default(0) @map("paid_paisa")
+
+  status FeeVoucherStatus @default(UNPAID)
+
+  issuedByUserId    String?   @map("issued_by_user_id") @db.Uuid
+  cancelledAt       DateTime? @map("cancelled_at") @db.Timestamptz(3)
+  cancelledByUserId String?   @map("cancelled_by_user_id") @db.Uuid
+  cancelReason      String?   @map("cancel_reason") @db.VarChar(255)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  student         Student          @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  academicSession AcademicSession? @relation(fields: [academicSessionId], references: [id], onDelete: SetNull)
+  feePackage      FeePackage?      @relation(fields: [feePackageId], references: [id], onDelete: SetNull)
+  issuedBy        User?            @relation("FeeVoucherIssuedBy", fields: [issuedByUserId], references: [id], onDelete: SetNull)
+  cancelledBy     User?            @relation("FeeVoucherCancelledBy", fields: [cancelledByUserId], references: [id], onDelete: SetNull)
+  payments        FeePayment[]
+
+  @@index([studentId, month(sort: Desc)])
+  @@index([month, status])
+  @@index([status, dueDate])
+  @@map("fee_vouchers")
+}
+
+/// Money received against a voucher.
+///
+/// Never edited and never deleted: a mistake is voided, with a reason and a
+/// name, and the record of both stays.
+model FeePayment {
+  id          String @id @default(uuid(7)) @db.Uuid
+  voucherId   String @map("voucher_id") @db.Uuid
+  amountPaisa Int    @map("amount_paisa")
+
+  /// The day the college received it, on the college calendar.
+  paidOn    DateTime         @map("paid_on") @db.Date
+  method    FeePaymentMethod
+  /// A slip or cheque number, when there is one.
+  reference String?          @db.VarChar(60)
+  remarks   String?          @db.VarChar(255)
+
+  receivedByUserId String?   @map("received_by_user_id") @db.Uuid
+  voidedAt         DateTime? @map("voided_at") @db.Timestamptz(3)
+  voidedByUserId   String?   @map("voided_by_user_id") @db.Uuid
+  voidReason       String?   @map("void_reason") @db.VarChar(255)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  voucher    FeeVoucher @relation(fields: [voucherId], references: [id], onDelete: Restrict)
+  receivedBy User?      @relation("FeePaymentReceivedBy", fields: [receivedByUserId], references: [id], onDelete: SetNull)
+  voidedBy   User?      @relation("FeePaymentVoidedBy", fields: [voidedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([voucherId, paidOn])
+  @@index([paidOn])
+  @@map("fee_payments")
 }
 
 model Document {

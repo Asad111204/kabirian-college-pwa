@@ -20,7 +20,7 @@ export { formatCode }
 
 type PrismaExecutor = Prisma.TransactionClient | typeof prisma
 
-export type CodeSequenceKey = 'STUDENT' | 'STAFF' | 'ADMISSION'
+export type CodeSequenceKey = 'STUDENT' | 'STAFF' | 'ADMISSION' | 'FEE_VOUCHER'
 
 interface SequenceRow {
   prefix: string

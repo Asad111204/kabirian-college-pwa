@@ -317,6 +317,14 @@ const ACTION_DESCRIPTIONS: Record<string, string> = {
   'auth.portal_switched': 'switched portal',
   'user.admin_access_granted': 'gave office access to',
   'user.admin_access_revoked': 'took office access from',
+  'fees.rules_updated': 'changed the fee rules',
+  'fee_package.created': 'created the fee package',
+  'fee_package.updated': 'changed the fee package',
+  'student.fee_plan_set': 'set the fee plan for',
+  'fee_voucher.issued': 'issued fee vouchers for',
+  'fee_voucher.cancelled': 'cancelled the voucher',
+  'fee_payment.recorded': 'recorded a fee payment for',
+  'fee_payment.voided': 'voided a fee payment for',
   'complaint.submitted': 'wrote an application to the office',
   'complaint.replied': 'answered the application',
   'complaint.status_changed': 'changed the state of the application',
@@ -374,6 +382,8 @@ export const AUDIT_MODULE_LABELS: Record<string, string> = {
   homework: 'Homework',
   staff_attendance: 'Staff attendance',
   complaint: 'Complaints',
+  fee_package: 'Fees',
+  fee_voucher: 'Fees',
 }
 
 export function describeModule(module: string): string {
