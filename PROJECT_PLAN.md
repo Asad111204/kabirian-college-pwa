@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | **Phase 26 complete: finance and permanent deletion. Every phase of the roadmap and every one of the college's own requests (§23A) is now built.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Everything through Phase 25 is live on Neon (sixteen migrations, zero drift). The office now records what the college spends, sees it against what the fees brought in with a hand-drawn graph of the year, and can erase a record for good — but only when nothing at all refers to it. **The Phase 26 migration is written and tested but not yet applied to Neon; it awaits the go-ahead.** |
+| **Status** | **Phase 26 complete: finance and permanent deletion. Every phase of the roadmap and every one of the college's own requests (§23A) is now built.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Everything is live on Neon (seventeen migrations, zero drift). The office now records what the college spends, sees it against what the fees brought in with a hand-drawn graph of the year, and can erase a record for good — but only when nothing at all refers to it. |
 | **Last updated** | 2026-09-10 (rev. 44 — Phase 26 complete; the roadmap is finished) |
 | **Companion docs** | [DECISIONS.md](DECISIONS.md) · [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) · [README.md](README.md) |
 
@@ -738,7 +738,7 @@ Everything else in §20 will proceed on the stated defaults.
 
 ## 22. Progress tracker
 
-**Current phase:** 26 — complete, apart from the Neon migration, which is waiting for the go-ahead. **This was the last phase: the original roadmap (§20) and all sixteen of the college's own requests (§23A) are built.**
+**Current phase:** 26 — complete and live on Neon. **This was the last phase: the original roadmap (§20) and all sixteen of the college's own requests (§23A) are built.**
 
 | Phase | Status | Notes |
 |---|---|---|
@@ -768,7 +768,7 @@ Everything else in §20 will proceed on the stated defaults.
 | 23 | ✅ Done (2026-09-09) | Complaints; live on Neon (fourteen migrations, zero drift) |
 | 24 | ✅ Done (2026-09-09) | A staff member who is also an admin; live on Neon (fifteen migrations, zero drift) |
 | 25 | ✅ Done (2026-09-10) | Fees; live on Neon (sixteen migrations, zero drift) |
-| 26 | ✅ Done (2026-09-10) | Finance and permanent deletion; migration written, not yet on Neon |
+| 26 | ✅ Done (2026-09-10) | Finance and permanent deletion; live on Neon (seventeen migrations, zero drift) |
 
 **Live database:** the college's Neon PostgreSQL instance is connected and holds the real academic structure (2026-27, 20 groups, 20 sections). All **ten** migrations are applied to it, along with the reference data (12 designations, 10 departments, **8 document types**, and the confirmed **grading scale**).
 
@@ -2015,7 +2015,7 @@ The last phase. Two things the college asked for, and with them the whole of §2
 
 **The confirmation is the record's own code**, never the word "delete": you cannot type `STU-0042` without looking at which record is open, and the server checks it again rather than trusting the screen.
 
-**Data:** one enum and one table, `expenses` — migration `20260910150000_expenses`. Deletion needed no schema at all. **Written, tested against a throwaway PostgreSQL, and not yet applied to Neon: it is waiting for the go-ahead.**
+**Data:** one enum and one table, `expenses` — migration `20260910150000_expenses`. Deletion needed no schema at all. Applied to Neon on 2026-09-10 (seventeen migrations, zero drift); the census before and after was identical, and the table and both CHECK constraints were confirmed on the live database.
 
 **Verified through the production build (53 new checks, all passing, alongside the 634 existing — 687 in total)**: an expense recorded in exact paisa and another under a different heading; spending nothing, spending tomorrow, and a heading the college does not have all refused; a teacher and a student refused the module entirely; the month totalled with the biggest heading first and twelve months ready for the graph; an expense voided with a reason, not voided twice, leaving the month's figures while staying on the list, marked; a student with a history refused with the list of what holds them; a teacher who has taught refused; an account that has acted refused, naming the audit log; your own account refused outright; a student created by mistake erased at the second attempt, after the wrong code was refused and left them untouched; and the finance page rendering its graph as plain SVG with the figures available as a table.
 
