@@ -26,6 +26,7 @@ import { logger } from '../logger'
 import { getStorageProvider } from '../storage/provider'
 import { getScopedSectionIds } from './staff-portal.service'
 import { canViewNotice } from './notices.service'
+import { assertCanManageHomework, canViewHomework } from './homework.service'
 import { canViewEvent } from './events.service'
 import { todayInCollegeTimezone } from '../time/college-date'
 import { buildStoredFileName, validateUpload } from '../documents/file-validation'
@@ -151,8 +152,14 @@ async function assertCanViewDocument(
  */
 async function assertCanViewAttachment(
   ctx: AuthContext,
-  attachment: { noticeId: string | null; eventId: string | null },
+  attachment: { noticeId: string | null; eventId: string | null; homeworkId: string | null },
 ): Promise<void> {
+  // Homework files are read by the section under the homework rule; a
+  // student holds no documents.view and does not need it here.
+  if (attachment.homeworkId) {
+    if (!(await canViewHomework(ctx, attachment.homeworkId))) throw new NotFoundError('document')
+    return
+  }
   authorize(ctx, 'documents.view')
   const visible = attachment.noticeId
     ? await canViewNotice(ctx, attachment.noticeId)
@@ -331,7 +338,8 @@ interface OwnerRecord {
   staffId: string | null
   noticeId: string | null
   eventId: string | null
-  /** A person's code, or a short tag for a notice or event: used in file names. */
+  homeworkId: string | null
+  /** A person's code, or a short tag for a notice, event or homework: used in file names. */
   code: string
   /** A person's name, or a notice's or event's title. */
   fullName: string
@@ -354,6 +362,7 @@ async function loadOwner(ownerType: DocumentOwner, ownerId: string): Promise<Own
       staffId: null,
       noticeId: null,
       eventId: null,
+      homeworkId: null,
       code: student.studentCode,
       fullName: student.fullName,
       driveFolderId: student.driveFolderId,
@@ -372,6 +381,7 @@ async function loadOwner(ownerType: DocumentOwner, ownerId: string): Promise<Own
       staffId: staff.id,
       noticeId: null,
       eventId: null,
+      homeworkId: null,
       code: staff.staffCode,
       fullName: staff.fullName,
       driveFolderId: staff.driveFolderId,
@@ -387,6 +397,7 @@ async function loadOwner(ownerType: DocumentOwner, ownerId: string): Promise<Own
       staffId: null,
       noticeId: notice.id,
       eventId: null,
+      homeworkId: null,
       code: `NOTICE-${notice.id.slice(0, 8)}`,
       fullName: notice.title,
       driveFolderId: null,
@@ -401,12 +412,28 @@ async function loadOwner(ownerType: DocumentOwner, ownerId: string): Promise<Own
       staffId: null,
       noticeId: null,
       eventId: event.id,
+      homeworkId: null,
       code: `EVENT-${event.id.slice(0, 8)}`,
       fullName: event.title,
       driveFolderId: null,
     }
   }
-  throw new ValidationError('Only student, staff, notice and event documents can be uploaded.')
+  if (ownerType === 'HOMEWORK') {
+    const homework = await prisma.homework.findUnique({ where: { id: ownerId, deletedAt: null }, select: { id: true, title: true } })
+    if (!homework) throw new NotFoundError('homework')
+    return {
+      ownerType,
+      studentId: null,
+      staffId: null,
+      noticeId: null,
+      eventId: null,
+      homeworkId: homework.id,
+      code: `HOMEWORK-${homework.id.slice(0, 8)}`,
+      fullName: homework.title,
+      driveFolderId: null,
+    }
+  }
+  throw new ValidationError('Only student, staff, notice, event and homework documents can be uploaded.')
 }
 
 /**
@@ -423,9 +450,9 @@ async function ensureOwnerFolder(owner: OwnerRecord): Promise<string> {
   // Notices and events are filed by year, not by owner: `Notices/2026`. There
   // is no id to remember, so the folder is found (or made) on each upload --
   // one cheap Drive lookup, for something the office does a few times a week.
-  if (owner.ownerType === 'NOTICE' || owner.ownerType === 'EVENT') {
+  if (owner.ownerType === 'NOTICE' || owner.ownerType === 'EVENT' || owner.ownerType === 'HOMEWORK') {
     const year = todayInCollegeTimezone().slice(0, 4)
-    const { folderId } = await storage.ensureFolder([owner.ownerType === 'NOTICE' ? 'Notices' : 'Events', year])
+    const { folderId } = await storage.ensureFolder([owner.ownerType === 'NOTICE' ? 'Notices' : owner.ownerType === 'EVENT' ? 'Events' : 'Homework', year])
     return folderId
   }
   const parent = owner.ownerType === 'STUDENT' ? 'Students' : 'Staff'
@@ -491,7 +518,9 @@ export async function uploadDocument(
       })
     : null
 
-  assertCanManageDocuments(ctx, existing ? 'documents.replace' : 'documents.upload')
+  // Homework files are the teacher's to attach: the homework rule applies, not the office rule.
+  if (owner.ownerType === 'HOMEWORK' && owner.homeworkId) await assertCanManageHomework(ctx, owner.homeworkId)
+  else assertCanManageDocuments(ctx, existing ? 'documents.replace' : 'documents.upload')
 
   // Verified from the file's own bytes — never from what the browser claimed.
   const validated = validateUpload({
@@ -554,6 +583,7 @@ export async function uploadDocument(
           staffId: owner.staffId,
           noticeId: owner.noticeId,
           eventId: owner.eventId,
+          homeworkId: owner.homeworkId,
           storageProvider: storage.name === 'google-drive' ? 'google_drive' : storage.name,
           storageFileId: uploaded.fileId,
           storageFolderId: folderId,
@@ -657,6 +687,7 @@ export async function getDocumentContent(ctx: AuthContext, documentId: string): 
       staffId: true,
       noticeId: true,
       eventId: true,
+      homeworkId: true,
       storageFileId: true,
       fileName: true,
       originalFileName: true,
@@ -671,8 +702,8 @@ export async function getDocumentContent(ctx: AuthContext, documentId: string): 
     throw new NotFoundError('document')
   }
 
-  if (document.noticeId !== null || document.eventId !== null) {
-    await assertCanViewAttachment(ctx, { noticeId: document.noticeId, eventId: document.eventId })
+  if (document.noticeId !== null || document.eventId !== null || document.homeworkId !== null) {
+    await assertCanViewAttachment(ctx, { noticeId: document.noticeId, eventId: document.eventId, homeworkId: document.homeworkId })
   } else {
     await assertCanViewDocument(ctx, {
       studentId: document.studentId,
@@ -710,7 +741,6 @@ export async function deleteDocument(
   documentId: string,
   request?: { ipAddress?: string | null; userAgent?: string | null },
 ): Promise<void> {
-  assertCanManageDocuments(ctx, 'documents.delete')
 
   const document = await prisma.document.findUnique({
     where: { id: documentId },
@@ -722,6 +752,7 @@ export async function deleteDocument(
       documentTypeKey: true,
       studentId: true,
       staffId: true,
+      homeworkId: true,
       documentType: { select: { label: true } },
       student: { select: { studentCode: true, fullName: true } },
       staff: { select: { staffCode: true, fullName: true } },
@@ -731,6 +762,8 @@ export async function deleteDocument(
   })
 
   if (!document || document.status === 'DELETED') throw new NotFoundError('document')
+  if (document.homeworkId) await assertCanManageHomework(ctx, document.homeworkId)
+  else assertCanManageDocuments(ctx, 'documents.delete')
 
   const ownerLabel = document.student
     ? `${document.student.studentCode} ${document.student.fullName}`

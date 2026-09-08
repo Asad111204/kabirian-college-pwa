@@ -307,6 +307,10 @@ const ACTION_DESCRIPTIONS: Record<string, string> = {
   'auth.other_sessions_revoked': 'signed out their other devices',
   // settings (Phase 18)
   'settings.updated': 'changed the settings for',
+  // homework (Phase 20)
+  'homework.created': 'set homework',
+  'homework.updated': 'changed homework',
+  'homework.deleted': 'removed homework',
 }
 
 /** "created the account" for a known action; a readable form of the key otherwise. */
@@ -354,6 +358,7 @@ export const AUDIT_MODULE_LABELS: Record<string, string> = {
   notice: 'Notices',
   event: 'Events',
   settings: 'Settings',
+  homework: 'Homework',
 }
 
 export function describeModule(module: string): string {

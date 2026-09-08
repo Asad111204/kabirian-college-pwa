@@ -157,6 +157,10 @@ export type AuditAction =
   | 'auth.other_sessions_revoked'
   // settings (Phase 18)
   | 'settings.updated'
+  // homework (Phase 20)
+  | 'homework.created'
+  | 'homework.updated'
+  | 'homework.deleted'
 
 export interface AuditInput {
   action: AuditAction

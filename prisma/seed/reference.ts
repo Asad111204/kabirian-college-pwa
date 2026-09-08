@@ -233,6 +233,19 @@ const DOCUMENT_TYPES = [
     description: 'A programme, form or map attached to an event.',
     sortOrder: 2,
   },
+  // Phase 20: files a teacher attaches to homework -- a worksheet, a scan of
+  // the questions, a marking scheme. Seen by the section, never sensitive.
+  {
+    key: 'HOMEWORK_ATTACHMENT',
+    label: 'Homework file',
+    ownerType: 'HOMEWORK',
+    isRequired: false,
+    isSensitive: false,
+    allowedMimeTypes: SCAN_TYPES,
+    maxSizeBytes: 10 * MB,
+    description: 'A worksheet, reading or scan attached to a piece of homework.',
+    sortOrder: 1,
+  },
 ] as const
 
 /**

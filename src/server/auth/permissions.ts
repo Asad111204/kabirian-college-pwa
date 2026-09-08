@@ -62,6 +62,8 @@ export const PERMISSIONS = {
   'notices.manage': { module: 'notices', description: 'Create and publish notices' },
   'events.view': { module: 'events', description: 'View events' },
   'events.manage': { module: 'events', description: 'Create and edit events' },
+  'homework.view': { module: 'homework', description: 'See homework set for one\'s sections' },
+  'homework.manage': { module: 'homework', description: 'Set, change and remove homework' },
 
   // Documents (Phase 6)
   'documents.view': { module: 'documents', description: 'View documents' },
@@ -110,6 +112,10 @@ const STAFF_PERMISSIONS: PermissionKey[] = [
   'timetable.view',
   'notices.view',
   'events.view',
+  'homework.view',
+  'homework.manage',
+  'homework.view',
+  'homework.manage',
   'documents.view',
 ]
 
@@ -123,6 +129,7 @@ const STUDENT_PERMISSIONS: PermissionKey[] = [
   'timetable.view',
   'notices.view',
   'events.view',
+  'homework.view',
   'documents.view',
 ]
 
