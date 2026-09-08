@@ -160,6 +160,9 @@ export type AuditAction =
   // marks deadline (Phase 21)
   | 'exam.marks_deadline_set'
   | 'mark_sheet.reopened'
+  // staff attendance (Phase 22)
+  | 'staff_attendance.marked'
+  | 'staff_attendance.corrected'
   // homework (Phase 20)
   | 'homework.created'
   | 'homework.updated'

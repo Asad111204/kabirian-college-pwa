@@ -222,7 +222,10 @@ function UserMenu({ user }: { user: AppShellUser }) {
     <IosInstallDialog open={iosInstallOpen} onOpenChange={setIosInstallOpen} />
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>
-        <button className="flex items-center gap-2 rounded-[var(--radius-control)] px-2 py-1.5 text-sm hover:bg-surface-muted">
+        {/* On a phone only the avatar shows, and an avatar without a photo is
+            decorative — so the button needs a name of its own or a screen
+            reader announces nothing but "button". */}
+        <button aria-label={`Account: ${user.fullName}`} className="flex items-center gap-2 rounded-[var(--radius-control)] px-2 py-1.5 text-sm hover:bg-surface-muted">
           <Avatar name={user.fullName} src={user.photoUrl} size="sm" />
           <span className="hidden max-w-32 truncate font-medium sm:inline">{user.fullName}</span>
           <ChevronDown className="h-4 w-4 text-foreground-muted" />

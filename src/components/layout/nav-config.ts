@@ -61,6 +61,7 @@ export const NAVIGATION: Record<UserRole, NavSection[]> = {
       items: [
         { label: 'Students', href: '/admin/students', icon: GraduationCap },
         { label: 'Staff', href: '/admin/staff', icon: UserCog },
+        { label: 'Staff Attendance', href: '/admin/staff-attendance', icon: ClipboardCheck },
         { label: 'User Accounts', href: '/admin/users', icon: Users },
       ],
     },

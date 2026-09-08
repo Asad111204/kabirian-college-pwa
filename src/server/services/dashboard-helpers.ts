@@ -310,6 +310,9 @@ const ACTION_DESCRIPTIONS: Record<string, string> = {
   // marks deadline (Phase 21)
   'exam.marks_deadline_set': 'set the marks deadline for',
   'mark_sheet.reopened': 'reopened the mark sheet for',
+  // staff attendance (Phase 22)
+  'staff_attendance.marked': 'took the staff register for',
+  'staff_attendance.corrected': 'corrected the staff register for',
   // homework (Phase 20)
   'homework.created': 'set homework',
   'homework.updated': 'changed homework',
@@ -362,6 +365,7 @@ export const AUDIT_MODULE_LABELS: Record<string, string> = {
   event: 'Events',
   settings: 'Settings',
   homework: 'Homework',
+  staff_attendance: 'Staff attendance',
 }
 
 export function describeModule(module: string): string {

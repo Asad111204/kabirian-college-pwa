@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | **Phase 21 complete: marks deadline and teacher corrections.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Every module is live on Neon (twelve migrations, zero drift); the roadmap is built and the college's own requests (§23A) are under way. The office now sets a marks deadline per exam; a teacher may correct their own submitted mark sheet until it passes, and afterwards the office reopens that one paper, for a stated reason, until a stated day. Published marks stay the office's alone. Next: Phase 22, staff attendance. |
-| **Last updated** | 2026-09-08 (rev. 39 — Phase 21 complete) |
+| **Status** | **Phase 22 complete: staff attendance, taken by the office.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Every module is live on Neon (twelve migrations, zero drift); the roadmap is built and the college's own requests (§23A) are under way. The office now takes its own daily register for the whole staff — Present, Absent, Short leave, Leave — with approved leave left out of the worked percentage rather than counted against anyone, and each staff member sees their own month on their profile. **The Phase 22 migration is written and tested but not yet applied to Neon; it awaits the go-ahead.** Next: Phase 23, complaints. |
+| **Last updated** | 2026-09-08 (rev. 40 — Phase 22 complete) |
 | **Companion docs** | [DECISIONS.md](DECISIONS.md) · [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) · [README.md](README.md) |
 
 ---
@@ -738,7 +738,7 @@ Everything else in §20 will proceed on the stated defaults.
 
 ## 22. Progress tracker
 
-**Current phase:** 21 — complete. Next: Phase 22, staff attendance taken by the office (§23A).
+**Current phase:** 22 — complete, apart from the Neon migration, which is waiting for the go-ahead. Next: Phase 23, complaints (§23A).
 
 | Phase | Status | Notes |
 |---|---|---|
@@ -764,7 +764,8 @@ Everything else in §20 will proceed on the stated defaults.
 | 19 Profile photos | ✅ Done (2026-09-08) | Thumbnails from the photo document, served under the document rule, faces on lists, pages, registers and the menu; in-memory storage for the harness. See §22.47 |
 | 20 Homework | ✅ Done (2026-09-08) | Teachers set homework where assigned, with files; students read their section's; the office sees all. Migration 11 live on Neon. See §22.48 |
 | 21 Marks deadline & corrections | ✅ Done (2026-09-08) | Deadline per exam; teachers correct their own submitted sheets until it passes; the office reopens one paper with a reason. Migration 12 live on Neon. See §22.49 |
-| 22 – 26 | ⏳ Not started | The college's requests (§23A). Next: staff attendance |
+| 22 | ✅ Done (2026-09-08) | Staff attendance taken by the office; migration written, not yet on Neon |
+| 23 – 26 | ⏳ Not started | The college's requests (§23A). Next: complaints |
 
 **Live database:** the college's Neon PostgreSQL instance is connected and holds the real academic structure (2026-27, 20 groups, 20 sections). All **ten** migrations are applied to it, along with the reference data (12 designations, 10 departments, **8 document types**, and the confirmed **grading scale**).
 
@@ -1911,6 +1912,24 @@ The first of the college's own requests (§23A). The **colour bands** were deliv
 
 **Tests: 21 new** — the window from both sides (before, on the day, after, reopened, expired reopening, the office exempt, the assignment still required, published sheets, drafts unchanged) and the teacher's screen in its three states. **1,256 in total across 67 files.** Two Phase 8 assertions that teachers must never hold `marks.update_submitted` were retired with a note — that rule is what the college asked to change. The harness gained exam fixtures (`seed-exams.mjs`); Phase 8 predated it.
 
+### 22.50 Phase 22, staff attendance (2026-09-08)
+
+**Admin → Staff Attendance** is the office's own register: everybody employed that day, four buttons each — **Present, Absent, Short leave, Leave** — an "All present" shortcut for the ordinary day, a search box, a department filter, and a running count of the five figures as the marks go in. Nothing is stored until Save. There is no draft and no submit: a class register is handed in by a teacher, but this one belongs to the office, so a mark is a fact when it is saved and a later change is a **correction** with a name on it. The audit log distinguishes the two.
+
+**The month** (Admin → Staff Attendance → This month) is one row per staff member: the four counts and how much of the marked month was worked, in the same colour bands as the students' figures. **Approved leave is left out of that percentage** rather than counted against anyone — sanctioned leave is not a failure to attend — while short leave counts as a day at work and is still shown as its own figure so a pattern stays visible. A month with nothing marked shows a dash, not a nought.
+
+**A staff member sees their own month** on their own profile, read-only, with their days, their remarks and their percentage. The endpoint reads their own staff record and nothing else.
+
+**Only the office**, and only with the new permissions `staff_attendance.view` and `staff_attendance.mark`. Who belongs on a day's register is worked out on the server from joining and leaving dates; a save that names somebody who was not employed that day is refused, not quietly skipped. Any past day may be marked — keying in Monday's paper register is ordinary office work — and the future may not.
+
+**Data:** one table, `staff_attendance`, unique on `(staff_id, date)` — migration `20260908180000_staff_attendance`. **Written, tested against a throwaway PostgreSQL, and not yet applied to Neon: it is waiting for the go-ahead.** Nothing that worked before touches it.
+
+**Verified through the production build (33 new checks, all passing, alongside the 435 existing — 468 in total)**: the register opens with everybody on it and nobody marked; a teacher and a student are refused reading it, reading the month and marking it, and are sent away from the page; two people are marked and a remark is kept; a correction is recorded as a correction, with the day and the number of marks moved; tomorrow is refused with a sentence, and tomorrow's register reads as not editable; an id that is not a staff member gives a 404 and an invented status a 400; yesterday's paper register goes in; the month shows one present plus one leave as 100% and one present plus one absent as 50%; each teacher sees their own record and nothing of the other's; a staff login with no staff record is told so.
+
+**Tests: 31 new** — the counting rule from both sides (short leave as work, ten days of leave not moving a 75%, nothing marked giving null, rounding to 66.7), the future-date refusal, the employment window at its boundaries, what the endpoints will and will not accept, and the three screens. **1,287 in total across 71 files.**
+
+**One old defect fixed on the way past.** The browser sweep caught it: on a phone the account button in the top bar had no accessible name at all — the name is hidden below the `sm` breakpoint and an avatar without a photo is decorative, so a screen reader announced nothing but "button". It now says whose account it is.
+
 ### 22.7 What Phase 4 delivered
 
 Student records and academic enrollment, built on the Phase 1–3 architecture. Nothing existing was rebuilt.
@@ -2117,7 +2136,7 @@ ones, so a mistake in them cannot be carried into everything else.
 | 20 | Homework and assignments | **Done.** Set where a teacher is assigned, read by the section, files as documents (ADR-169). No student submissions — not asked for |
 | 21 | Marks entry deadline | **Done.** `exams.marks_deadline`; after it the office reopens that one paper, for a stated reason, until a stated day (ADR-170) |
 | 21 | Marks correction for teachers | **Done.** Their own submitted sheets, within the deadline; never a PUBLISHED sheet — a result was made from it (ADR-170) |
-| 22 | Staff attendance | Taken by the admin: Present, Absent, Short Leave, Leave |
+| 22 | Staff attendance | **Done.** The office's own daily register: Present, Absent, Short leave, Leave; approved leave is left out of the worked percentage, and each staff member sees their own month (ADR-171) |
 | 23 | Complaints | Student submits an application; the admin reads and responds |
 | 24 | A staff member who is also an admin | One account, both portals, with a switcher |
 | 25 | Fees | Named packages, per-student assignment, a per-student discount, monthly vouchers, late fine |

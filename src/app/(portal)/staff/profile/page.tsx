@@ -1,6 +1,8 @@
 import type { Metadata } from 'next'
 import { requirePortalAccess } from '@/server/auth/context'
 import { getMyProfile } from '@/server/services/staff-portal.service'
+import { getMyStaffAttendance } from '@/server/services/staff-attendance.service'
+import { MyAttendanceCard } from '@/features/staff-attendance/my-attendance-card'
 import { ForbiddenError } from '@/server/api/errors'
 import { formatDate } from '@/lib/format'
 import { PageHeader } from '@/components/layout/app-shell'
@@ -32,6 +34,9 @@ export default async function MyProfilePage() {
     }
     throw error
   }
+
+  // Their own register for this month, read with their own id and nobody else's.
+  const attendance = await getMyStaffAttendance(ctx, {})
 
   return (
     <>
@@ -80,6 +85,10 @@ export default async function MyProfilePage() {
             </dl>
           </CardContent>
         </Card>
+      </div>
+
+      <div className="mt-4">
+        <MyAttendanceCard attendance={attendance} />
       </div>
 
       <Alert variant="info" className="mt-4">

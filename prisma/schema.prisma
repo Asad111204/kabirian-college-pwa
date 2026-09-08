@@ -100,6 +100,21 @@ enum StaffType {
   @@map("staff_type")
 }
 
+enum StaffAttendanceStatus {
+  /// At work.
+  PRESENT
+  /// Not at work, without approved leave. Lowers the worked percentage.
+  ABSENT
+  /// At work for part of the day, with permission. Counted as a day at work,
+  /// and kept separate so a pattern of it stays visible.
+  SHORT_LEAVE
+  /// Approved absence. Left out of the percentage rather than counted against
+  /// the person (ADR-171).
+  LEAVE
+
+  @@map("staff_attendance_status")
+}
+
 enum EmploymentStatus {
   /// Currently working. Only active staff can receive new assignments.
   ACTIVE
@@ -336,6 +351,7 @@ model User {
   auditLogs         AuditLog[]
   uploadedDocuments Document[]       @relation("DocumentUploader")
   reopenedMarkSheets ExamMarkSheet[] @relation("MarkSheetReopenedBy")
+  staffAttendanceMarked StaffAttendance[] @relation("StaffAttendanceMarkedBy")
 
   @@index([role, status])
   @@map("users")
@@ -765,6 +781,7 @@ model Staff {
   examMarkSheets     ExamMarkSheet[]
   timetableSlots     TimetableSlot[]
   homework Homework[]
+  staffAttendance StaffAttendance[]
 
   @@index([employmentStatus])
   @@index([fullName])
@@ -888,6 +905,29 @@ model DocumentType {
 /// A piece of work a teacher sets for one section in one subject (Phase 20).
 /// Files are documents with `homeworkId` set. Removed homework is kept with
 /// `deletedAt`, so a student's "what was I set" never silently changes.
+/// The office's own register: one mark per staff member per college day
+/// (Phase 22). No draft-then-submit — a mark is a fact when it is saved, and
+/// a change is a correction with the office's name on it.
+model StaffAttendance {
+  id      String                @id @default(uuid(7)) @db.Uuid
+  staffId String                @map("staff_id") @db.Uuid
+  date    DateTime              @db.Date
+  status  StaffAttendanceStatus
+  remarks String?               @db.VarChar(255)
+
+  markedByUserId String?  @map("marked_by_user_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  staff    Staff @relation(fields: [staffId], references: [id], onDelete: Restrict)
+  markedBy User? @relation("StaffAttendanceMarkedBy", fields: [markedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([staffId, date])
+  @@index([date(sort: Desc)])
+  @@index([staffId, date(sort: Desc)])
+  @@map("staff_attendance")
+}
+
 model Homework {
   id                String @id @default(uuid(7)) @db.Uuid
   sectionId         String @map("section_id") @db.Uuid

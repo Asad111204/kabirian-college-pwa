@@ -429,6 +429,22 @@ Unique `(sheet_id, student_id)`. Indexes `(student_id, academic_session_id, date
 
 Derived metrics (computed in services, never stored): daily view per student, subject-wise %, monthly %, overall % = PRESENT ÷ (PRESENT + ABSENT + LEAVE) unless the `attendance.leave_counts_as_present` setting is on. Class/division/program reports group by `section → academic_group`.
 
+
+### `staff_attendance` — the office's own register, one row per staff member per day (Phase 22)
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| staff_id | uuid | FK -> staff `ON DELETE RESTRICT` |
+| date | date | college-timezone calendar date |
+| status | enum `staff_attendance_status` | `PRESENT`, `ABSENT`, `SHORT_LEAVE`, `LEAVE` |
+| remarks | varchar(255) | why, when the office wants to say |
+| marked_by_user_id | uuid | FK -> users `ON DELETE SET NULL` |
+| created_at / updated_at | timestamptz | |
+
+Unique `(staff_id, date)` — one mark per person per day, so a second save corrects rather than duplicates. Indexes `(date DESC)` and `(staff_id, date DESC)`.
+
+There is no sheet and no draft: a class register is handed in by a teacher and needs a submit step, but this one is the office's own record, so a mark is a fact the moment it is saved. Who belongs on a day's register comes from `staff.joining_date` / `staff.leaving_date`, never from the browser. The worked percentage is computed in `staff-attendance-policy.ts` and never stored: PRESENT and SHORT_LEAVE count as worked, ABSENT counts against, and LEAVE is left out of the denominator altogether.
+
 ---
 
 ## 5. Exams & results
