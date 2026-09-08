@@ -39,9 +39,18 @@ Decision and reasoning: ADR-163 in `DECISIONS.md`. Start on Vercel; move to Dock
 
 Documents (photos, CNIC scans, result cards, notice attachments) live in a Google Drive the college owns — `kabiriancollege@gmail.com` — under folders the app creates. Nothing is ever shared publicly; the app streams files to signed-in users.
 
-1. In Google Cloud Console, the OAuth client used in development needs the **production redirect URI** added: `https://<your-domain>/api/v1/settings/google/callback`.
-2. Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_OAUTH_REDIRECT_URI` (the production one) and `STORAGE_PROVIDER=google_drive` on the host.
+1. In Google Cloud Console → **APIs & Services → Credentials → your OAuth client**, add the **production redirect URI** to *Authorised redirect URIs*: `https://<your-domain>/api/v1/settings/google/callback`. Keep the localhost one as well, so the app still connects from a laptop. For this college that is:
+   ```
+   https://kabiriancollegeapp.vercel.app/api/v1/settings/google/callback
+   http://localhost:3000/api/v1/settings/google/callback
+   ```
+2. Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `STORAGE_PROVIDER=google_drive` on the host. `GOOGLE_OAUTH_REDIRECT_URI` is **derived from `APP_URL`** unless you set it, so getting `APP_URL` right is usually enough.
 3. After the first deploy, sign in as an administrator → **Settings → Google Drive → Connect**, sign in as the college's Google account, and press **Create folders**. The refresh token is stored encrypted with `APP_ENCRYPTION_KEY`.
+
+**The connection lives in the database, not in the code.** Connecting stores two rows in `settings` (the account record and the refresh token, encrypted with `APP_ENCRYPTION_KEY`). So:
+
+- if the deployed site shows Drive as **not connected**, either nobody has pressed **Connect** against *that database*, or the rows are gone — connect again from Settings;
+- if `APP_ENCRYPTION_KEY` on the host differs from the one used when connecting, the stored token cannot be read and every Drive action fails until you reconnect. Keep that key identical wherever the app runs against the same database, and never regenerate it casually.
 
 If the app moves to a new domain, repeat step 1 and reconnect.
 

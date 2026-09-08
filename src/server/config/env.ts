@@ -71,7 +71,20 @@ function loadEnv() {
     )
   }
 
-  return parsed.data
+  const data = parsed.data
+
+  /**
+   * The Google callback belongs to whichever address the app is served from,
+   * so it is derived from APP_URL unless it is given explicitly. One variable
+   * fewer to keep in step between a laptop and the deployed site — and one
+   * fewer way for the Drive connection to fail with a redirect_uri_mismatch.
+   * Whatever it resolves to must also be listed in the Google Cloud console.
+   */
+  if (!data.GOOGLE_OAUTH_REDIRECT_URI.trim()) {
+    data.GOOGLE_OAUTH_REDIRECT_URI = `${data.APP_URL.replace(/\/+$/, '')}/api/v1/settings/google/callback`
+  }
+
+  return data
 }
 
 export const env = loadEnv()
