@@ -20,6 +20,7 @@ export type AttendanceRefusal =
   | 'NOT_ADMIN_AREA'
   | 'SHEET_SUBMITTED'
   | 'SHEET_CANCELLED'
+  | 'CORRECTION_WINDOW_CLOSED'
 
 /** What the service has looked up about the person asking. */
 export interface AttendanceViewer {
@@ -101,21 +102,37 @@ export function decideCanMarkAttendance(
       }
 }
 
+/** The office's rule for how long a teacher may correct a submitted register. */
+export interface CorrectionRule {
+  /** The moment being decided at. */
+  now: Date
+  /** Days after submission a teacher may still correct; 0 = only the office. */
+  teacherCorrectionDays: number
+}
+
+/** When a teacher's right to correct a submitted register runs out, or null when it never began. */
+export function teacherCorrectionDeadline(submittedAt: Date | null, teacherCorrectionDays: number): Date | null {
+  if (!submittedAt || teacherCorrectionDays <= 0) return null
+  return new Date(submittedAt.getTime() + teacherCorrectionDays * 24 * 60 * 60 * 1000)
+}
+
 /**
  * May this person change an entry on an existing sheet?
  *
  * On top of being allowed to mark the sheet at all:
  *
  *   - a **cancelled** sheet is closed to everyone; the class did not happen;
- *   - a **submitted** sheet is closed to teachers, and open only to someone
- *     holding `attendance.update_submitted` — which by default is the office
- *     alone. A teacher fixes their own mistakes while the sheet is a draft;
- *     after they hand it in, changes leave the office's fingerprints.
+ *   - a **submitted** sheet needs `attendance.update_submitted`. The office
+ *     holds it outright. A teacher holds it too (Phase 18), but only for the
+ *     window the office sets after submission — `teacherCorrectionDays`,
+ *     seven by default, zero for "only the office" — and only for their own
+ *     sections, as ever. Either way the correction is audited.
  */
 export function decideCanEditSheet(
   viewer: AttendanceViewer,
   context: MarkingContext,
-  sheet: { status: 'DRAFT' | 'SUBMITTED' | 'CANCELLED' },
+  sheet: { status: 'DRAFT' | 'SUBMITTED' | 'CANCELLED'; submittedAt?: Date | null },
+  rule?: CorrectionRule,
 ): AttendanceDecision {
   if (sheet.status === 'CANCELLED') {
     return {
@@ -136,12 +153,30 @@ export function decideCanEditSheet(
   const marking = decideCanMarkAttendance({ ...viewer, canCreate: true }, context)
   if (!marking.allowed) return marking
 
-  if (sheet.status === 'SUBMITTED' && !viewer.canUpdateSubmitted) {
-    return {
-      allowed: false,
-      code: 'SHEET_SUBMITTED',
-      reason:
-        'This attendance has already been submitted. Ask the office to correct it.',
+  if (sheet.status === 'SUBMITTED') {
+    if (!viewer.canUpdateSubmitted) {
+      return {
+        allowed: false,
+        code: 'SHEET_SUBMITTED',
+        reason: 'This attendance has already been submitted. Ask the office to correct it.',
+      }
+    }
+    if (viewer.role !== 'ADMIN' && rule) {
+      if (rule.teacherCorrectionDays <= 0) {
+        return {
+          allowed: false,
+          code: 'CORRECTION_WINDOW_CLOSED',
+          reason: 'Submitted attendance can only be corrected by the office. Ask the office to correct it.',
+        }
+      }
+      const deadline = teacherCorrectionDeadline(sheet.submittedAt ?? null, rule.teacherCorrectionDays)
+      if (!deadline || rule.now.getTime() > deadline.getTime()) {
+        return {
+          allowed: false,
+          code: 'CORRECTION_WINDOW_CLOSED',
+          reason: `Teachers can correct a submitted register for ${rule.teacherCorrectionDays} day${rule.teacherCorrectionDays === 1 ? '' : 's'} after submitting it. That time has passed — ask the office to correct it.`,
+        }
+      }
     }
   }
 

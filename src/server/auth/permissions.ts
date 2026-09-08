@@ -100,6 +100,8 @@ const STAFF_PERMISSIONS: PermissionKey[] = [
   'attendance.view',
   'attendance.create',
   'attendance.update',
+  // Their own submitted registers, within the window the office sets (Phase 18).
+  'attendance.update_submitted',
   'exams.view',
   'marks.view',
   'marks.enter',

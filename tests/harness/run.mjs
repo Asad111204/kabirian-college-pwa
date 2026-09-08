@@ -150,7 +150,7 @@ try {
   if (code !== 200) throw new Error(`next did not start\n${nextLog.slice(-30).join('')}`)
 
   log('verify')
-  for (const v of ['verify.mjs', 'verify-notices.mjs', 'verify-security.mjs', 'verify-pwa.mjs']) {
+  for (const v of ['verify.mjs', 'verify-notices.mjs', 'verify-security.mjs', 'verify-pwa.mjs', 'verify-attendance.mjs']) {
     console.log(`\n--- ${v}`)
     if (run('node', [join(HERE, v)], { env: harnessEnv }) !== 0) failures += 1
   }

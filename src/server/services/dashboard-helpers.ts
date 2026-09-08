@@ -305,6 +305,8 @@ const ACTION_DESCRIPTIONS: Record<string, string> = {
   'user.session_revoked': 'signed out one device for',
   'auth.session_revoked': 'signed out one of their own devices',
   'auth.other_sessions_revoked': 'signed out their other devices',
+  // settings (Phase 18)
+  'settings.updated': 'changed the settings for',
 }
 
 /** "created the account" for a known action; a readable form of the key otherwise. */
@@ -351,6 +353,7 @@ export const AUDIT_MODULE_LABELS: Record<string, string> = {
   timetable_slot: 'Timetable',
   notice: 'Notices',
   event: 'Events',
+  settings: 'Settings',
 }
 
 export function describeModule(module: string): string {

@@ -200,6 +200,7 @@ const baseRegister = {
   markedByName: 'Sara Khan',
   submittedAt: null,
   cancelledReason: null,
+  correction: { canEdit: true, reason: null, until: null },
   studentCount: 2,
   entries,
 }
@@ -331,12 +332,16 @@ describe('submitting', () => {
 })
 
 describe('a submitted register', () => {
-  const submitted = { status: 'SUBMITTED' as const, submittedAt: '2026-08-30T10:00:00Z' }
+  const submitted = {
+    status: 'SUBMITTED' as const,
+    submittedAt: '2026-08-30T10:00:00Z',
+    correction: { canEdit: false, reason: 'Submitted attendance can only be corrected by the office. Ask the office to correct it.', until: null },
+  }
 
   it('tells the teacher to contact the office', () => {
     renderRegister(submitted)
     expect(screen.getByText('Attendance submitted')).toBeTruthy()
-    expect(screen.getByText(/cannot be edited. Please contact the office/)).toBeTruthy()
+    expect(screen.getByText(/only be corrected by the office/)).toBeTruthy()
   })
 
   it('offers no marking controls, no Save and no Submit', () => {
@@ -388,5 +393,37 @@ describe('an empty section', () => {
     renderRegister({ entries: [], studentCount: 0 })
     expect(screen.getByText('No students on this register')).toBeTruthy()
     expect(screen.getByText('No active students are enrolled in this section.')).toBeTruthy()
+  })
+})
+
+describe('a submitted register inside the correction window (Phase 18)', () => {
+  const open = {
+    status: 'SUBMITTED' as const,
+    submittedAt: '2026-08-30T10:00:00Z',
+    correction: { canEdit: true, reason: null, until: '2026-09-06T10:00:00Z' },
+  }
+
+  it('says corrections are still open and until when', () => {
+    renderRegister(open)
+    expect(screen.getByText(/corrections still open/)).toBeTruthy()
+    expect(screen.getByText(/until 06 Sep/)).toBeTruthy()
+    expect(screen.getByText(/recorded in the audit log/)).toBeTruthy()
+  })
+
+  it('lets the teacher change a mark and save it as a correction, without a Submit button', async () => {
+    patch.mockResolvedValueOnce({})
+    renderRegister(open)
+    const row = screen.getAllByRole('radiogroup')[0]!
+    await userEvent.click(within(row).getByRole('radio', { name: /Absent/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Save corrections/ }))
+    expect(patch).toHaveBeenCalledWith('/api/v1/attendance/sheets/sheet-1', expect.objectContaining({ entries: expect.arrayContaining([expect.objectContaining({ studentId: 'st1', status: 'ABSENT' })]) }))
+    expect(screen.queryByRole('button', { name: /^Submit$/ })).toBeNull()
+  })
+
+  it('offers nothing when the server says the window is closed', () => {
+    renderRegister({ ...open, correction: { canEdit: false, reason: 'Teachers can correct a submitted register for 7 days after submitting it. That time has passed — ask the office to correct it.', until: null } })
+    expect(screen.getByText(/That time has passed/)).toBeTruthy()
+    expect(screen.queryAllByRole('radiogroup')).toHaveLength(0)
+    expect(screen.queryByRole('button', { name: /Save/ })).toBeNull()
   })
 })

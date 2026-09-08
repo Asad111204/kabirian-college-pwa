@@ -48,6 +48,8 @@ export interface TeacherRegister {
   cancelledReason: string | null
   studentCount: number
   entries: TeacherRegisterEntry[]
+  /** Decided by the server with the same policy the save route applies. */
+  correction: { canEdit: boolean; reason: string | null; until: string | null }
 }
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'failed'
@@ -63,9 +65,10 @@ const SHORTCUTS: Record<string, AttendanceStatusValue> = {
 /**
  * A teacher's register.
  *
- * Deliberately narrower than the admin screen: mark, save, submit. No cancel, no
- * correction, no filters — the office does those. Built for a phone held in one
- * hand at the front of a classroom.
+ * Deliberately narrower than the admin screen: mark, save, submit — and, since
+ * Phase 18, correct a submitted register while the office's window is open.
+ * No cancel, no filters — the office does those. Built for a phone held in
+ * one hand at the front of a classroom.
  */
 export function TeacherRegisterView({
   register: initial,
@@ -98,7 +101,10 @@ export function TeacherRegisterView({
   const isDraft = register.status === 'DRAFT'
   const isSubmitted = register.status === 'SUBMITTED'
   const isCancelled = register.status === 'CANCELLED'
-  const editable = canUpdate && isDraft
+  // A draft is theirs to mark; a submitted register only while the office's
+  // correction window is open (Phase 18) -- the server says which.
+  const correcting = isSubmitted && register.correction.canEdit
+  const editable = canUpdate && (isDraft || correcting)
 
   const dirty = React.useMemo(
     () => register.entries.some((e) => marks[e.studentId] !== e.status),
@@ -272,10 +278,17 @@ export function TeacherRegisterView({
         </Alert>
       ) : null}
 
-      {isSubmitted ? (
+      {isSubmitted && correcting ? (
+        <Alert variant="warning" className="mb-4" title="Attendance submitted; corrections still open">
+          You can still correct this register
+          {register.correction.until ? ` until ${formatDateTime(register.correction.until)}` : ''}. Every correction
+          is recorded in the audit log. After that, ask the office.
+        </Alert>
+      ) : null}
+
+      {isSubmitted && !correcting ? (
         <Alert variant="success" className="mb-4" title="Attendance submitted">
-          Submitted attendance cannot be edited. Please contact the office if something needs
-          correcting.
+          {register.correction.reason ?? 'Submitted attendance cannot be edited. Please contact the office if something needs correcting.'}
         </Alert>
       ) : null}
 
@@ -395,12 +408,15 @@ export function TeacherRegisterView({
               disabled={!dirty}
             >
               <Save className="h-4 w-4" aria-hidden />
-              Save draft
+              {correcting ? 'Save corrections' : 'Save draft'}
             </Button>
-            <Button onClick={() => setSubmitOpen(true)}>
-              <Send className="h-4 w-4" aria-hidden />
-              Submit
-            </Button>
+            {/* Corrections are saved, not submitted again: the register is already in. */}
+            {isDraft ? (
+              <Button onClick={() => setSubmitOpen(true)}>
+                <Send className="h-4 w-4" aria-hidden />
+                Submit
+              </Button>
+            ) : null}
           </div>
         </div>
       ) : null}

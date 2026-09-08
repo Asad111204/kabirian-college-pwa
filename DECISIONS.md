@@ -2767,3 +2767,17 @@ The harness performs the drill on every CI run (`--backup-drill`): export, delet
 The harness runs the drill (`--import-drill`): a four-row CSV with a quoted name, a "Section B" spelling, a section that does not exist and a CNIC that is not one — the dry run must create nothing and name both problems; `--apply` must create exactly two, refuse the same two, and leave two `student.created` entries under the administrator.
 
 **Consequences.** There is one path for a student to enter the system. The spreadsheet's column names are forgiving ("Full Name", "full_name"); the values are not — a wrong CNIC is refused with the same sentence the form would use.
+
+---
+
+## ADR-166 · A teacher corrects a submitted register for as long as the office allows
+
+**Status:** Accepted · 2026-09-08 · Phase 18
+
+**Context.** The college asked for attendance to be "editable by teacher". Since Phase 7 a teacher could change a register only while it was a draft; once submitted it was the office's, unless an administrator granted `attendance.update_submitted` to that one teacher by hand. The reason was sound — a teacher who can silently rewrite last month can rewrite a term — but the effect was that every honest slip the day after submission became a trip to the office.
+
+**Decision.** Teachers hold `attendance.update_submitted` by default, and the edit policy (`decideCanEditSheet`) applies a **correction window** to them that it never applies to the office: a submitted register may be corrected by its teacher for `attendance.teacher_correction_days` days after submission — seven unless the office changes it, zero for "only the office". The window is a setting on the Settings page (with the older "leave counts as present" rule beside it, which had never had a screen), changed only with `settings.manage`, and audited with the old and new values. Every correction is audited as before; the teacher's scope is unchanged — their own sections and subjects, decided from `teacher_assignments` as ever. The register tells the teacher the deadline, or the reason it is closed, from the same decision the save route applies, so the screen never promises what the server refuses. A correction is saved, not re-submitted: the register was already handed in.
+
+**Alternatives.** *Leave the permission override as the answer* — pushes an ordinary need onto the office one teacher at a time. *No window at all* — the risk Phase 7 named. *A reason field on every correction* — the office's own corrections have never needed one; the audit entry carries who, when and how many marks moved, which is what the college asked to know.
+
+**Consequences.** Through the production build a teacher corrected a mark on a register they had submitted, the correction was audited under them, a teacher of another subject and a student were refused, the office set the window to zero and the same teacher was refused with a sentence naming the office, the office could still correct, and the Settings page showed the rules. Both sides of the window are tested in the policy suite.

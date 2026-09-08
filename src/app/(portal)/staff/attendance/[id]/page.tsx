@@ -56,6 +56,7 @@ export default async function StaffRegisterPage({
           markedByName: sheet.markedByName,
           submittedAt: sheet.submittedAt,
           cancelledReason: sheet.cancelledReason,
+          correction: sheet.correction,
           studentCount: sheet.studentCount,
           entries: sheet.entries.map((entry) => ({
             id: entry.id,

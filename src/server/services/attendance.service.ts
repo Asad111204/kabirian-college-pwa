@@ -23,6 +23,7 @@ import { authorize, can, type AuthContext } from '../auth/context'
 import { writeAuditLog } from '../audit/audit'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../api/errors'
 import { readSetting } from '../settings/settings-store'
+import { getAttendanceRules } from './settings.service'
 import { paginate, paginatedResult, withUniqueConstraintHandling, type PaginatedResult } from './service-utils'
 import {
   collegeDateToStorage,
@@ -47,6 +48,8 @@ import {
   decideCanMarkAttendance,
   type AttendanceViewer,
   type MarkingContext,
+  teacherCorrectionDeadline,
+  type CorrectionRule,
 } from '../attendance/access'
 import type {
   AttendanceSheetCreateInput,
@@ -82,6 +85,13 @@ export interface AttendanceSheetListItem {
 export interface AttendanceSheetDetail extends AttendanceSheetListItem {
   academicSessionId: string
   cancelledReason: string | null
+  /**
+   * Whether the person reading this may change it, and if not, why -- decided
+   * by the same policy the PATCH route applies, so the screen never promises
+   * what the server will refuse. `until` is when a teacher's right to correct
+   * a submitted register runs out (ISO), when there is one.
+   */
+  correction: { canEdit: boolean; reason: string | null; until: string | null }
   /**
    * The percentage for this one register, using the college's own rule. Sent
    * from the server so no screen ever computes it a second, different way.
@@ -494,6 +504,7 @@ interface LoadedSheet {
   period: number
   markedByStaffId: string
   sectionName: string
+  submittedAt: Date | null
 }
 
 async function loadSheet(sheetId: string): Promise<LoadedSheet> {
@@ -508,6 +519,7 @@ async function loadSheet(sheetId: string): Promise<LoadedSheet> {
       date: true,
       period: true,
       markedByStaffId: true,
+      submittedAt: true,
       section: { select: { name: true } },
     },
   })
@@ -544,9 +556,15 @@ async function markingContextFor(ctx: AuthContext, sheet: LoadedSheet): Promise<
   return { subjectId: sheet.subjectId, hasActiveAssignment, isActiveIncharge }
 }
 
+/** The office's rule for teacher corrections, read once per decision. */
+async function correctionRule(): Promise<CorrectionRule> {
+  const rules = await getAttendanceRules()
+  return { now: new Date(), teacherCorrectionDays: rules.teacherCorrectionDays }
+}
+
 async function assertCanEdit(ctx: AuthContext, sheet: LoadedSheet): Promise<void> {
   const context = await markingContextFor(ctx, sheet)
-  const decision = decideCanEditSheet(viewerOf(ctx), context, { status: sheet.status })
+  const decision = decideCanEditSheet(viewerOf(ctx), context, { status: sheet.status, submittedAt: sheet.submittedAt }, await correctionRule())
   if (!decision.allowed) {
     throw new ForbiddenError(decision.reason, {
       userId: ctx.userId,
@@ -1016,10 +1034,20 @@ export async function getAttendanceSheet(
 
   const counts = countStatuses(entries.map((e) => e.status))
 
+  const rule = await correctionRule()
+  const loaded = await loadSheet(sheetId)
+  const editDecision = decideCanEditSheet(viewerOf(ctx), await markingContextFor(ctx, loaded), { status: loaded.status, submittedAt: loaded.submittedAt }, rule)
+  const deadline = ctx.role === 'ADMIN' ? null : teacherCorrectionDeadline(loaded.submittedAt, rule.teacherCorrectionDays)
+
   return {
     ...toListItem(row, counts),
     academicSessionId: row.academicSessionId,
     cancelledReason: row.cancelledReason,
+    correction: {
+      canEdit: editDecision.allowed,
+      reason: editDecision.allowed ? null : editDecision.reason,
+      until: loaded.status === 'SUBMITTED' && editDecision.allowed && deadline ? deadline.toISOString() : null,
+    },
     percentage: summarise(counts, { leaveCountsAsPresent: await leaveCountsAsPresent() }).percentage,
     entries: entries.map((entry) => ({
       id: entry.id,

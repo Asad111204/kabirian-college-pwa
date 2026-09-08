@@ -3,6 +3,7 @@ import {
   decideCanCancelSheet,
   decideCanEditSheet,
   decideCanMarkAttendance,
+  teacherCorrectionDeadline,
   type AttendanceViewer,
   type MarkingContext,
 } from '@/server/attendance/access'
@@ -250,5 +251,58 @@ describe('cancelling a register', () => {
       allowed: false,
       code: 'NO_PERMISSION',
     })
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+/* Phase 18: a teacher corrects a submitted register within the window        */
+/* -------------------------------------------------------------------------- */
+
+describe('the teacher correction window', () => {
+  const correctingTeacher: AttendanceViewer = { ...teacher, canUpdateSubmitted: true }
+  const assigned: MarkingContext = { subjectId: 'bio', hasActiveAssignment: true, isActiveIncharge: false }
+  const submittedAt = new Date('2026-09-01T05:00:00Z')
+  const day = 24 * 60 * 60 * 1000
+
+  it('lets an assigned teacher correct their submitted register inside the window', () => {
+    const decision = decideCanEditSheet(correctingTeacher, assigned, { status: 'SUBMITTED', submittedAt }, { now: new Date(submittedAt.getTime() + 2 * day), teacherCorrectionDays: 7 })
+    expect(decision.allowed).toBe(true)
+  })
+
+  it('refuses once the window has passed, naming the number of days and the office', () => {
+    const decision = decideCanEditSheet(correctingTeacher, assigned, { status: 'SUBMITTED', submittedAt }, { now: new Date(submittedAt.getTime() + 8 * day), teacherCorrectionDays: 7 })
+    expect(decision.allowed).toBe(false)
+    if (!decision.allowed) {
+      expect(decision.code).toBe('CORRECTION_WINDOW_CLOSED')
+      expect(decision.reason).toMatch(/7 days/)
+      expect(decision.reason).toMatch(/office/)
+    }
+  })
+
+  it('refuses every teacher when the office sets the window to zero', () => {
+    const decision = decideCanEditSheet(correctingTeacher, assigned, { status: 'SUBMITTED', submittedAt }, { now: new Date(submittedAt.getTime() + 1000), teacherCorrectionDays: 0 })
+    expect(decision.allowed).toBe(false)
+    if (!decision.allowed) expect(decision.code).toBe('CORRECTION_WINDOW_CLOSED')
+  })
+
+  it('never applies the window to the office', () => {
+    expect(decideCanEditSheet(admin, assigned, { status: 'SUBMITTED', submittedAt }, { now: new Date(submittedAt.getTime() + 400 * day), teacherCorrectionDays: 0 }).allowed).toBe(true)
+  })
+
+  it('still needs the assignment: the window opens nothing for a teacher of another subject', () => {
+    const decision = decideCanEditSheet(correctingTeacher, { ...assigned, hasActiveAssignment: false }, { status: 'SUBMITTED', submittedAt }, { now: new Date(submittedAt.getTime() + 1000), teacherCorrectionDays: 7 })
+    expect(decision.allowed).toBe(false)
+    if (!decision.allowed) expect(decision.code).toBe('NOT_ASSIGNED')
+  })
+
+  it('does not touch drafts or cancelled sheets', () => {
+    expect(decideCanEditSheet(correctingTeacher, assigned, { status: 'DRAFT', submittedAt: null }, { now: new Date(), teacherCorrectionDays: 0 }).allowed).toBe(true)
+    expect(decideCanEditSheet(correctingTeacher, assigned, { status: 'CANCELLED', submittedAt }, { now: new Date(), teacherCorrectionDays: 7 }).allowed).toBe(false)
+  })
+
+  it('computes the deadline from the submission, or none when there is no window', () => {
+    expect(teacherCorrectionDeadline(submittedAt, 3)?.toISOString()).toBe('2026-09-04T05:00:00.000Z')
+    expect(teacherCorrectionDeadline(submittedAt, 0)).toBeNull()
+    expect(teacherCorrectionDeadline(null, 7)).toBeNull()
   })
 })

@@ -44,7 +44,8 @@ describe('role defaults', () => {
       'students.delete',
       'results.publish',
       'marks.update_submitted',
-      'attendance.update_submitted',
+      // attendance.update_submitted is no longer here: since Phase 18 a teacher
+      // holds it for their own registers, bounded by the office's correction window.
     ]
     for (const key of forbidden) {
       expect(ROLE_DEFAULT_PERMISSIONS.STAFF, `staff must not hold ${key}`).not.toContain(key)

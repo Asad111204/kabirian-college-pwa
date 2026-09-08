@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | **Phase 17 complete: deployment.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Every module is live on Neon. The system now has a deployment guide for Vercel (recommended, free, 4 MB uploads) and for Docker (standalone image, built and started by CI), a least-privilege database role script, backups the college holds itself with a restore that the harness drills on every push, a CSV import that goes through the application, an administrator's handover guide, monitoring instructions and a go-live checklist. What remains is in the college's hands: the host variables, the domain, the Google production redirect, the Neon role, one restore drill on a Neon branch, the real intake, and installing on two phones. Next: the college's own requests, Phases 18–26 (§23A). |
-| **Last updated** | 2026-09-08 (rev. 35 — Phase 17 complete) |
+| **Status** | **Phase 18 complete: attendance colour bands and teacher corrections.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Every module is live on Neon; the roadmap (Phases 1–17) is built and the college's own requests (§23A) are under way. Attendance percentages are coloured in the college's bands, and a teacher can now correct a register they have submitted for as long as the office allows — a window set on the Settings page, seven days by default — with every correction audited. Next: Phase 19, profile photos for students and staff. |
+| **Last updated** | 2026-09-08 (rev. 36 — Phase 18 complete) |
 | **Companion docs** | [DECISIONS.md](DECISIONS.md) · [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) · [README.md](README.md) |
 
 ---
@@ -738,7 +738,7 @@ Everything else in §20 will proceed on the stated defaults.
 
 ## 22. Progress tracker
 
-**Current phase:** 17 — complete (the roadmap's last phase). Next: the college's further requests, Phases 18–26 (§23A), starting with Phase 18.
+**Current phase:** 18 — complete. Next: Phase 19, profile photos for students and staff (§23A).
 
 | Phase | Status | Notes |
 |---|---|---|
@@ -760,6 +760,8 @@ Everything else in §20 will proceed on the stated defaults.
 | 15 PWA & offline | ✅ Done (2026-09-08) | Serwist worker (build files only), offline page, offline banner and guarded submits, update prompt, install entry with iOS steps, shortcuts via `/go/*`. See §22.43 |
 | 16 Testing & QA | ✅ Done (2026-09-08) | Harness in the repo, Playwright on phone + desktop, responsive matrix, 5k-student load check, coverage gaps closed, CI runs all of it. See §22.44 |
 | 17 Deployment & go-live | ✅ Done (2026-09-08) | Vercel + Docker guides, least-privilege role, backups + restore drill, CSV import, handover guide, monitoring, go-live checklist. See §22.45 |
+| 18 Attendance bands & teacher corrections | ✅ Done (2026-09-08) | Colour bands (Phase 10); teachers correct submitted registers within an office-set window, audited; Attendance rules on Settings. See §22.46 |
+| 19 – 26 | ⏳ Not started | The college's requests (§23A). Next: profile photos |
 
 **Live database:** the college's Neon PostgreSQL instance is connected and holds the real academic structure (2026-27, 20 groups, 20 sections). All **ten** migrations are applied to it, along with the reference data (12 designations, 10 departments, **8 document types**, and the confirmed **grading scale**).
 
@@ -1862,6 +1864,14 @@ One tidy-up: the target index is now declared in the Prisma model under the migr
 
 **In the college's hands** (nothing here can be done from this side): the host variables and domain; the production Google redirect URI and reconnecting Drive; applying the least-privilege role in Neon; one restore drill on a Neon branch; the real intake through the import; installing on one Android phone and one iPhone.
 
+### 22.46 Phase 18, attendance bands and teacher corrections (2026-09-08)
+
+The first of the college's own requests (§23A). The **colour bands** were delivered in Phase 10 (below 75% red, 75–79 amber, 80–89 light green, 90–100 dark green, always with the figure and a word beside the colour). **Teacher corrections** (ADR-166): a teacher now holds `attendance.update_submitted` for their own registers, bounded by a **correction window** the office sets under **Settings → Attendance rules** — seven days after submission by default, 0 for "only the office", up to 60. The teacher's register says until when it can be corrected, or why it cannot; a correction is saved (not re-submitted) and audited under the teacher as before. The office's own corrections are unchanged and unbounded. The "leave counts as present" rule, which existed but had no screen, is on the same card. Changing the rules needs `settings.manage` and is audited with the old and new values.
+
+**Verified through the production build (21 new checks, all passing, alongside the 319 existing)**: the office reads and changes the rules and a teacher cannot; a value over the ceiling is refused; the change is audited with before and after; a teacher opens, submits and then corrects a register, the correction audited under them; a teacher of another subject and a student are refused; with the window at zero the same teacher is refused with a sentence naming the office while the office still can; the register page shows the notice and the Settings page the card.
+
+**Tests: 13 new** — both sides of the window in the policy suite (inside, past, zero, office exempt, assignment still required, drafts and cancelled untouched, the deadline arithmetic), the rules schema, and the teacher's register (the notice with its deadline, saving a correction without a Submit button, the closed-window message). One Phase 7 assertion that teachers must never hold the permission was retired with a note. **1,211 in total across 60 files.** Lint, typecheck and build clean.
+
 ### 22.7 What Phase 4 delivered
 
 Student records and academic enrollment, built on the Phase 1–3 architecture. Nothing existing was rebuilt.
@@ -2063,7 +2073,7 @@ ones, so a mistake in them cannot be carried into everything else.
 | Phase | Feature | Notes |
 |---|---|---|
 | 18 | Attendance colour bands | **Done.** Below 75% red, 75-79 amber, 80-89 light green, 90-100 dark green |
-| 18 | Teacher edits attendance | Drafts already editable; correcting a **submitted** register needs `attendance.update_submitted`, which an admin can grant per teacher today |
+| 18 | Teacher edits attendance | **Done.** Teachers correct their own submitted registers within an office-set window (Settings → Attendance rules; 7 days by default, 0 = office only); every correction audited (ADR-166) |
 | 19 | Profile photos for students and staff | Through the existing Google Drive `StorageProvider` |
 | 20 | Homework and assignments | Teacher uploads per subject and section; students see their own subjects' work |
 | 21 | Marks entry deadline | Set by the admin per exam; after it a teacher needs the admin to reopen the paper |

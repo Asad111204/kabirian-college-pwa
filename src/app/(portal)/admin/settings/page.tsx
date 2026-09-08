@@ -4,12 +4,14 @@ import { getDriveStatus } from '@/server/services/google-drive.service'
 import { PageHeader } from '@/components/layout/app-shell'
 import { Alert } from '@/components/ui/feedback'
 import { GoogleDriveCard } from '@/features/settings/google-drive-card'
+import { AttendanceRulesCard } from '@/features/settings/attendance-rules-card'
+import { getAttendanceRulesForAdmin } from '@/server/services/settings.service'
 
 export const metadata: Metadata = { title: 'Settings' }
 export const dynamic = 'force-dynamic'
 
 /**
- * Settings — currently the Google Drive connection.
+ * Settings — the Google Drive connection and the attendance rules.
  *
  * The status is read on the server by a service that checks the ADMIN role and
  * the `settings.manage` permission, so the page cannot render for anyone else
@@ -21,7 +23,7 @@ export default async function SettingsPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
   const ctx = await requirePortalAccess(['ADMIN'])
-  const status = await getDriveStatus(ctx)
+  const [status, rules] = await Promise.all([getDriveStatus(ctx), getAttendanceRulesForAdmin(ctx)])
 
   // The OAuth routes are browser navigations, so they report their outcome
   // through the query string rather than a JSON body.
@@ -51,6 +53,8 @@ export default async function SettingsPage({
 
       <div className="space-y-4">
         <GoogleDriveCard status={status} notice={notice} />
+
+        <AttendanceRulesCard rules={rules} />
 
         <Alert variant="info" title="Where documents live">
           Files are stored in Google Drive; the database stores the record of each document — who it

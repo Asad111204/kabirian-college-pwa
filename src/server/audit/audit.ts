@@ -155,6 +155,8 @@ export type AuditAction =
   | 'user.session_revoked'
   | 'auth.session_revoked'
   | 'auth.other_sessions_revoked'
+  // settings (Phase 18)
+  | 'settings.updated'
 
 export interface AuditInput {
   action: AuditAction
