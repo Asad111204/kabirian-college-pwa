@@ -180,6 +180,12 @@ export type AuditAction =
   | 'fee_voucher.cancelled'
   | 'fee_payment.recorded'
   | 'fee_payment.voided'
+  // finance and permanent deletion (Phase 26)
+  | 'expense.recorded'
+  | 'expense.voided'
+  | 'student.erased'
+  | 'staff.erased'
+  | 'user.erased'
   // complaints (Phase 23)
   | 'complaint.submitted'
   | 'complaint.replied'

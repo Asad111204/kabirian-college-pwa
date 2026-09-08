@@ -345,6 +345,21 @@ enum FeePaymentMethod {
   @@map("fee_payment_method")
 }
 
+/// What the college spent money on (Phase 26). Broad on purpose: a long list
+/// nobody keeps up to date is worse than eight headings everybody understands.
+enum ExpenseCategory {
+  SALARIES
+  UTILITIES
+  RENT
+  MAINTENANCE
+  SUPPLIES
+  TRANSPORT
+  EVENTS
+  OTHER
+
+  @@map("expense_category")
+}
+
 enum ComplaintCategory {
   ACADEMIC
   ATTENDANCE
@@ -416,6 +431,8 @@ model User {
   feeVouchersCancelled  FeeVoucher[]      @relation("FeeVoucherCancelledBy")
   feePaymentsReceived   FeePayment[]      @relation("FeePaymentReceivedBy")
   feePaymentsVoided     FeePayment[]      @relation("FeePaymentVoidedBy")
+  expensesRecorded      Expense[]         @relation("ExpenseRecordedBy")
+  expensesVoided        Expense[]         @relation("ExpenseVoidedBy")
 
   @@index([role, status])
   @@map("users")
@@ -1215,6 +1232,40 @@ model FeePayment {
   @@index([voucherId, paidOn])
   @@index([paidOn])
   @@map("fee_payments")
+}
+
+/// Money the college spent (Phase 26).
+///
+/// Kept like a fee payment and for the same reason: never edited, never
+/// deleted, voided with a name and a reason when it was recorded in error.
+/// Amounts are whole paisa.
+model Expense {
+  id          String          @id @default(uuid(7)) @db.Uuid
+  category    ExpenseCategory
+  title       String          @db.VarChar(150)
+  amountPaisa Int             @map("amount_paisa")
+
+  /// The day the money went out, on the college calendar.
+  spentOn   DateTime         @map("spent_on") @db.Date
+  method    FeePaymentMethod
+  /// A bill or cheque number, when there is one.
+  reference String?          @db.VarChar(60)
+  remarks   String?          @db.VarChar(255)
+
+  recordedByUserId String?   @map("recorded_by_user_id") @db.Uuid
+  voidedAt         DateTime? @map("voided_at") @db.Timestamptz(3)
+  voidedByUserId   String?   @map("voided_by_user_id") @db.Uuid
+  voidReason       String?   @map("void_reason") @db.VarChar(255)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  recordedBy User? @relation("ExpenseRecordedBy", fields: [recordedByUserId], references: [id], onDelete: SetNull)
+  voidedBy   User? @relation("ExpenseVoidedBy", fields: [voidedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([spentOn(sort: Desc)])
+  @@index([category, spentOn(sort: Desc)])
+  @@map("expenses")
 }
 
 model Document {

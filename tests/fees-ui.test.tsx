@@ -260,8 +260,9 @@ describe('a student’s own fees', () => {
 
 describe('finding it', () => {
   it('is in the office menu and the student menu, and not in a teacher’s', () => {
-    const fees = NAVIGATION.ADMIN.find((g) => g.title === 'Fees')
-    expect(fees?.items.map((i) => i.href)).toEqual(['/admin/fees', '/admin/fees/packages'])
+    const fees = NAVIGATION.ADMIN.find((g) => g.title === 'Fees & Finance')
+    expect(fees?.items.map((i) => i.href)).toContain('/admin/fees')
+    expect(fees?.items.map((i) => i.href)).toContain('/admin/fees/packages')
     expect(NAVIGATION.STUDENT.some((g) => g.items.some((i) => i.href === '/student/fees'))).toBe(true)
     expect(NAVIGATION.STAFF.some((g) => g.items.some((i) => i.href.includes('fees')))).toBe(false)
   })

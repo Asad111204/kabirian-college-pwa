@@ -17,6 +17,8 @@ import { EMPLOYMENT_STATUS_LABEL, STAFF_TYPE_LABEL } from '@/validation/staff'
 import { CloseAssignmentButton, StaffActions } from '@/features/staff/staff-actions'
 import { DocumentPanel } from '@/features/documents/document-panel'
 import { getStaffDocuments, isDocumentStorageReady } from '@/server/services/documents.service'
+import { getStaffDeletionReport } from '@/server/services/deletion.service'
+import { DangerZone } from '@/features/admin/danger-zone'
 import { can } from '@/server/auth/context'
 
 export const metadata: Metadata = { title: 'Staff profile' }
@@ -50,6 +52,10 @@ export default async function StaffProfilePage({ params }: { params: Promise<{ i
     getStaffDocuments(ctx, id),
     isDocumentStorageReady(),
   ])
+
+  // Erasing is offered only to somebody who may delete, and only when
+  // nothing in the college's records refers to them.
+  const deletion = can(ctx, 'staff.delete') ? await getStaffDeletionReport(ctx, staff.id) : null
 
   const activeAssignments = staff.assignments.filter((a) => a.isActive)
   const pastAssignments = staff.assignments.filter((a) => !a.isActive)
@@ -368,6 +374,8 @@ export default async function StaffProfilePage({ params }: { params: Promise<{ i
             canManage={can(ctx, 'documents.upload')}
             storageReady={storageReady}
           />
+
+          {deletion ? <DangerZone report={deletion} endpoint={`/api/v1/staff/${staff.id}/deletion`} afterDelete="/admin/staff" /> : null}
         </div>
       </div>
     </>

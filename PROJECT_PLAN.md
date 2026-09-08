@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | **Phase 25 complete: fees.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Every module is live on Neon (sixteen migrations, zero drift); the roadmap is built and the college's own requests (§23A) are under way. The college now has named fee packages, a package and a concession per student, monthly vouchers with a due date and a late fine, payments recorded against them, and a family that can see its own bill. Every amount is whole paisa. Next: Phase 26, finance and admin delete. |
-| **Last updated** | 2026-09-10 (rev. 43 — Phase 25 complete) |
+| **Status** | **Phase 26 complete: finance and permanent deletion. Every phase of the roadmap and every one of the college's own requests (§23A) is now built.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Everything through Phase 25 is live on Neon (sixteen migrations, zero drift). The office now records what the college spends, sees it against what the fees brought in with a hand-drawn graph of the year, and can erase a record for good — but only when nothing at all refers to it. **The Phase 26 migration is written and tested but not yet applied to Neon; it awaits the go-ahead.** |
+| **Last updated** | 2026-09-10 (rev. 44 — Phase 26 complete; the roadmap is finished) |
 | **Companion docs** | [DECISIONS.md](DECISIONS.md) · [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) · [README.md](README.md) |
 
 ---
@@ -738,7 +738,7 @@ Everything else in §20 will proceed on the stated defaults.
 
 ## 22. Progress tracker
 
-**Current phase:** 25 — complete and live on Neon. Next: Phase 26, finance and admin delete (§23A).
+**Current phase:** 26 — complete, apart from the Neon migration, which is waiting for the go-ahead. **This was the last phase: the original roadmap (§20) and all sixteen of the college's own requests (§23A) are built.**
 
 | Phase | Status | Notes |
 |---|---|---|
@@ -768,7 +768,7 @@ Everything else in §20 will proceed on the stated defaults.
 | 23 | ✅ Done (2026-09-09) | Complaints; live on Neon (fourteen migrations, zero drift) |
 | 24 | ✅ Done (2026-09-09) | A staff member who is also an admin; live on Neon (fifteen migrations, zero drift) |
 | 25 | ✅ Done (2026-09-10) | Fees; live on Neon (sixteen migrations, zero drift) |
-| 26 | ⏳ Not started | The last of the college's requests (§23A): finance, and admin delete |
+| 26 | ✅ Done (2026-09-10) | Finance and permanent deletion; migration written, not yet on Neon |
 
 **Live database:** the college's Neon PostgreSQL instance is connected and holds the real academic structure (2026-27, 20 groups, 20 sections). All **ten** migrations are applied to it, along with the reference data (12 designations, 10 departments, **8 document types**, and the confirmed **grading scale**).
 
@@ -1999,6 +1999,28 @@ The first of the college's own requests (§23A). The **colour bands** were deliv
 
 **Also fixed on the way past.** The student record still carried a "Not built yet" card listing attendance, exams and results — all three of which have existed since Phases 7 to 9. It was telling the office that three working modules were missing. The card is gone, and the fee plan sits in its place.
 
+### 22.54 Phase 26, finance and permanent deletion (2026-09-10)
+
+The last phase. Two things the college asked for, and with them the whole of §23A is built.
+
+**Admin → Finance** puts the two sides of the college's money on one screen: what the fees brought in this month, what was spent, what is left over, what was billed and what is still owed. Underneath, **a year drawn month by month** — collected against spent — and a breakdown of where this month's spending went.
+
+**The graph is drawn by hand**, in plain SVG: a dozen rectangles, a viewBox and three guide lines. No charting library, because the college's deployment carries no paid dependencies and a bar chart does not need one. Every bar carries its own figure for a screen reader and a hover, and the same numbers sit underneath in a table anybody can open.
+
+**Expenses are kept exactly like fee payments**: recorded with a heading, a date, how it was paid and a bill number; never edited; voided with a name and a reason when recorded in error. That is not symmetry for its own sake — the two sides are added together on one screen, and a system where income is immutable while spending can be quietly edited produces a figure nobody can defend a year later. Nothing about income is stored twice: the summary reads the fee ledger, so each fact has one number.
+
+**Erasing a record for good.** Every student, staff member and account page now carries an **Erase permanently** card. The server counts everything that refers to the record and either offers the button or explains, by name and number, what stands in the way — "42 attendance marks and 2 results" — and says to deactivate instead.
+
+**Nothing cascades.** A published result card must not stop existing because somebody tidied a list. What goes *with* a record is only its own placement: an enrolment row, a teacher's assignments, a login session. An **account is blocked by the audit log itself**, because an audit entry names who acted by user id and nothing else; erasing a used account would leave a trail saying nobody did it. In practice only a record created by mistake and never used can be erased, which is the honest answer to what was asked.
+
+**The confirmation is the record's own code**, never the word "delete": you cannot type `STU-0042` without looking at which record is open, and the server checks it again rather than trusting the screen.
+
+**Data:** one enum and one table, `expenses` — migration `20260910150000_expenses`. Deletion needed no schema at all. **Written, tested against a throwaway PostgreSQL, and not yet applied to Neon: it is waiting for the go-ahead.**
+
+**Verified through the production build (53 new checks, all passing, alongside the 634 existing — 687 in total)**: an expense recorded in exact paisa and another under a different heading; spending nothing, spending tomorrow, and a heading the college does not have all refused; a teacher and a student refused the module entirely; the month totalled with the biggest heading first and twelve months ready for the graph; an expense voided with a reason, not voided twice, leaving the month's figures while staying on the list, marked; a student with a history refused with the list of what holds them; a teacher who has taught refused; an account that has acted refused, naming the audit log; your own account refused outright; a student created by mistake erased at the second attempt, after the wrong code was refused and left them untouched; and the finance page rendering its graph as plain SVG with the figures available as a table.
+
+**Tests: 33 new** — the months a graph covers and how tall its bars are, the sum of a month, voiding, every refusal a delete can give, the rules that stop the college locking itself out, the confirmation, and the screens. **1,462 in total across 83 files.**
+
 ### 22.7 What Phase 4 delivered
 
 Student records and academic enrollment, built on the Phase 1–3 architecture. Nothing existing was rebuilt.
@@ -2209,8 +2231,8 @@ ones, so a mistake in them cannot be carried into everything else.
 | 23 | Complaints | **Done.** A student writes an application, the office answers it, and the exchange stays between the two of them — a teacher cannot read one even holding every permission (ADR-172) |
 | 24 | A staff member who is also an admin | **Done.** One account, both portals, with a switcher; the portal they are in is the role they are, so a principal teaching is a teacher (ADR-173) |
 | 25 | Fees | **Done.** Named packages, one per student with a concession on top, monthly vouchers with a due date, a flat late fine, and payments recorded against them — all in whole paisa (ADR-174) |
-| 26 | Finance | Admin records expenses; dashboard shows collection, outstanding and hand-drawn SVG graphs |
-| 26 | Admin delete | Erase only when nothing references the record; otherwise refuse and say why |
+| 26 | Finance | **Done.** Expenses recorded and voided like fee payments, a month's income against its spending, and a year drawn as hand-made SVG (ADR-175) |
+| 26 | Admin delete | **Done.** A student, staff member or account is erased only when nothing at all refers to it; otherwise the refusal names what stands in the way (ADR-175) |
 
 ### The four decisions behind them (confirmed 2026-09-07)
 

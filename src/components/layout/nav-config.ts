@@ -16,6 +16,7 @@ import {
   MessagesSquare,
   Receipt,
   Wallet,
+  TrendingUp,
 } from 'lucide-react'
 import type { UserRole } from '@/generated/prisma/enums'
 
@@ -88,10 +89,11 @@ export const NAVIGATION: Record<UserRole, NavSection[]> = {
       ],
     },
     {
-      title: 'Fees',
+      title: 'Fees & Finance',
       items: [
         { label: 'Fee Vouchers', href: '/admin/fees', icon: Receipt },
         { label: 'Packages & Rules', href: '/admin/fees/packages', icon: Wallet },
+        { label: 'Finance', href: '/admin/finance', icon: TrendingUp },
       ],
     },
     {

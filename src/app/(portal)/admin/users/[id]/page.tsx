@@ -16,6 +16,8 @@ import { Alert } from '@/components/ui/feedback'
 import { formatDateTime } from '@/lib/format'
 import { AccountStatusBadge, RoleBadge } from '@/features/users/shared'
 import { UserActions } from '@/features/users/user-actions'
+import { getAccountDeletionReport } from '@/server/services/deletion.service'
+import { DangerZone } from '@/features/admin/danger-zone'
 import { PermissionsEditor } from '@/features/users/permissions-editor'
 
 export const metadata: Metadata = { title: 'User account' }
@@ -43,6 +45,10 @@ export default async function UserDetailPage({
     prisma.user.findUnique({ where: { id }, select: { fullName: true } }),
     listUserSessions(ctx, id),
   ])
+
+  // Erasing is offered only when nothing refers to the account: an audit
+  // entry names who acted by this id alone, so a used account stays.
+  const deletion = can(ctx, 'users.manage') ? await getAccountDeletionReport(ctx, user.id) : null
 
   const isSelf = ctx.userId === user.id
 
@@ -146,6 +152,8 @@ export default async function UserDetailPage({
           activeAdminCount={activeAdminCount}
           canManagePermissions={can(ctx, 'permissions.manage')}
         />
+
+        {deletion ? <DangerZone report={deletion} endpoint={`/api/v1/users/${user.id}/deletion`} afterDelete="/admin/users" /> : null}
       </div>
 
       <Card className="mt-4">

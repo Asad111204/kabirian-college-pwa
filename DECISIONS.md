@@ -2943,3 +2943,31 @@ The migration was applied to Neon on 2026-09-09 (fifteen migrations, zero drift)
 **Consequences.** Through the production build: rupees typed with commas and decimals stored as exact paisa; a duplicate package name refused; a negative amount and an amount with an extra zero refused; a student put on a package with a concession billed 10,000 where the package is 12,500, and another on the same package billed 12,500; nobody put on a retired package; a dry run that wrote nothing and then a run that issued one voucher each, due on the day the office set; the same run again issuing nothing; a part payment leaving exactly 6,000 outstanding and the rest settling it; nothing taken against a settled or a cancelled voucher; a voucher with money on it refusing to cancel and saying to void the payments first; a void putting the voucher back to part paid and keeping the voided payment with its reason; a payment dated in the future refused; a cancelled voucher reissued by the next run; a family seeing their own voucher and their own total, without the office's buttons and without the clerk's name; another student getting a 404 and a teacher a 403. Sixty-four checks. **The harness found one real bug on the way**: a payment of nought passed validation and was stopped only by the database CHECK, so the office got a 500 where it should have got a sentence. That is now refused with words, and a test pins it.
 
 The migration was applied to Neon on 2026-09-10 (sixteen migrations, zero drift), with the three tables, the two student columns, the voucher counter and every CHECK confirmed on the live database.
+
+---
+
+## ADR-175 · The two sides of the ledger, and a delete that refuses more often than it obeys
+
+**Status:** Accepted · 2026-09-10 · Phase 26 · the last of §23A
+
+**Context.** Two things were left: **finance** — the office records expenses, and a dashboard shows collection, outstanding and hand-drawn graphs — and **admin delete** — erase a record only when nothing references it, otherwise refuse and say why.
+
+**Decision, on the money.** An expense is kept **exactly like a fee payment**: recorded, never edited, never deleted, voided with a name and a reason. That is not symmetry for its own sake. The two sides of the ledger are added together on one screen, and a system where income is immutable while spending can be quietly edited produces a figure nobody can defend a year later.
+
+Nothing about income is stored a second time. The summary reads the fee payments for what came in and the fee vouchers for what is still owed, so each fact has exactly one number and there is no pair that can disagree. A month is added up in two queries over the whole range rather than twenty-four round trips.
+
+**The graphs are drawn by hand**, in plain SVG: a dozen rectangles, a viewBox, and three guide lines. The college's deployment carries no paid dependencies and no charting library, and a bar chart does not need one. Each bar carries a `<title>` and the whole figure carries a label, and the same numbers sit underneath in a table anybody can open — a picture is not an excuse for figures a screen reader cannot reach.
+
+**Decision, on erasing.** The service **counts** every record that points at the one being deleted, hands the counts to a pure policy, and either erases or explains. The refusal names what stands in the way — "42 attendance marks and 2 results" — and says to deactivate instead, because "cannot delete" on its own tells nobody anything.
+
+**Nothing cascades.** Attendance, marks, results, documents, complaints and fee vouchers each block a student; registers, mark sheets, homework, staff attendance, documents and timetable lessons each block a member of staff. What goes *with* a record is only its own placement: an enrolment row, a teacher's assignments, a login session. Those say where somebody sat; everything else says what they did.
+
+**An account is blocked by the audit log itself.** An audit entry names who acted by user id and by nothing else — there is no username snapshot on the row — so erasing an account that has ever done anything would leave a trail of entries saying nobody did it. That is exactly the history the delete rule exists to protect, so the log is the blocker. In practice this means only an account created by mistake and never used can be erased, which is the honest answer. The last-administrator, system-owner and not-yourself rules apply on top, and a staff member who also holds office access is deliberately **not** counted as an administrator by them.
+
+**The confirmation is the record's own code**, not the word "delete". You cannot type `STU-0042` without looking at which record is open, and the typing test is repeated on the server rather than trusted from the screen.
+
+**Alternatives.** *Soft-deleting instead* — the college already has deactivation and asked for something stronger; a second kind of hidden is not stronger. *Cascading and warning loudly* — the warning is read once and the results are gone forever. *A charting library* — a dependency, a bundle, and a licence, for twelve rectangles. *Recomputing income into its own table* — a second number for the same fact, and the day they disagree nobody knows which is right.
+
+**Consequences.** Through the production build: an expense recorded in exact paisa and another under a different heading; spending nothing, spending tomorrow, and a heading the college does not have all refused; a teacher and a student refused the whole module; the month totalled, the biggest heading first, twelve months ready for the graph and an absurd range refused; an expense voided with a reason, not voided twice, leaving the month's figures while staying on the list; a student with a history refused with the list of what holds them; a teacher who has taught refused; an account that has acted refused, naming the audit log; your own account refused outright; a student created by mistake erased on the second attempt, after the wrong code was refused and left them untouched; erasing them again giving a 404; and the finance page rendering its graph as plain SVG with the figures available as a table. Fifty-three checks.
+
+The migration is written and was **not** applied to Neon in this phase.

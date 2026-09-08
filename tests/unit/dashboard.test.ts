@@ -210,12 +210,13 @@ describe('describeAuditEntry', () => {
     expect(describeAuditEntry(auditEntry({ action: 'user.updated' })).tone).toBe('neutral')
   })
 
-  it('stays readable for an action added in a future phase', () => {
-    // Fees had their own sentence from Phase 25, so this now uses an action
-    // that genuinely does not exist yet: the point is the fallback, which
-    // reads the verb out of the key rather than printing the key itself.
-    const item = describeAuditEntry(auditEntry({ action: 'expense.recorded' }))
-    expect(item.description).toBe('recorded')
+  it('stays readable for an action nothing has a sentence for', () => {
+    // Deliberately a key no phase will ever define: every real one that has
+    // been used here got its own sentence a phase later, and the point of the
+    // test is the fallback, which reads the verb out of the key rather than
+    // printing the key itself.
+    const item = describeAuditEntry(auditEntry({ action: 'nonesuch.happened' }))
+    expect(item.description).toBe('happened')
   })
 
   /**

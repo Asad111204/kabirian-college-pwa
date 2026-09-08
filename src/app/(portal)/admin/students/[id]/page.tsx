@@ -18,6 +18,8 @@ import { StudentActions } from '@/features/students/student-actions'
 import { DocumentPanel } from '@/features/documents/document-panel'
 import { getStudentDocuments, isDocumentStorageReady } from '@/server/services/documents.service'
 import { getStudentFeePlan, listFeePackages } from '@/server/services/fees.service'
+import { getStudentDeletionReport } from '@/server/services/deletion.service'
+import { DangerZone } from '@/features/admin/danger-zone'
 import { StudentFeePlanCard } from '@/features/fees/student-fee-plan-card'
 import { can } from '@/server/auth/context'
 
@@ -55,6 +57,10 @@ export default async function StudentProfilePage({
     getStudentDocuments(ctx, id),
     isDocumentStorageReady(),
   ])
+
+  // Erasing is offered only to somebody who may delete, and only when
+  // nothing in the college's records refers to them.
+  const deletion = can(ctx, 'students.delete') ? await getStudentDeletionReport(ctx, student.id) : null
 
   // The fee plan sits on the student's own record; a reader without
   // `fees.view` simply does not get the card.
@@ -317,6 +323,8 @@ export default async function StudentProfilePage({
           />
 
           {feePlan ? <StudentFeePlanCard plan={feePlan} packages={feePackages} canManage={can(ctx, 'fees.manage')} /> : null}
+
+          {deletion ? <DangerZone report={deletion} endpoint={`/api/v1/students/${student.id}/deletion`} afterDelete="/admin/students" /> : null}
         </div>
       </div>
     </>

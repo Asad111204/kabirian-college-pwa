@@ -821,6 +821,54 @@ a late voucher the fine is frozen onto it, because from then on it is part of
 what was actually charged. Voiding every payment puts it back. The arithmetic
 lives in `fees-policy.ts` (ADR-174).
 
+
+## 8B. Finance (Phase 26)
+
+### `expenses` - what the college spent
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| category | enum `expense_category` | `SALARIES`, `UTILITIES`, `RENT`, `MAINTENANCE`, `SUPPLIES`, `TRANSPORT`, `EVENTS`, `OTHER` |
+| title | varchar(150) | |
+| amount_paisa | integer | must be greater than nought |
+| spent_on | date | college calendar |
+| method | enum `fee_payment_method` | the same list a fee payment uses |
+| reference / remarks | varchar | a bill or cheque number, and a note |
+| recorded_by_user_id | uuid | FK -> users, `SET NULL` |
+| voided_at / voided_by_user_id / void_reason | | never edited, never deleted |
+| created_at / updated_at | timestamptz | |
+
+Indexes on `(spent_on DESC)` and `(category, spent_on DESC)`: the page reads a
+month, the graph reads a year.
+
+An expense behaves exactly like a fee payment - recorded, never edited, voided
+with a name and a reason - so the two sides of the ledger add up the same way.
+Nothing about income is stored again here: the finance summary reads
+`fee_payments` for what came in and `fee_vouchers` for what is still owed, so
+there is one number for each fact and no chance of two.
+
+## 8C. Erasing a record (Phase 26)
+
+No table. An administrator may permanently delete a student, a member of staff
+or an account **only when nothing references it**; the service counts the
+references and a pure policy decides. Nothing cascades - a published result
+card must not stop existing because somebody tidied a list, and an audit entry
+must not lose the name of who acted.
+
+| Record | What blocks the delete |
+|---|---|
+| Student | attendance marks, exam marks, results, documents, applications to the office, fee vouchers; and a portal account that has been used |
+| Staff | registers they took, mark sheets, homework, days on the staff register, documents, lessons on the timetable; and a used account |
+| Account | any entry in the audit log, and any student or staff record it belongs to |
+
+What goes **with** the record is only its own placement: a student's enrolment
+row, a teacher's assignments, a login session. Those say where somebody sat,
+not what they did.
+
+The confirmation is the record's own code or username, never the word
+"delete", so it cannot be typed without looking at which record is open
+(ADR-175).
+
 ---
 
 ## 9. System
