@@ -14,6 +14,8 @@ import {
   Settings,
   ScrollText,
   MessagesSquare,
+  Receipt,
+  Wallet,
 } from 'lucide-react'
 import type { UserRole } from '@/generated/prisma/enums'
 
@@ -86,6 +88,13 @@ export const NAVIGATION: Record<UserRole, NavSection[]> = {
       ],
     },
     {
+      title: 'Fees',
+      items: [
+        { label: 'Fee Vouchers', href: '/admin/fees', icon: Receipt },
+        { label: 'Packages & Rules', href: '/admin/fees/packages', icon: Wallet },
+      ],
+    },
+    {
       title: 'System',
       items: [
         { label: 'Reports', href: '/admin/reports', icon: FileText },
@@ -124,6 +133,7 @@ export const NAVIGATION: Record<UserRole, NavSection[]> = {
         { label: 'Homework', href: '/student/homework', icon: BookOpen },
         { label: 'Notices', href: '/student/notices', icon: Megaphone },
         { label: 'Events', href: '/student/events', icon: CalendarDays },
+        { label: 'My Fees', href: '/student/fees', icon: Receipt },
         { label: 'Write to the Office', href: '/student/complaints', icon: MessagesSquare },
       ],
     },

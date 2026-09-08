@@ -17,6 +17,8 @@ import { ENROLLMENT_STATUS_LABEL, STUDENT_STATUS_LABEL } from '@/validation/stud
 import { StudentActions } from '@/features/students/student-actions'
 import { DocumentPanel } from '@/features/documents/document-panel'
 import { getStudentDocuments, isDocumentStorageReady } from '@/server/services/documents.service'
+import { getStudentFeePlan, listFeePackages } from '@/server/services/fees.service'
+import { StudentFeePlanCard } from '@/features/fees/student-fee-plan-card'
 import { can } from '@/server/auth/context'
 
 export const metadata: Metadata = { title: 'Student profile' }
@@ -53,6 +55,12 @@ export default async function StudentProfilePage({
     getStudentDocuments(ctx, id),
     isDocumentStorageReady(),
   ])
+
+  // The fee plan sits on the student's own record; a reader without
+  // `fees.view` simply does not get the card.
+  const [feePlan, feePackages] = can(ctx, 'fees.view')
+    ? await Promise.all([getStudentFeePlan(ctx, student.id), listFeePackages(ctx)])
+    : [null, []]
 
   const currentLabel = current
     ? `${current.sessionName} · ${current.className} · ${current.divisionName} · ${current.programName} · Section ${current.sectionName}${current.rollNumber ? ` · Roll ${current.rollNumber}` : ''}`
@@ -301,7 +309,6 @@ export default async function StudentProfilePage({
             </Card>
           ) : null}
 
-          {/* Modules that genuinely do not exist yet */}
           <DocumentPanel
             slots={documents}
             ownerEndpoint={`/api/v1/students/${student.id}/documents`}
@@ -309,36 +316,7 @@ export default async function StudentProfilePage({
             storageReady={storageReady}
           />
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Not built yet</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ul className="space-y-2">
-                {[
-                  { name: 'Attendance', phase: 7, detail: 'Daily record and percentage' },
-                  { name: 'Exams & marks', phase: 8, detail: 'Exam schedule and marks' },
-                  { name: 'Results', phase: 9, detail: 'Grades and result cards' },
-                ].map((module) => (
-                  <li
-                    key={module.name}
-                    className="flex items-start justify-between gap-3 rounded-[var(--radius-control)] border border-dashed border-border p-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="flex items-center gap-1.5 text-sm font-medium text-foreground-muted">
-                        <FileText className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                        {module.name}
-                      </p>
-                      <p className="mt-0.5 text-xs text-foreground-subtle">{module.detail}</p>
-                    </div>
-                    <Badge variant="neutral" className="shrink-0">
-                      Phase {module.phase}
-                    </Badge>
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
+          {feePlan ? <StudentFeePlanCard plan={feePlan} packages={feePackages} canManage={can(ctx, 'fees.manage')} /> : null}
         </div>
       </div>
     </>
