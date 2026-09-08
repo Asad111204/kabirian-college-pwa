@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | **Phase 20 complete: homework.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Every module is live on Neon (eleven migrations, zero drift); the roadmap is built and the college's own requests (§23A) are under way. A teacher now sets homework for the sections and subjects they are assigned to, with instructions, a due date and attached files; the section's students see it soonest-due first and download the files; the office sees everything and can set or remove any piece. Next: Phase 21, marks deadline and corrections. |
-| **Last updated** | 2026-09-08 (rev. 38 — Phase 20 complete) |
+| **Status** | **Phase 21 complete: marks deadline and teacher corrections.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Every module is live on Neon (twelve migrations, zero drift); the roadmap is built and the college's own requests (§23A) are under way. The office now sets a marks deadline per exam; a teacher may correct their own submitted mark sheet until it passes, and afterwards the office reopens that one paper, for a stated reason, until a stated day. Published marks stay the office's alone. Next: Phase 22, staff attendance. |
+| **Last updated** | 2026-09-08 (rev. 39 — Phase 21 complete) |
 | **Companion docs** | [DECISIONS.md](DECISIONS.md) · [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) · [README.md](README.md) |
 
 ---
@@ -738,7 +738,7 @@ Everything else in §20 will proceed on the stated defaults.
 
 ## 22. Progress tracker
 
-**Current phase:** 20 — complete. Next: Phase 21, marks entry deadline and marks correction for teachers (§23A).
+**Current phase:** 21 — complete. Next: Phase 22, staff attendance taken by the office (§23A).
 
 | Phase | Status | Notes |
 |---|---|---|
@@ -763,7 +763,8 @@ Everything else in §20 will proceed on the stated defaults.
 | 18 Attendance bands & teacher corrections | ✅ Done (2026-09-08) | Colour bands (Phase 10); teachers correct submitted registers within an office-set window, audited; Attendance rules on Settings. See §22.46 |
 | 19 Profile photos | ✅ Done (2026-09-08) | Thumbnails from the photo document, served under the document rule, faces on lists, pages, registers and the menu; in-memory storage for the harness. See §22.47 |
 | 20 Homework | ✅ Done (2026-09-08) | Teachers set homework where assigned, with files; students read their section's; the office sees all. Migration 11 live on Neon. See §22.48 |
-| 21 – 26 | ⏳ Not started | The college's requests (§23A). Next: marks deadline and corrections |
+| 21 Marks deadline & corrections | ✅ Done (2026-09-08) | Deadline per exam; teachers correct their own submitted sheets until it passes; the office reopens one paper with a reason. Migration 12 live on Neon. See §22.49 |
+| 22 – 26 | ⏳ Not started | The college's requests (§23A). Next: staff attendance |
 
 **Live database:** the college's Neon PostgreSQL instance is connected and holds the real academic structure (2026-27, 20 groups, 20 sections). All **ten** migrations are applied to it, along with the reference data (12 designations, 10 departments, **8 document types**, and the confirmed **grading scale**).
 
@@ -1896,6 +1897,20 @@ The first of the college's own requests (§23A). The **colour bands** were deliv
 
 **Tests: 18 new** — the policy from both sides (assignment, ownership, the office, visibility per role, the due-date words), the schemas, and the editor, list and feed. **1,239 in total across 66 files.** Lint, typecheck and build clean.
 
+### 22.49 Phase 21, marks deadline and teacher corrections (2026-09-08)
+
+**Admin → Exams → one exam** carries a **marks deadline**: the last college day on which teachers may enter, correct or submit marks for it. Empty means no deadline, which is how every exam behaved before. Setting or clearing it needs `exams.manage` and is audited with the old and new dates.
+
+**Teachers correct their own submitted sheets** (ADR-170) until that day. The sheet says which state it is in, in the server's own words: *"Submitted — corrections still open until 20 Sep… every correction is recorded in the audit log"*, or the refusal itself. Their assignment still decides which sheets are theirs, and a **PUBLISHED** sheet is never theirs — a result card has been made from those marks.
+
+**The office reopens one paper** from the mark-sheet list: until a stated day, for a stated reason, kept on the row (with a CHECK that a half-recorded reopening cannot exist) and in the audit log. One paper, not the exam. The sheet keeps its status.
+
+**Data:** `exams.marks_deadline`, and four columns on `exam_mark_sheets` — migration `20260908120000_marks_deadline`, applied to Neon on 2026-09-08 (twelve migrations, zero drift). Every existing exam has no deadline, so nothing that worked before changed.
+
+**Verified through the production build (32 new checks, all passing, alongside the 403 existing)**: only the office sets the deadline; a date that is not a date is refused; the change is audited; inside the window a teacher opens, submits and then corrects, and the correction is logged as one; another teacher is refused; with the deadline in the past the teacher is refused with a sentence naming the date and the office, while the office continues; a teacher cannot reopen their own paper; a reopening without a reason, or into the past, is refused; after a reopening the teacher works again and is told why; clearing the deadline restores the old behaviour.
+
+**Tests: 21 new** — the window from both sides (before, on the day, after, reopened, expired reopening, the office exempt, the assignment still required, published sheets, drafts unchanged) and the teacher's screen in its three states. **1,256 in total across 67 files.** Two Phase 8 assertions that teachers must never hold `marks.update_submitted` were retired with a note — that rule is what the college asked to change. The harness gained exam fixtures (`seed-exams.mjs`); Phase 8 predated it.
+
 ### 22.7 What Phase 4 delivered
 
 Student records and academic enrollment, built on the Phase 1–3 architecture. Nothing existing was rebuilt.
@@ -2100,8 +2115,8 @@ ones, so a mistake in them cannot be carried into everything else.
 | 18 | Teacher edits attendance | **Done.** Teachers correct their own submitted registers within an office-set window (Settings → Attendance rules; 7 days by default, 0 = office only); every correction audited (ADR-166) |
 | 19 | Profile photos for students and staff | **Done.** The photo document makes a 128 px thumbnail kept in the database and served under the document rule; faces beside names everywhere (ADR-167) |
 | 20 | Homework and assignments | **Done.** Set where a teacher is assigned, read by the section, files as documents (ADR-169). No student submissions — not asked for |
-| 21 | Marks entry deadline | Set by the admin per exam; after it a teacher needs the admin to reopen the paper |
-| 21 | Marks correction for teachers | Limited to papers they hold an ACTIVE TeacherAssignment for |
+| 21 | Marks entry deadline | **Done.** `exams.marks_deadline`; after it the office reopens that one paper, for a stated reason, until a stated day (ADR-170) |
+| 21 | Marks correction for teachers | **Done.** Their own submitted sheets, within the deadline; never a PUBLISHED sheet — a result was made from it (ADR-170) |
 | 22 | Staff attendance | Taken by the admin: Present, Absent, Short Leave, Leave |
 | 23 | Complaints | Student submits an application; the admin reads and responds |
 | 24 | A staff member who is also an admin | One account, both portals, with a switcher |

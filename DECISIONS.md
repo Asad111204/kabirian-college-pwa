@@ -2823,3 +2823,23 @@ Who may set it is the attendance rule, unchanged: a teacher with an ACTIVE assig
 **Alternatives.** *Submissions* — students handing work back through the app — were not asked for and would need marking, deadlines and storage rules of their own; left for a later request. *Free targeting like notices* — a whole class or programme — would have let a teacher set work for sections they do not teach; the assignment rule is the point.
 
 **Consequences.** Through the production build teacher A set homework for 11-A Biology and attached a worksheet; teacher A was refused for 11-B Chemistry, teacher B for 11-A Biology, and a student for anything; the 11-A student saw A's piece with its file and downloaded it, and could not see 11-B's; teacher B could not see or change A's piece; the office saw all three, changed one and removed one; removing a piece removed its file from reach. The migration was applied to Neon on 2026-09-08 (eleven migrations, zero drift) with zero drift.
+
+---
+
+## ADR-170 · One deadline per exam, one reopening per paper, and teachers who may correct until it passes
+
+**Status:** Accepted · 2026-09-08 · Phase 21 · amends ADR-088 (marks access)
+
+**Context.** The college asked for two things that turn out to be one: a **marks upload deadline set by the admin**, with the admin's permission needed after it, and **marks correction for teachers**, limited to papers they are assigned to. Since Phase 8 a teacher could change marks only while the sheet was a draft; after submitting, every fix — a transposed digit, a re-checked paper — went through the office by hand. There was no deadline at all: marking stayed open as long as the exam did.
+
+**Decision.** `exams.marks_deadline` is the last college day on which a **teacher** may enter, correct or submit marks for that exam. Null means no deadline, which is what every existing exam has and how the system behaved before. The office is never bound by it — that is what "with admin permission after" means in practice: the work does not stop, it changes hands.
+
+Teachers now hold `marks.update_submitted` for their own sheets, exactly as they hold `attendance.update_submitted` since Phase 18, and the deadline is what closes the door rather than the permission. Two limits sit on top: the assignment rule is unchanged (their own section and subject, from `teacher_assignments`), and a **PUBLISHED** sheet is never theirs — a result card has been made from those marks, and a teacher's silent correction would contradict a card a student is already holding. That refusal has its own code, `SHEET_PUBLISHED`.
+
+When a teacher needs more time, the office **reopens that one paper**: `exam_mark_sheets.reopened_until`, with a required reason, the user and the moment, and a CHECK that keeps a half-recorded reopening out of the table. Per sheet, not per exam: "let Miss Sara finish 1st Year Biology" must not reopen every paper in the college. Reopening does not change the sheet's status; a submitted sheet stays submitted, and each correction is audited as one.
+
+The decision is one pure function (`isWithinMarksWindow`) over three college dates — today, the deadline, the reopening — and the sheet the teacher reads carries the same answer the API would give, including the sentence, so no screen promises what the server will refuse.
+
+**Alternatives.** *A deadline per paper* — more precise, and more for the office to keep track of for no case the college has. *A grace period in days after the exam* — a rule nobody could see; a date on the exam is a rule everybody can read. *Letting teachers correct published marks* — silently disagreeing with an issued result card.
+
+**Consequences.** Through the production build: the deadline set and audited with both values; a teacher correcting their own submitted sheet inside the window and the change recorded as a correction; another teacher refused; the deadline moved into the past and the same teacher refused with a sentence naming the date and the office, while the office continued; a teacher unable to reopen their own paper; a reopening without a reason, or into the past, refused; after reopening, the teacher working again and told why. Twelve migrations on Neon, zero drift.
