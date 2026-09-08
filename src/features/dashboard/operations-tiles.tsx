@@ -7,6 +7,7 @@ import {
   Megaphone,
   Percent,
   ScrollText,
+  MessagesSquare,
 } from 'lucide-react'
 import type { OperationsStatistics } from '@/server/services/dashboard.service'
 import { StatTile } from './stat-tiles'
@@ -60,6 +61,16 @@ export function TodayTiles({ operations, today }: { operations: OperationsStatis
             value={c.eventsNext30Days}
             icon={CalendarDays}
             href="/admin/events"
+          />
+        ) : null}
+        {c ? (
+          <StatTile
+            label="Applications waiting on us"
+            value={c.complaintsAwaitingOffice}
+            icon={MessagesSquare}
+            href="/admin/complaints"
+            hint="Written by students, not yet answered"
+            emphasis={c.complaintsAwaitingOffice > 0}
           />
         ) : null}
       </div>

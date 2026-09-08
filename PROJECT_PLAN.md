@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | **Phase 22 complete: staff attendance, taken by the office.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Every module is live on Neon (thirteen migrations, zero drift); the roadmap is built and the college's own requests (§23A) are under way. The office now takes its own daily register for the whole staff — Present, Absent, Short leave, Leave — with approved leave left out of the worked percentage rather than counted against anyone, and each staff member sees their own month on their profile. Next: Phase 23, complaints. |
-| **Last updated** | 2026-09-08 (rev. 40 — Phase 22 complete) |
+| **Status** | **Phase 23 complete: complaints.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Every module through Phase 22 is live on Neon (thirteen migrations, zero drift); the roadmap is built and the college's own requests (§23A) are under way. A student now writes an application to the office and the office answers it, with nobody else able to read a word of it — not another student, not a teacher. **The Phase 23 migration is written and tested but not yet applied to Neon; it awaits the go-ahead.** Next: Phase 24, a staff member who is also an admin. |
+| **Last updated** | 2026-09-09 (rev. 41 — Phase 23 complete) |
 | **Companion docs** | [DECISIONS.md](DECISIONS.md) · [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) · [README.md](README.md) |
 
 ---
@@ -738,7 +738,7 @@ Everything else in §20 will proceed on the stated defaults.
 
 ## 22. Progress tracker
 
-**Current phase:** 22 — complete and live on Neon. Next: Phase 23, complaints (§23A).
+**Current phase:** 23 — complete, apart from the Neon migration, which is waiting for the go-ahead. Next: Phase 24, a staff member who is also an admin (§23A).
 
 | Phase | Status | Notes |
 |---|---|---|
@@ -765,7 +765,8 @@ Everything else in §20 will proceed on the stated defaults.
 | 20 Homework | ✅ Done (2026-09-08) | Teachers set homework where assigned, with files; students read their section's; the office sees all. Migration 11 live on Neon. See §22.48 |
 | 21 Marks deadline & corrections | ✅ Done (2026-09-08) | Deadline per exam; teachers correct their own submitted sheets until it passes; the office reopens one paper with a reason. Migration 12 live on Neon. See §22.49 |
 | 22 | ✅ Done (2026-09-08) | Staff attendance taken by the office; live on Neon (thirteen migrations, zero drift) |
-| 23 – 26 | ⏳ Not started | The college's requests (§23A). Next: complaints |
+| 23 | ✅ Done (2026-09-09) | Complaints; migration written, not yet on Neon |
+| 24 – 26 | ⏳ Not started | The college's requests (§23A). Next: a staff member who is also an admin |
 
 **Live database:** the college's Neon PostgreSQL instance is connected and holds the real academic structure (2026-27, 20 groups, 20 sections). All **ten** migrations are applied to it, along with the reference data (12 designations, 10 departments, **8 document types**, and the confirmed **grading scale**).
 
@@ -1930,6 +1931,26 @@ The first of the college's own requests (§23A). The **colour bands** were deliv
 
 **One old defect fixed on the way past.** The browser sweep caught it: on a phone the account button in the top bar had no accessible name at all — the name is hidden below the `sm` breakpoint and an avatar without a photo is decorative, so a screen reader announced nothing but "button". It now says whose account it is.
 
+### 22.51 Phase 23, complaints (2026-09-09)
+
+**Student → Write to the Office.** A student chooses what it is about — teaching, attendance, exams, fees, the building, behaviour, or something else — gives it a one-line subject and writes what happened. The form says before they send it that an application cannot be edited afterwards, because it is what they said, on the record. They can add to it, and they can take it back, but they cannot rewrite it.
+
+**Admin → Complaints.** Every application, ordered by whatever last happened on it, filtered by state, by subject area, by student, or narrowed to **the ones waiting on us**. Opening one shows the application, the exchange so far, a box to answer in, and the states it may be moved to. Answering a new application moves it to "being looked at" by itself, so nothing needs a second button. Resolving it takes a closing message that reaches the student as the college's answer.
+
+**Who can read one is the point of the phase (ADR-172).** The student who wrote it, and the office. **A teacher cannot read a complaint even holding both complaint permissions** — a complaint may be about a teacher. Another student asking after one is told it does not exist rather than that it is not theirs, because the second answer confirms it is. And **nothing an application says reaches the audit log**: the log records that one was written, what it was about and what state it moved to, never a word of the wording.
+
+**Four states.** Submitted, being looked at, resolved, withdrawn. The office may pick a resolved application back up, but never withdraws one on a student's behalf and never undoes a withdrawal; withdrawing keeps the application, marked. A student may have five open at once, refused with a sentence that says so.
+
+**The dashboard** gained one tile: applications waiting on the office, emphasised when there are any, linking straight to them.
+
+**Data:** two tables, `complaints` and `complaint_replies`, and two enums — migration `20260909090000_complaints`. **Written, tested against a throwaway PostgreSQL, and not yet applied to Neon: it is waiting for the go-ahead.** Nothing that worked before touches it.
+
+**Verified through the production build (61 new checks, all passing, alongside the 469 existing — 530 in total)**: an application written and refused when too short or in a category the college does not have; the office and a teacher refused the ability to write one; the writer and the office able to read it, another student given a 404 with not one word of it in the reply, a teacher a 403; the office's answer moving it off the "waiting on us" list by itself; the reply reading as the college's to the student and as a named person's to the office; a student refused the office's list and refused the right to resolve their own application; the office refused a withdrawal and refused an action on a state it was already in; after resolving, both sides refused with the reason; the office picking it back up; a withdrawal that the office cannot undo; every audit entry carrying the category and none of the wording; the sixth open application refused; and the three screens rendering, with a teacher, a student and a signed-out visitor all sent away from the office's.
+
+**Tests: 49 new** — the rules from both sides (who reads, who writes, who withdraws, where the office may move it, whose move it is next), what the endpoints accept, and the screens in every state they have. **1,336 in total across 74 files.** The harness fixtures gained a **second student**, so "one student cannot see another's" is checked rather than assumed.
+
+**One defect fixed on the way past.** The permission table said a teacher holds the two staff-attendance permissions, added by mistake in Phase 22. Staff attendance asserts the office before it checks any permission, so no teacher could ever have marked a register; the table was wrong all the same, and the account screens repeated it. A duplicated pair of homework entries went with it.
+
 ### 22.7 What Phase 4 delivered
 
 Student records and academic enrollment, built on the Phase 1–3 architecture. Nothing existing was rebuilt.
@@ -2137,7 +2158,7 @@ ones, so a mistake in them cannot be carried into everything else.
 | 21 | Marks entry deadline | **Done.** `exams.marks_deadline`; after it the office reopens that one paper, for a stated reason, until a stated day (ADR-170) |
 | 21 | Marks correction for teachers | **Done.** Their own submitted sheets, within the deadline; never a PUBLISHED sheet — a result was made from it (ADR-170) |
 | 22 | Staff attendance | **Done.** The office's own daily register: Present, Absent, Short leave, Leave; approved leave is left out of the worked percentage, and each staff member sees their own month (ADR-171) |
-| 23 | Complaints | Student submits an application; the admin reads and responds |
+| 23 | Complaints | **Done.** A student writes an application, the office answers it, and the exchange stays between the two of them — a teacher cannot read one even holding every permission (ADR-172) |
 | 24 | A staff member who is also an admin | One account, both portals, with a switcher |
 | 25 | Fees | Named packages, per-student assignment, a per-student discount, monthly vouchers, late fine |
 | 26 | Finance | Admin records expenses; dashboard shows collection, outstanding and hand-drawn SVG graphs |

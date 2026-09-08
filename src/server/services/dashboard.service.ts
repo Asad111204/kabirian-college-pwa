@@ -90,6 +90,8 @@ export interface OperationsStatistics {
   communication: {
     noticesShowing: number
     eventsNext30Days: number
+    /** Students' applications still waiting on the office (Phase 23). */
+    complaintsAwaitingOffice: number
   } | null
   timetable: {
     sections: number
@@ -279,6 +281,7 @@ async function operationsFor(ctx: AuthContext, sessionId: string | null): Promis
     resultsByStatus,
     noticesShowing,
     eventsNext30Days,
+    complaintsAwaitingOffice,
     sectionsWithLessons,
     requiredTypes,
     studentsActive,
@@ -323,6 +326,9 @@ async function operationsFor(ctx: AuthContext, sessionId: string | null): Promis
       : 0,
     has('events.view')
       ? prisma.event.count({ where: { status: 'PUBLISHED', startsAt: { gte: now, lte: in30Days } } })
+      : 0,
+    has('complaints.view')
+      ? prisma.complaint.count({ where: { awaitingOffice: true, status: { in: ['SUBMITTED', 'IN_REVIEW'] } } })
       : 0,
     has('timetable.view') && sessionId
       ? prisma.section.count({
@@ -377,7 +383,8 @@ async function operationsFor(ctx: AuthContext, sessionId: string | null): Promis
       }
     : null
 
-  const communication = has('notices.view') || has('events.view') ? { noticesShowing, eventsNext30Days } : null
+  const communication =
+    has('notices.view') || has('events.view') || has('complaints.view') ? { noticesShowing, eventsNext30Days, complaintsAwaitingOffice } : null
 
   const timetable = has('timetable.view') ? { sections, sectionsWithLessons } : null
 

@@ -646,6 +646,42 @@ Index `(status, publish_at DESC)`, `(expires_at)`.
 
 Index `(status, starts_at)`. CHECKs: `events_audience_is_population` (`ALL`/`STUDENTS`/`STAFF` only) and `events_end_after_start`. Notices likewise carry `notices_expiry_after_publish`.
 
+
+### `complaints` — a student's written application to the office (Phase 23)
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| student_id | uuid | FK -> students `ON DELETE RESTRICT` |
+| academic_session_id | uuid | FK -> academic_sessions `ON DELETE SET NULL`; the session they were in when they wrote it |
+| category | enum `complaint_category` | `ACADEMIC`, `ATTENDANCE`, `EXAMS_RESULTS`, `FEES`, `FACILITIES`, `DISCIPLINE`, `OTHER` |
+| subject | varchar(150) | one line |
+| body | text | plain text; never edited once sent |
+| status | enum `complaint_status` | `SUBMITTED`, `IN_REVIEW`, `RESOLVED`, `WITHDRAWN` |
+| awaiting_office | boolean | whether the next move is the office's |
+| last_activity_at | timestamptz | written, replied to, or state changed |
+| closed_at / closed_by_user_id | timestamptz / uuid | set when resolved or withdrawn |
+| created_at / updated_at | timestamptz | |
+
+Indexes `(status, last_activity_at DESC)`, `(awaiting_office, last_activity_at DESC)`, `(student_id, created_at DESC)`, `(category)`.
+
+### `complaint_replies` — one message in the exchange
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| complaint_id | uuid | FK -> complaints `ON DELETE CASCADE` |
+| body | text | plain text |
+| by_office | boolean | decided on the server from who is signed in |
+| author_user_id | uuid | FK -> users `ON DELETE SET NULL` |
+| created_at | timestamptz | |
+
+Index `(complaint_id, created_at)`.
+
+Only the student who wrote an application and the office can read it: a
+complaint may be about a member of staff, so a teacher holding every
+permission still cannot open one. The rules live in `complaints-policy.ts`,
+and nothing an application says reaches the audit log — the log records that
+one was written and what it was about, never a word of what it said.
+
 ---
 
 ## 8. Documents

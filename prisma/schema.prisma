@@ -317,6 +317,35 @@ enum EventStatus {
   @@map("event_status")
 }
 
+/// What a student's application is about, so the office can sort a morning's
+/// post. Broad on purpose: a long list nobody reads is worse than seven
+/// headings everybody understands. Adding one is a migration (ADR-172).
+enum ComplaintCategory {
+  ACADEMIC
+  ATTENDANCE
+  EXAMS_RESULTS
+  FEES
+  FACILITIES
+  DISCIPLINE
+  OTHER
+
+  @@map("complaint_category")
+}
+
+enum ComplaintStatus {
+  /// Written by the student; the office has not answered yet.
+  SUBMITTED
+  /// The office has replied and is dealing with it.
+  IN_REVIEW
+  /// The office has finished with it. Neither side writes on it again.
+  RESOLVED
+  /// Taken back by the student. Only the student can do this, and only
+  /// before it is resolved.
+  WITHDRAWN
+
+  @@map("complaint_status")
+}
+
 // ---------------------------------------------------------------------------
 // Identity & access
 // ---------------------------------------------------------------------------
@@ -343,15 +372,17 @@ model User {
   createdAt           DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt           DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  sessions          Session[]
-  userPermissions   UserPermission[] @relation("UserPermissionOwner")
-  grantedBy         UserPermission[] @relation("UserPermissionGrantedBy")
-  student           Student?
-  staff             Staff?
-  auditLogs         AuditLog[]
-  uploadedDocuments Document[]       @relation("DocumentUploader")
-  reopenedMarkSheets ExamMarkSheet[] @relation("MarkSheetReopenedBy")
+  sessions              Session[]
+  userPermissions       UserPermission[]  @relation("UserPermissionOwner")
+  grantedBy             UserPermission[]  @relation("UserPermissionGrantedBy")
+  student               Student?
+  staff                 Staff?
+  auditLogs             AuditLog[]
+  uploadedDocuments     Document[]        @relation("DocumentUploader")
+  reopenedMarkSheets    ExamMarkSheet[]   @relation("MarkSheetReopenedBy")
   staffAttendanceMarked StaffAttendance[] @relation("StaffAttendanceMarkedBy")
+  complaintsClosed      Complaint[]       @relation("ComplaintClosedBy")
+  complaintReplies      ComplaintReply[]  @relation("ComplaintReplyAuthor")
 
   @@index([role, status])
   @@map("users")
@@ -482,7 +513,7 @@ model Subject {
   attendanceSheets   AttendanceSheet[]
   examPapers         ExamPaper[]
   timetableSlots     TimetableSlot[]
-  homework Homework[]
+  homework           Homework[]
 
   @@map("subjects")
 }
@@ -538,7 +569,8 @@ model AcademicSession {
   curriculumSubjects CurriculumSubject[]
   admittedStudents   Student[]
   exams              Exam[]
-  homework Homework[]
+  homework           Homework[]
+  complaints         Complaint[]
 
   @@index([status])
   @@map("academic_sessions")
@@ -595,7 +627,7 @@ model Section {
   examMarkSheets     ExamMarkSheet[]
   timetableSlots     TimetableSlot[]
   noticeTargets      NoticeTarget[]
-  homework Homework[]
+  homework           Homework[]
 
   @@unique([academicGroupId, name])
   @@unique([id, academicSessionId])
@@ -705,6 +737,7 @@ model Student {
   attendanceEntries AttendanceEntry[]
   marks             Mark[]
   results           Result[]
+  complaints        Complaint[]
 
   @@index([status])
   @@index([fullName])
@@ -780,8 +813,8 @@ model Staff {
   attendanceSheets   AttendanceSheet[]
   examMarkSheets     ExamMarkSheet[]
   timetableSlots     TimetableSlot[]
-  homework Homework[]
-  staffAttendance StaffAttendance[]
+  homework           Homework[]
+  staffAttendance    StaffAttendance[]
 
   @@index([employmentStatus])
   @@index([fullName])
@@ -961,6 +994,71 @@ model Homework {
   @@map("homework")
 }
 
+/// A student's written application to the office (Phase 23).
+///
+/// The application itself is never edited once sent — it is what the student
+/// said, on the record — and the exchange that follows lives in
+/// `complaint_replies`. Nobody but the student who wrote it and the office
+/// can read it.
+model Complaint {
+  id                String  @id @default(uuid(7)) @db.Uuid
+  studentId         String  @map("student_id") @db.Uuid
+  /// The session the student was in when they wrote it, for later reporting.
+  /// Null when they were not enrolled anywhere at the time.
+  academicSessionId String? @map("academic_session_id") @db.Uuid
+
+  category ComplaintCategory
+  subject  String            @db.VarChar(150)
+  /// Plain text; line breaks kept, nothing rendered as markup.
+  body     String
+  status   ComplaintStatus   @default(SUBMITTED)
+
+  /// Whether the next move is the office's. Stored rather than worked out
+  /// from the last message, so "everything still on my desk" is one indexed
+  /// query instead of a page-by-page guess.
+  awaitingOffice Boolean @default(true) @map("awaiting_office")
+
+  /// When anything last happened on it: written, replied to, status changed.
+  /// The office's list is ordered by this, so the oldest silence rises.
+  lastActivityAt DateTime  @default(now()) @map("last_activity_at") @db.Timestamptz(3)
+  closedAt       DateTime? @map("closed_at") @db.Timestamptz(3)
+  closedByUserId String?   @map("closed_by_user_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  student         Student          @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  academicSession AcademicSession? @relation(fields: [academicSessionId], references: [id], onDelete: SetNull)
+  closedBy        User?            @relation("ComplaintClosedBy", fields: [closedByUserId], references: [id], onDelete: SetNull)
+  replies         ComplaintReply[]
+
+  @@index([status, lastActivityAt(sort: Desc)])
+  @@index([awaitingOffice, lastActivityAt(sort: Desc)])
+  @@index([studentId, createdAt(sort: Desc)])
+  @@index([category])
+  @@map("complaints")
+}
+
+/// One message in the exchange, from the student or from the office.
+model ComplaintReply {
+  id          String @id @default(uuid(7)) @db.Uuid
+  complaintId String @map("complaint_id") @db.Uuid
+
+  /// Plain text, like the application.
+  body         String
+  /// Decided on the server from who is signed in, never sent by the browser.
+  byOffice     Boolean @map("by_office")
+  authorUserId String? @map("author_user_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  complaint Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  author    User?     @relation("ComplaintReplyAuthor", fields: [authorUserId], references: [id], onDelete: SetNull)
+
+  @@index([complaintId, createdAt])
+  @@map("complaint_replies")
+}
+
 model Document {
   id              String @id @default(uuid()) @db.Uuid
   documentTypeKey String @map("document_type_key") @db.VarChar(50)
@@ -968,10 +1066,10 @@ model Document {
   /// At most one owner column is set, enforced by a check constraint. All
   /// four null is a COLLEGE document (none exist yet); the service keeps the
   /// owner column in step with the document type's `ownerType`.
-  studentId String? @map("student_id") @db.Uuid
-  staffId   String? @map("staff_id") @db.Uuid
-  noticeId  String? @map("notice_id") @db.Uuid
-  eventId   String? @map("event_id") @db.Uuid
+  studentId  String? @map("student_id") @db.Uuid
+  staffId    String? @map("staff_id") @db.Uuid
+  noticeId   String? @map("notice_id") @db.Uuid
+  eventId    String? @map("event_id") @db.Uuid
   homeworkId String? @map("homework_id") @db.Uuid
 
   storageProvider String  @default("google_drive") @map("storage_provider") @db.VarChar(30)
@@ -1311,18 +1409,18 @@ model ExamMarkSheet {
   /// The office reopened this one paper after the exam's marks deadline: until
   /// which college day, why, when and by whom. All four are null together —
   /// a CHECK in the Phase 21 migration keeps a half-recorded reopening out.
-  reopenedUntil     DateTime? @map("reopened_until") @db.Date
-  reopenedReason    String?   @map("reopened_reason") @db.VarChar(255)
-  reopenedByUserId  String?   @map("reopened_by_user_id") @db.Uuid
-  reopenedAt        DateTime? @map("reopened_at") @db.Timestamptz(3)
-  createdByUserId   String?   @map("created_by_user_id") @db.Uuid
-  updatedByUserId   String?   @map("updated_by_user_id") @db.Uuid
-  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  reopenedUntil    DateTime? @map("reopened_until") @db.Date
+  reopenedReason   String?   @map("reopened_reason") @db.VarChar(255)
+  reopenedByUserId String?   @map("reopened_by_user_id") @db.Uuid
+  reopenedAt       DateTime? @map("reopened_at") @db.Timestamptz(3)
+  createdByUserId  String?   @map("created_by_user_id") @db.Uuid
+  updatedByUserId  String?   @map("updated_by_user_id") @db.Uuid
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  examPaper ExamPaper @relation(fields: [examPaperId, academicSessionId], references: [id, academicSessionId])
-  section   Section   @relation(fields: [sectionId, academicSessionId], references: [id, academicSessionId])
-  enteredBy Staff     @relation(fields: [enteredByStaffId], references: [id])
+  examPaper  ExamPaper @relation(fields: [examPaperId, academicSessionId], references: [id, academicSessionId])
+  section    Section   @relation(fields: [sectionId, academicSessionId], references: [id, academicSessionId])
+  enteredBy  Staff     @relation(fields: [enteredByStaffId], references: [id])
   reopenedBy User?     @relation("MarkSheetReopenedBy", fields: [reopenedByUserId], references: [id], onDelete: SetNull)
 
   marks Mark[]

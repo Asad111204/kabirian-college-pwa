@@ -13,6 +13,7 @@ import {
   UserCog,
   Settings,
   ScrollText,
+  MessagesSquare,
 } from 'lucide-react'
 import type { UserRole } from '@/generated/prisma/enums'
 
@@ -81,6 +82,7 @@ export const NAVIGATION: Record<UserRole, NavSection[]> = {
       items: [
         { label: 'Notices', href: '/admin/notices', icon: Megaphone },
         { label: 'Events', href: '/admin/events', icon: CalendarDays },
+        { label: 'Complaints', href: '/admin/complaints', icon: MessagesSquare },
       ],
     },
     {
@@ -122,6 +124,7 @@ export const NAVIGATION: Record<UserRole, NavSection[]> = {
         { label: 'Homework', href: '/student/homework', icon: BookOpen },
         { label: 'Notices', href: '/student/notices', icon: Megaphone },
         { label: 'Events', href: '/student/events', icon: CalendarDays },
+        { label: 'Write to the Office', href: '/student/complaints', icon: MessagesSquare },
       ],
     },
   ],

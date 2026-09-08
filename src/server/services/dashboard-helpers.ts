@@ -314,6 +314,10 @@ const ACTION_DESCRIPTIONS: Record<string, string> = {
   'staff_attendance.marked': 'took the staff register for',
   'staff_attendance.corrected': 'corrected the staff register for',
   // homework (Phase 20)
+  'complaint.submitted': 'wrote an application to the office',
+  'complaint.replied': 'answered the application',
+  'complaint.status_changed': 'changed the state of the application',
+  'complaint.withdrawn': 'withdrew the application',
   'homework.created': 'set homework',
   'homework.updated': 'changed homework',
   'homework.deleted': 'removed homework',
@@ -366,6 +370,7 @@ export const AUDIT_MODULE_LABELS: Record<string, string> = {
   settings: 'Settings',
   homework: 'Homework',
   staff_attendance: 'Staff attendance',
+  complaint: 'Complaints',
 }
 
 export function describeModule(module: string): string {

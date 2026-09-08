@@ -60,11 +60,13 @@ const ID = {
   staffA: '88888888-8888-4888-8888-888888888881',
   staffB: '88888888-8888-4888-8888-888888888882',
   student: '66666666-6666-4666-8666-666666666661',
+  studentB: '66666666-6666-4666-8666-666666666662',
   userAdmin: '99999999-9999-4999-8999-999999999901',
   userA: '99999999-9999-4999-8999-999999999902',
   userB: '99999999-9999-4999-8999-999999999903',
   userStudent: '99999999-9999-4999-8999-999999999904',
   userUnlinked: '99999999-9999-4999-8999-999999999905',
+  userStudentB: '99999999-9999-4999-8999-999999999906',
 }
 
 let n = 0
@@ -143,6 +145,7 @@ const users = [
   [ID.userB, 'harness.teacher.b', 'STAFF'],
   [ID.userStudent, 'harness.student', 'STUDENT'],
   [ID.userUnlinked, 'harness.unlinked', 'STAFF'],
+  [ID.userStudentB, 'harness.student.b', 'STUDENT'],
 ]
 for (const [id, username, role] of users) {
   await client.query(
@@ -168,6 +171,19 @@ await client.query(
   `INSERT INTO student_enrollments (id, student_id, academic_session_id, section_id, roll_number, status, start_date, created_at, updated_at)
    VALUES ($1, $2, $3, $4, '1', 'ACTIVE', '2026-04-01', now(), now())`,
   [uid(), ID.student, ID.session, ID.sec11A],
+)
+
+// A second student, in another section, so "one student cannot see another
+// student's things" can be checked rather than assumed.
+await client.query(
+  `INSERT INTO students (id, student_code, admission_number, full_name, father_name, gender, admission_date, admission_session_id, status, user_id, created_at, updated_at)
+   VALUES ($1, 'HSTU-0002', 'HADM-00002', 'Bilal Ahmed', 'Ahmed Khan', 'MALE', '2026-04-01', $2, 'ACTIVE', $3, now(), now())`,
+  [ID.studentB, ID.session, ID.userStudentB],
+)
+await client.query(
+  `INSERT INTO student_enrollments (id, student_id, academic_session_id, section_id, roll_number, status, start_date, created_at, updated_at)
+   VALUES ($1, $2, $3, $4, '1', 'ACTIVE', '2026-04-01', now(), now())`,
+  [uid(), ID.studentB, ID.session, ID.sec11B],
 )
 
 // TeacherAssignment stays the authority: A teaches Biology in 11A and 12B,

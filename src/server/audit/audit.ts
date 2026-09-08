@@ -167,6 +167,11 @@ export type AuditAction =
   | 'homework.created'
   | 'homework.updated'
   | 'homework.deleted'
+  // complaints (Phase 23)
+  | 'complaint.submitted'
+  | 'complaint.replied'
+  | 'complaint.status_changed'
+  | 'complaint.withdrawn'
 
 export interface AuditInput {
   action: AuditAction

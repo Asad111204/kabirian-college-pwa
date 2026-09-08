@@ -388,7 +388,7 @@ heading('Phase 13: the report centre')
 
   // Students: the JSON the screen shows and the CSV the button downloads are one query.
   r = await get('admin', `/api/v1/reports/students?academicSessionId=${ids.session}`)
-  check('students report → 200 with groups and a total', r.status === 200 && Array.isArray(r.data.groups) && r.data.total === 1, `${r.status} total=${r.data?.total}`)
+  check('students report → 200 with groups and a total', r.status === 200 && Array.isArray(r.data.groups) && r.data.total === 2, `${r.status} total=${r.data?.total}`)
   check('the student row carries placement and no ids', r.data.groups[0]?.rows[0]?.sectionName === 'A' && !r.text.includes('"id"'))
   let csv = await csvOf('admin', `/api/v1/reports/students?academicSessionId=${ids.session}&format=csv`)
   check('the same query as CSV → 200 text/csv, as an attachment, never cached', csv.status === 200 && csv.type.startsWith('text/csv') && /attachment; filename="students-/.test(csv.disposition) && /no-store/.test(csv.cache), `${csv.status} ${csv.type} ${csv.disposition}`)
@@ -397,7 +397,10 @@ heading('Phase 13: the report centre')
   check('the CSV names the student and their section', csv.text.includes('Ali Raza') && csv.text.split('\r\n')[1]?.includes(',A,'))
 
   r = await get('admin', `/api/v1/reports/students?academicSessionId=${ids.session}&sectionId=${ids.sec11B}`)
-  check('narrowing to a section with nobody in it gives zero rows, not an error', r.status === 200 && r.data.total === 0)
+  check('narrowing to one section gives only that section’s student', r.status === 200 && r.data.total === 1 && r.data.groups[0]?.rows[0]?.fullName === 'Bilal Ahmed', `${r.status} total=${r.data?.total}`)
+  // 12-B is in this session and has nobody in it.
+  r = await get('admin', `/api/v1/reports/students?academicSessionId=${ids.session}&sectionId=${ids.sec12B}`)
+  check('narrowing to a section with nobody in it gives zero rows, not an error', r.status === 200 && r.data.total === 0, `${r.status} total=${r.data?.total}`)
   r = await get('admin', `/api/v1/reports/students?academicSessionId=${ids.session}&groupBy=section`)
   check('grouping by section labels the group in full', r.status === 200 && /Section A/.test(r.data.groups[0]?.label ?? ''), r.data?.groups?.[0]?.label)
 
@@ -408,7 +411,7 @@ heading('Phase 13: the report centre')
 
   r = await get('admin', `/api/v1/reports/missing-documents?academicSessionId=${ids.session}`)
   csv = await csvOf('admin', `/api/v1/reports/missing-documents?academicSessionId=${ids.session}&format=csv`)
-  check('missing documents: the one student is missing every required type', r.status === 200 && r.data.total === 1 && r.data.groups[0]?.rows[0]?.missing.length === r.data.types.length && r.data.types.length >= 1, `${r.status} ${JSON.stringify(r.data?.groups?.[0]?.rows?.[0]?.missing)}`)
+  check('missing documents: both students are missing every required type', r.status === 200 && r.data.total === 2 && r.data.groups[0]?.rows[0]?.missing.length === r.data.types.length && r.data.types.length >= 1, `${r.status} ${JSON.stringify(r.data?.groups?.[0]?.rows?.[0]?.missing)}`)
   check('missing documents: JSON rows equal CSV rows', dataRows(csv.text) === r.data.total)
 
   r = await get('admin', '/api/v1/reports/exams?examId=99999999-9999-4999-8999-999999999999')
