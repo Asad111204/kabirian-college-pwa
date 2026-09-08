@@ -46,6 +46,7 @@ import {
   type ExamPaperInput,
   type ExamStatusValue,
   type ExamTypeInput,
+  type MarksDeadlineInput,
 } from '@/validation/exams'
 
 /* ========================================================================== */
@@ -201,6 +202,8 @@ export interface ExamRow {
   description: string | null
   paperCount: number
   dateSheetPublished: boolean
+  /** The office's last day for entering marks, or null (Phase 21). */
+  marksDeadline: string | null
 }
 
 function toExamRow(row: {
@@ -212,6 +215,7 @@ function toExamRow(row: {
   academicSession: { name: string }
   startDate: Date | null
   endDate: Date | null
+  marksDeadline: Date | null
   status: string
   description: string | null
   _count: { papers: number }
@@ -230,6 +234,7 @@ function toExamRow(row: {
     description: row.description,
     paperCount: row._count.papers,
     dateSheetPublished: isDateSheetPublished(status),
+    marksDeadline: row.marksDeadline ? storageToCollegeDate(row.marksDeadline) : null,
   }
 }
 
@@ -473,6 +478,46 @@ export async function updateExam(ctx: AuthContext, id: string, input: ExamInput)
  * Cancelling is the alternative to deleting: the record and its papers stay
  * readable, which matters once anyone has seen the schedule.
  */
+/**
+ * Sets or clears the last college day on which teachers may enter or correct
+ * marks for this exam (Phase 21).
+ *
+ * The office is never bound by it, and can reopen one paper past it from the
+ * mark-sheet monitor. Clearing it (an empty value) puts the exam back to how
+ * every exam behaved before this phase: open while the exam itself is.
+ */
+export async function setMarksDeadline(ctx: AuthContext, id: string, input: MarksDeadlineInput) {
+  assertAdminArea(ctx, 'Exam management')
+  authorize(ctx, 'exams.manage')
+
+  const before = await prisma.exam.findUnique({ where: { id } })
+  if (!before) throw new NotFoundError('exam')
+
+  const deadline = input.marksDeadline ?? null
+  if (deadline && before.startDate && deadline < storageToCollegeDate(before.startDate)) {
+    throw new ValidationError('The marks deadline cannot fall before the exam starts.', {
+      marksDeadline: ['The marks deadline cannot fall before the exam starts.'],
+    })
+  }
+
+  await prisma.exam.update({
+    where: { id },
+    data: { marksDeadline: deadline ? collegeDateToStorage(deadline) : null, updatedByUserId: ctx.userId },
+  })
+
+  await writeAuditLog(ctx, {
+    action: 'exam.marks_deadline_set',
+    entityType: 'exam',
+    entityId: id,
+    entityLabel: before.name,
+    before: { marksDeadline: before.marksDeadline ? storageToCollegeDate(before.marksDeadline) : null },
+    after: { marksDeadline: deadline },
+  })
+
+  // The same shape the exam is read in, so a screen can use the reply directly.
+  return getExam(ctx, id)
+}
+
 export async function setExamStatus(
   ctx: AuthContext,
   id: string,

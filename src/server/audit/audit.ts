@@ -157,6 +157,9 @@ export type AuditAction =
   | 'auth.other_sessions_revoked'
   // settings (Phase 18)
   | 'settings.updated'
+  // marks deadline (Phase 21)
+  | 'exam.marks_deadline_set'
+  | 'mark_sheet.reopened'
   // homework (Phase 20)
   | 'homework.created'
   | 'homework.updated'

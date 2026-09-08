@@ -307,6 +307,9 @@ const ACTION_DESCRIPTIONS: Record<string, string> = {
   'auth.other_sessions_revoked': 'signed out their other devices',
   // settings (Phase 18)
   'settings.updated': 'changed the settings for',
+  // marks deadline (Phase 21)
+  'exam.marks_deadline_set': 'set the marks deadline for',
+  'mark_sheet.reopened': 'reopened the mark sheet for',
   // homework (Phase 20)
   'homework.created': 'set homework',
   'homework.updated': 'changed homework',

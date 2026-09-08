@@ -18,6 +18,7 @@ import type { MarkSheetStatusRow } from '@/server/services/marks.service'
 import { DateSheetView } from './date-sheet-view'
 import { ExamFormDialog, type ExamTypeOption, type SessionOption } from './exam-form-dialog'
 import { PaperFormDialog, type PaperFormValues } from './paper-form-dialog'
+import { MarksDeadlineCard } from './marks-deadline-card'
 import { DateRange, ExamStatusBadge, formatExamDate, formatMarks, formatTimeRange, programLabel } from './shared'
 
 type Confirm =
@@ -173,6 +174,8 @@ export function ExamDetail({
 
   return (
     <>
+      <MarksDeadlineCard examId={exam.id} deadline={exam.marksDeadline} canManage={canManage} />
+
       <Card className="mb-4 p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <dl className="grid flex-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
@@ -325,7 +328,7 @@ export function ExamDetail({
       ) : null}
 
       {tab === 'marks' ? (
-        <MarkSheetMonitor rows={markSheets} />
+        <MarkSheetMonitor rows={markSheets} canReopen={canManage} />
       ) : tab === 'schedule' ? (
         <DateSheetView groups={dateSheet} />
       ) : (

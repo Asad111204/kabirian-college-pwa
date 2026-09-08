@@ -43,7 +43,8 @@ describe('role defaults', () => {
       'academics.manage',
       'students.delete',
       'results.publish',
-      'marks.update_submitted',
+      // marks.update_submitted is no longer here: since Phase 21 a teacher holds
+      // it for their own sheets, bounded by the exam's marks deadline.
       // attendance.update_submitted is no longer here: since Phase 18 a teacher
       // holds it for their own registers, bounded by the office's correction window.
     ]

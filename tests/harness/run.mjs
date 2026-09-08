@@ -131,6 +131,7 @@ try {
   log('fixture seeds')
   if (run('node', [join(HERE, 'seed.mjs'), '--data'], { env: harnessEnv }) !== 0) throw new Error('data seed failed')
   if (run('node', [join(HERE, 'seed-notices.mjs')], { env: harnessEnv }) !== 0) throw new Error('notices seed failed')
+  if (run('node', [join(HERE, 'seed-exams.mjs')], { env: harnessEnv }) !== 0) throw new Error('exam seed failed')
   log('production server')
   const next = start('npx', ['next', 'start', '-p', String(PORT)], { cwd: ROOT, env: harnessEnv })
   const nextLog = []
@@ -150,7 +151,7 @@ try {
   if (code !== 200) throw new Error(`next did not start\n${nextLog.slice(-30).join('')}`)
 
   log('verify')
-  for (const v of ['verify.mjs', 'verify-notices.mjs', 'verify-security.mjs', 'verify-pwa.mjs', 'verify-attendance.mjs', 'verify-photos.mjs', 'verify-homework.mjs']) {
+  for (const v of ['verify.mjs', 'verify-notices.mjs', 'verify-security.mjs', 'verify-pwa.mjs', 'verify-attendance.mjs', 'verify-photos.mjs', 'verify-homework.mjs', 'verify-marks-deadline.mjs']) {
     console.log(`\n--- ${v}`)
     if (run('node', [join(HERE, v)], { env: harnessEnv }) !== 0) failures += 1
   }

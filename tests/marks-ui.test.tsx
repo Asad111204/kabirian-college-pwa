@@ -103,6 +103,8 @@ function sheet(over: Record<string, unknown> = {}) {
     marks,
     canEdit: true,
     canSubmit: true,
+    // Phase 21: the server says whether the deadline has closed the sheet.
+    window: { deadline: null, reopenedUntil: null, reopenedReason: null, closedReason: null },
     ...over,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any
@@ -522,6 +524,12 @@ describe('a submitted mark sheet', () => {
       submittedAt: '2026-05-13T09:00:00.000Z',
       canEdit: false,
       canSubmit: false,
+      window: {
+        deadline: null,
+        reopenedUntil: null,
+        reopenedReason: null,
+        closedReason: 'Submitted marks cannot be edited. Please contact the administrator if a correction is required.',
+      },
       marks: [
         student(1, { status: 'ENTERED', obtainedMarks: '75.00' }),
         student(2, { status: 'ABSENT', obtainedMarks: '0.00' }),
@@ -622,5 +630,68 @@ describe('the admin’s mark sheet monitor', () => {
     const table = screen.getByRole('table')
     expect(within(table).getByText('30')).toBeTruthy()
     expect(within(table).getByText('18')).toBeTruthy()
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+/* Phase 21: the deadline window on the teacher's sheet                        */
+/* -------------------------------------------------------------------------- */
+
+describe('a submitted sheet the teacher may still correct', () => {
+  const open = () =>
+    sheet({
+      status: 'SUBMITTED',
+      submittedAt: '2026-05-13T09:00:00.000Z',
+      canEdit: true,
+      canSubmit: false,
+      window: { deadline: '2026-05-20', reopenedUntil: null, reopenedReason: null, closedReason: null },
+      marks: [student(1, { status: 'ENTERED', obtainedMarks: '75.00' })],
+    })
+
+  it('says corrections are still open, until the exam’s deadline', () => {
+    render(<MarkSheetView sheet={open()} />)
+    expect(screen.getByText(/corrections still open/i)).toBeTruthy()
+    expect(screen.getByText(/until 2026-05-20, the deadline for this exam/)).toBeTruthy()
+    expect(screen.getByText(/recorded in the audit log/)).toBeTruthy()
+  })
+
+  it('lets the teacher change a mark, and offers no Submit — the sheet is already in', () => {
+    render(<MarkSheetView sheet={open()} />)
+    expect(screen.getByLabelText('Marks for Student 1')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /^Submit/ })).toBeNull()
+  })
+
+  it('names the office’s reopening and its reason when that is why it is open', () => {
+    render(
+      <MarkSheetView
+        sheet={sheet({
+          status: 'SUBMITTED',
+          submittedAt: '2026-05-13T09:00:00.000Z',
+          canEdit: true,
+          canSubmit: false,
+          window: { deadline: '2026-05-10', reopenedUntil: '2026-05-25', reopenedReason: 'Paper re-checked', closedReason: null },
+          marks: [student(1, { status: 'ENTERED', obtainedMarks: '75.00' })],
+        })}
+      />,
+    )
+    expect(screen.getByText(/until 2026-05-25, because the office reopened this paper/)).toBeTruthy()
+    expect(screen.getByText(/Reason given: Paper re-checked/)).toBeTruthy()
+  })
+
+  it('gives the server’s own sentence when the deadline has closed the sheet', () => {
+    render(
+      <MarkSheetView
+        sheet={sheet({
+          status: 'SUBMITTED',
+          submittedAt: '2026-05-13T09:00:00.000Z',
+          canEdit: false,
+          canSubmit: false,
+          window: { deadline: '2026-05-10', reopenedUntil: null, reopenedReason: null, closedReason: 'The deadline for entering marks for this exam was 10 May 2026. Ask the office to reopen this paper.' },
+          marks: [student(1, { status: 'ENTERED', obtainedMarks: '75.00' })],
+        })}
+      />,
+    )
+    expect(screen.getByText(/deadline for entering marks for this exam was 10 May 2026/)).toBeTruthy()
+    expect(screen.queryByLabelText('Marks for Student 1')).toBeNull()
   })
 })

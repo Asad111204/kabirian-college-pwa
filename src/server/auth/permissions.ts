@@ -108,6 +108,8 @@ const STAFF_PERMISSIONS: PermissionKey[] = [
   'marks.view',
   'marks.enter',
   'marks.update',
+  // Their own submitted sheets, until the exam's marks deadline (Phase 21).
+  'marks.update_submitted',
   'results.view',
   'timetable.view',
   'notices.view',

@@ -266,16 +266,30 @@ export function MarkSheetView({ sheet: initialSheet }: { sheet: MarkSheetDetail 
         <CountsSummary counts={liveCounts} className="mt-4" />
       </Card>
 
-      {!isDraft ? (
+      {!isDraft && editable ? (
+        <Alert variant="warning" title="Submitted — corrections still open" className="mb-4">
+          Handed in {formatDateTime(sheet.submittedAt)}. You can still correct these marks
+          {sheet.window.reopenedUntil
+            ? ` until ${sheet.window.reopenedUntil}, because the office reopened this paper`
+            : sheet.window.deadline
+              ? ` until ${sheet.window.deadline}, the deadline for this exam`
+              : ''}
+          . Every correction is recorded in the audit log.
+          {sheet.window.reopenedReason ? ` Reason given: ${sheet.window.reopenedReason}` : ''}
+        </Alert>
+      ) : null}
+
+      {!isDraft && !editable ? (
         <Alert variant="success" title="Submitted" className="mb-4">
-          Handed in {formatDateTime(sheet.submittedAt)}. Submitted marks cannot be edited. Please
-          contact the administrator if a correction is required.
+          Handed in {formatDateTime(sheet.submittedAt)}.{' '}
+          {sheet.window.closedReason ??
+            'Submitted marks cannot be edited. Please contact the administrator if a correction is required.'}
         </Alert>
       ) : null}
 
       {isDraft && !editable ? (
         <Alert variant="warning" className="mb-4">
-          These marks are a draft, but you cannot change them.
+          {sheet.window.closedReason ?? 'These marks are a draft, but you cannot change them.'}
         </Alert>
       ) : null}
 

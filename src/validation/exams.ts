@@ -164,6 +164,29 @@ export const examListQuerySchema = z.object({
 export type ExamListQuery = z.infer<typeof examListQuerySchema>
 
 /** Cancelling an exam, or reopening a cancelled one. */
+/**
+ * The office's last day for entering marks for one exam (Phase 21). An empty
+ * value clears it: "no deadline" is a real answer, and the one every exam had
+ * before this phase.
+ */
+export const marksDeadlineSchema = z.object({
+  marksDeadline: z.preprocess((v) => (v === '' || v === null ? undefined : v), isoDate.optional()),
+})
+
+export type MarksDeadlineInput = z.infer<typeof marksDeadlineSchema>
+
+/**
+ * Reopening one mark sheet after the deadline: until which college day, and
+ * why. Both are required — a reopening nobody can explain later is not a
+ * decision, it is a hole.
+ */
+export const markSheetReopenSchema = z.object({
+  reopenedUntil: isoDate,
+  reason: requiredText(255, 'Reason'),
+})
+
+export type MarkSheetReopenInput = z.infer<typeof markSheetReopenSchema>
+
 export const examStatusSchema = z.object({
   status: z.enum(['DRAFT', 'CANCELLED'], {
     error: 'An exam can only be cancelled or returned to draft here.',

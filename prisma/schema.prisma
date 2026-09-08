@@ -335,6 +335,7 @@ model User {
   staff             Staff?
   auditLogs         AuditLog[]
   uploadedDocuments Document[]       @relation("DocumentUploader")
+  reopenedMarkSheets ExamMarkSheet[] @relation("MarkSheetReopenedBy")
 
   @@index([role, status])
   @@map("users")
@@ -1125,6 +1126,10 @@ model Exam {
   academicSessionId String     @map("academic_session_id") @db.Uuid
   startDate         DateTime?  @map("start_date") @db.Date
   endDate           DateTime?  @map("end_date") @db.Date
+  /// The last college day on which a teacher may enter or correct marks for
+  /// this exam. Null means no deadline. The office is never bound by it, and
+  /// may reopen one paper past it (Phase 21).
+  marksDeadline     DateTime?  @map("marks_deadline") @db.Date
   status            ExamStatus @default(DRAFT)
   description       String?    @db.VarChar(500)
   createdByUserId   String?    @map("created_by_user_id") @db.Uuid
@@ -1262,6 +1267,14 @@ model ExamMarkSheet {
   submittedAt       DateTime? @map("submitted_at") @db.Timestamptz(3)
   publishedAt       DateTime? @map("published_at") @db.Timestamptz(3)
   publishedByUserId String?   @map("published_by_user_id") @db.Uuid
+
+  /// The office reopened this one paper after the exam's marks deadline: until
+  /// which college day, why, when and by whom. All four are null together —
+  /// a CHECK in the Phase 21 migration keeps a half-recorded reopening out.
+  reopenedUntil     DateTime? @map("reopened_until") @db.Date
+  reopenedReason    String?   @map("reopened_reason") @db.VarChar(255)
+  reopenedByUserId  String?   @map("reopened_by_user_id") @db.Uuid
+  reopenedAt        DateTime? @map("reopened_at") @db.Timestamptz(3)
   createdByUserId   String?   @map("created_by_user_id") @db.Uuid
   updatedByUserId   String?   @map("updated_by_user_id") @db.Uuid
   createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -1270,6 +1283,7 @@ model ExamMarkSheet {
   examPaper ExamPaper @relation(fields: [examPaperId, academicSessionId], references: [id, academicSessionId])
   section   Section   @relation(fields: [sectionId, academicSessionId], references: [id, academicSessionId])
   enteredBy Staff     @relation(fields: [enteredByStaffId], references: [id])
+  reopenedBy User?     @relation("MarkSheetReopenedBy", fields: [reopenedByUserId], references: [id], onDelete: SetNull)
 
   marks Mark[]
 

@@ -23,7 +23,7 @@ import { prisma } from '../db/prisma'
 import { authorize, can, type AuthContext } from '../auth/context'
 import { writeAuditLog } from '../audit/audit'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../api/errors'
-import { storageToCollegeDate } from '../time/college-date'
+import { collegeDateToStorage, storageToCollegeDate, todayInCollegeTimezone } from '../time/college-date'
 import { fromHundredths, toHundredths, tryHundredths } from '../exams/exact'
 import {
   decideCanEditMarks,
@@ -32,9 +32,10 @@ import {
   findUnenteredStudents,
   type MarkingContext,
   type MarksViewer,
+  type MarksWindow,
 } from '../exams/marks-access'
 import { assertAdminArea } from './service-utils'
-import type { ExamStatusValue } from '@/validation/exams'
+import type { ExamStatusValue, MarkSheetReopenInput } from '@/validation/exams'
 import type {
   MarkSheetStatusValue,
   MarkStatusValue,
@@ -65,6 +66,8 @@ export interface MarkSheetPaper {
   endTime: string | null
   maxMarks: string
   passingPercentage: string
+  /** The office's last day for entering marks for this exam, or null (Phase 21). */
+  marksDeadline: string | null
 }
 
 export interface MarkRow {
@@ -98,6 +101,17 @@ export interface MarkSheetDetail extends MarkSheetPaper {
   marks: MarkRow[]
   canEdit: boolean
   canSubmit: boolean
+  /**
+   * Why the sheet is or is not editable, in the reader's own terms (Phase 21):
+   * the deadline, any reopening, and the refusal the API would give.
+   */
+  window: {
+    deadline: string | null
+    reopenedUntil: string | null
+    reopenedReason: string | null
+    /** Null when they may edit; otherwise the sentence the API would answer with. */
+    closedReason: string | null
+  }
 }
 
 /** One row of the teacher's "what can I mark?" list. */
@@ -117,6 +131,20 @@ export interface MyPaperOption extends MarkSheetPaper {
 /* ========================================================================== */
 /* Small helpers                                                              */
 /* ========================================================================== */
+
+/**
+ * The deadline window for one paper and sheet (Phase 21): the exam's
+ * deadline, and any reopening of this sheet. The office is never bound by it,
+ * so `undefined` is passed for an administrator and the policy skips the rule.
+ */
+function windowFor(ctx: AuthContext, marksDeadline: string | null, sheet?: { reopenedUntil: Date | null }): MarksWindow | undefined {
+  if (ctx.role === 'ADMIN') return undefined
+  return {
+    today: todayInCollegeTimezone(),
+    deadline: marksDeadline,
+    reopenedUntil: sheet?.reopenedUntil ? storageToCollegeDate(sheet.reopenedUntil) : null,
+  }
+}
 
 function viewerOf(ctx: AuthContext): MarksViewer {
   return {
@@ -239,6 +267,7 @@ async function resolveTarget(
           id: true,
           name: true,
           status: true,
+          marksDeadline: true,
           examType: { select: { name: true } },
           academicSession: { select: { name: true } },
         },
@@ -303,6 +332,7 @@ async function resolveTarget(
       examName: paper.exam.name,
       examTypeName: paper.exam.examType.name,
       examStatus: paper.exam.status as ExamStatusValue,
+      marksDeadline: paper.exam.marksDeadline ? storageToCollegeDate(paper.exam.marksDeadline) : null,
       academicSessionId: paper.academicSessionId,
       sessionName: paper.exam.academicSession.name,
       examPaperId: paper.id,
@@ -337,7 +367,7 @@ async function assertCanEnterMarks(
   assertCouldEnterMarks(ctx)
 
   const target = await resolveTarget(ctx, examPaperId, sectionId)
-  const decision = decideCanEnterMarks(viewerOf(ctx), target.context)
+  const decision = decideCanEnterMarks(viewerOf(ctx), target.context, windowFor(ctx, target.paper.marksDeadline))
   if (!decision.allowed) {
     throw new ForbiddenError(decision.reason, {
       userId: ctx.userId,
@@ -430,6 +460,7 @@ export async function getMyExamPapers(ctx: AuthContext): Promise<MyPaperOption[]
           id: true,
           name: true,
           status: true,
+          marksDeadline: true,
           examType: { select: { name: true } },
           academicSession: { select: { name: true } },
         },
@@ -451,6 +482,7 @@ export async function getMyExamPapers(ctx: AuthContext): Promise<MyPaperOption[]
         examName: paper.exam.name,
         examTypeName: paper.exam.examType.name,
         examStatus: paper.exam.status as ExamStatusValue,
+        marksDeadline: paper.exam.marksDeadline ? storageToCollegeDate(paper.exam.marksDeadline) : null,
         academicSessionId: paper.academicSessionId,
         sessionName: paper.exam.academicSession.name,
         examPaperId: paper.id,
@@ -644,6 +676,9 @@ interface LoadedSheet {
   enteredByName: string
   submittedAt: Date | null
   updatedAt: Date
+  /** Set when the office reopened this one paper after the deadline (Phase 21). */
+  reopenedUntil: Date | null
+  reopenedReason: string | null
 }
 
 async function loadSheet(sheetId: string): Promise<LoadedSheet> {
@@ -657,6 +692,8 @@ async function loadSheet(sheetId: string): Promise<LoadedSheet> {
       enteredByStaffId: true,
       submittedAt: true,
       updatedAt: true,
+      reopenedUntil: true,
+      reopenedReason: true,
       enteredBy: { select: { fullName: true } },
     },
   })
@@ -667,6 +704,8 @@ async function loadSheet(sheetId: string): Promise<LoadedSheet> {
     examPaperId: sheet.examPaperId,
     sectionId: sheet.sectionId,
     status: sheet.status as MarkSheetStatusValue,
+    reopenedUntil: sheet.reopenedUntil,
+    reopenedReason: sheet.reopenedReason,
     enteredByStaffId: sheet.enteredByStaffId,
     enteredByName: sheet.enteredBy.fullName,
     submittedAt: sheet.submittedAt,
@@ -726,8 +765,8 @@ export async function getMarkSheet(ctx: AuthContext, sheetId: string): Promise<M
   })
 
   const viewer = viewerOf(ctx)
-  const edit = decideCanEditMarks(viewer, target.context, { status: sheet.status })
-  const submit = decideCanSubmitMarks(viewer, target.context, { status: sheet.status })
+  const edit = decideCanEditMarks(viewer, target.context, { status: sheet.status }, windowFor(ctx, target.paper.marksDeadline, sheet))
+  const submit = decideCanSubmitMarks(viewer, target.context, { status: sheet.status }, windowFor(ctx, target.paper.marksDeadline, sheet))
 
   return {
     ...target.paper,
@@ -743,6 +782,12 @@ export async function getMarkSheet(ctx: AuthContext, sheetId: string): Promise<M
     counts: countsOf(rows),
     marks: rows,
     canEdit: edit.allowed,
+    window: {
+      deadline: target.paper.marksDeadline,
+      reopenedUntil: sheet.reopenedUntil ? storageToCollegeDate(sheet.reopenedUntil) : null,
+      reopenedReason: sheet.reopenedReason,
+      closedReason: edit.allowed ? null : edit.reason,
+    },
     canSubmit: submit.allowed,
   }
 }
@@ -861,7 +906,7 @@ export async function saveMarks(
   const sheet = await loadSheet(sheetId)
   const target = await resolveTarget(ctx, sheet.examPaperId, sheet.sectionId)
 
-  const decision = decideCanEditMarks(viewerOf(ctx), target.context, { status: sheet.status })
+  const decision = decideCanEditMarks(viewerOf(ctx), target.context, { status: sheet.status }, windowFor(ctx, target.paper.marksDeadline, sheet))
   if (!decision.allowed) {
     throw new ForbiddenError(decision.reason, {
       userId: ctx.userId,
@@ -1019,7 +1064,7 @@ export async function submitMarkSheet(
   const sheet = await loadSheet(sheetId)
   const target = await resolveTarget(ctx, sheet.examPaperId, sheet.sectionId)
 
-  const decision = decideCanSubmitMarks(viewerOf(ctx), target.context, { status: sheet.status })
+  const decision = decideCanSubmitMarks(viewerOf(ctx), target.context, { status: sheet.status }, windowFor(ctx, target.paper.marksDeadline, sheet))
   if (!decision.allowed) {
     // Already submitted is a conflict, not a permission problem.
     if (decision.code === 'SHEET_SUBMITTED' && sheet.status !== 'DRAFT') {
@@ -1088,6 +1133,8 @@ export interface MarkSheetStatusRow {
   status: MarkSheetStatusValue | null
   submittedAt: string | null
   counts: MarkSheetCounts
+  /** Set when the office reopened this paper after the deadline (Phase 21). */
+  reopenedUntil: string | null
 }
 
 /**
@@ -1143,6 +1190,7 @@ export async function listExamMarkSheets(
         sectionId: true,
         status: true,
         submittedAt: true,
+        reopenedUntil: true,
         enteredBy: { select: { fullName: true } },
         marks: { select: { status: true } },
       },
@@ -1183,9 +1231,74 @@ export async function listExamMarkSheets(
         counts: sheet
           ? countsOf(sheet.marks as { status: MarkStatusValue }[])
           : { total: 0, entered: 0, absent: 0, pending: 0 },
+        reopenedUntil: sheet?.reopenedUntil ? storageToCollegeDate(sheet.reopenedUntil) : null,
       })
     }
   }
 
   return rows
+}
+
+/* ========================================================================== */
+/* Reopening one paper after the deadline (Phase 21)                          */
+/* ========================================================================== */
+
+/**
+ * The office lets one teacher back into one mark sheet after the exam's marks
+ * deadline has passed.
+ *
+ * It is deliberately per sheet, not per exam: "let Miss Sara finish 1st Year
+ * Biology" should not reopen every paper in the college. The reason is
+ * required and kept on the row, so a month later the office can say why.
+ * Reopening does not change the sheet's status -- a submitted sheet stays
+ * submitted, and every correction is audited as one.
+ */
+export async function reopenMarkSheet(
+  ctx: AuthContext,
+  sheetId: string,
+  input: MarkSheetReopenInput,
+  request?: { ipAddress?: string | null; userAgent?: string | null },
+): Promise<MarkSheetDetail> {
+  assertAdminArea(ctx, 'Mark sheets')
+  authorize(ctx, 'marks.update_submitted')
+
+  const sheet = await loadSheet(sheetId)
+  const target = await resolveTarget(ctx, sheet.examPaperId, sheet.sectionId)
+
+  if (sheet.status === 'PUBLISHED') {
+    throw new ConflictError('These marks have been published. Reopening the paper would not change the result that was made from them.')
+  }
+  const today = todayInCollegeTimezone()
+  if (input.reopenedUntil < today) {
+    throw new ValidationError('Reopen the paper until today or a later day.', {
+      reopenedUntil: ['Reopen the paper until today or a later day.'],
+    })
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.examMarkSheet.update({
+      where: { id: sheetId },
+      data: {
+        reopenedUntil: collegeDateToStorage(input.reopenedUntil),
+        reopenedReason: input.reason,
+        reopenedByUserId: ctx.userId,
+        reopenedAt: new Date(),
+        updatedByUserId: ctx.userId,
+      },
+    })
+    await writeAuditLog(
+      ctx,
+      {
+        action: 'mark_sheet.reopened',
+        entityType: 'mark_sheet',
+        entityId: sheetId,
+        entityLabel: `${target.paper.subjectName} · ${target.paper.examName} · Section ${sheet.sectionId.slice(0, 8)}`,
+        metadata: { reopenedUntil: input.reopenedUntil, reason: input.reason, teacher: sheet.enteredByName },
+        request,
+      },
+      tx,
+    )
+  })
+
+  return getMarkSheet(ctx, sheetId)
 }

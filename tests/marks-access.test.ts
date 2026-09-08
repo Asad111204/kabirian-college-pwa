@@ -225,12 +225,13 @@ describe('what is still unmarked', () => {
 /* -------------------------------------------------------------------------- */
 
 describe('who holds the marks permissions', () => {
-  it('gives a teacher entry and ordinary correction, but not correction after submission', () => {
-    const staff = ROLE_DEFAULT_PERMISSIONS.STAFF
-    expect(staff).toContain('marks.enter')
-    expect(staff).toContain('marks.update')
-    expect(staff).toContain('marks.view')
-    expect(staff).not.toContain('marks.update_submitted')
+  it('gives a teacher entry, ordinary correction, and correction after submission within the deadline', () => {
+    // Phase 21: teachers hold marks.update_submitted for their own sheets; the
+    // exam's marks deadline, not the permission, is what closes the door.
+    expect(ROLE_DEFAULT_PERMISSIONS.STAFF).toContain('marks.enter')
+    expect(ROLE_DEFAULT_PERMISSIONS.STAFF).toContain('marks.update')
+    expect(ROLE_DEFAULT_PERMISSIONS.STAFF).toContain('marks.update_submitted')
+    expect(ROLE_DEFAULT_PERMISSIONS.STUDENT).not.toContain('marks.enter')
   })
 
   it('gives an administrator correction after submission', () => {

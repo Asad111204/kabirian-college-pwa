@@ -1,11 +1,15 @@
+'use client'
+
 import * as React from 'react'
 import { ClipboardList } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Alert, EmptyState } from '@/components/ui/feedback'
 import { Table, TableWrapper, TBody, TD, TH, THead, TR } from '@/components/ui/table'
 import { formatDateTime } from '@/lib/format'
 import type { MarkSheetStatusRow } from '@/server/services/marks.service'
 import { MarkSheetStatusBadge } from './shared'
+import { ReopenSheetDialog } from './reopen-sheet-dialog'
 
 /**
  * Admin → one exam → who has marked what.
@@ -16,8 +20,12 @@ import { MarkSheetStatusBadge } from './shared'
  *
  * Status only. No marks appear here: reading a student's mark is the marks
  * screen's job, and this is a progress board.
+ *
+ * With `canReopen`, each started sheet also offers "Reopen": the office letting
+ * one teacher back into one paper after the exam's marks deadline (Phase 21).
  */
-export function MarkSheetMonitor({ rows }: { rows: MarkSheetStatusRow[] }) {
+export function MarkSheetMonitor({ rows, canReopen = false }: { rows: MarkSheetStatusRow[]; canReopen?: boolean }) {
+  const [reopening, setReopening] = React.useState<MarkSheetStatusRow | null>(null)
   if (rows.length === 0) {
     return (
       <Card>
@@ -56,6 +64,11 @@ export function MarkSheetMonitor({ rows }: { rows: MarkSheetStatusRow[] }) {
                 <TH className="hidden md:table-cell text-right">Absent</TH>
                 <TH className="hidden md:table-cell text-right">Not entered</TH>
                 <TH>Status</TH>
+                {canReopen ? (
+                  <TH className="text-right">
+                    <span className="sr-only">Reopen</span>
+                  </TH>
+                ) : null}
               </TR>
             </THead>
             <TBody>
@@ -95,13 +108,32 @@ export function MarkSheetMonitor({ rows }: { rows: MarkSheetStatusRow[] }) {
                         {formatDateTime(row.submittedAt)}
                       </span>
                     ) : null}
+                    {row.reopenedUntil ? (
+                      <span className="block text-xs text-warning-700">Reopened until {row.reopenedUntil}</span>
+                    ) : null}
                   </TD>
+                  {canReopen ? (
+                    <TD className="text-right">
+                      {row.sheetId && row.status !== 'PUBLISHED' ? (
+                        <Button variant="ghost" size="sm" onClick={() => setReopening(row)}>
+                          Reopen
+                        </Button>
+                      ) : null}
+                    </TD>
+                  ) : null}
                 </TR>
               ))}
             </TBody>
           </Table>
         </TableWrapper>
       </Card>
+
+      <ReopenSheetDialog
+        sheetId={reopening?.sheetId ?? null}
+        label={reopening ? `${reopening.subjectName} · ${reopening.className} · ${reopening.divisionName} · Section ${reopening.sectionName}` : ''}
+        open={reopening !== null}
+        onOpenChange={(open) => !open && setReopening(null)}
+      />
     </>
   )
 }

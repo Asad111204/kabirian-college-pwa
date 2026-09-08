@@ -20,6 +20,8 @@ export type MarksRefusal =
   | 'NOT_ASSIGNED'
   | 'EXAM_NOT_OPEN'
   | 'SHEET_SUBMITTED'
+  | 'SHEET_PUBLISHED'
+  | 'DEADLINE_PASSED'
 
 /** What the service has looked up about the person asking. */
 export interface MarksViewer {
@@ -37,6 +39,45 @@ export interface MarkingContext {
   hasActiveAssignment: boolean
   /** The exam's own status, which decides whether marking is open at all. */
   examStatus: ExamStatusValue
+}
+
+/**
+ * The office's deadline for this exam, and any reopening of this one paper
+ * (Phase 21). All dates are college dates, YYYY-MM-DD; null means "none".
+ * The office is never bound by any of it.
+ */
+export interface MarksWindow {
+  today: string
+  deadline: string | null
+  reopenedUntil: string | null
+}
+
+/**
+ * Is the door still open for a teacher: no deadline, the deadline has not
+ * passed, or the office reopened this paper and that reopening has not passed
+ * either?
+ */
+export function isWithinMarksWindow(window: MarksWindow): boolean {
+  if (!window.deadline) return true
+  if (window.today <= window.deadline) return true
+  return window.reopenedUntil !== null && window.today <= window.reopenedUntil
+}
+
+/** 2026-09-12 -> 12 Sep 2026, for a sentence a teacher reads. */
+function readableDate(date: string): string {
+  const [y, m, d] = date.split('-').map(Number)
+  if (!y || !m || !d) return date
+  return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(Date.UTC(y, m - 1, d)))
+}
+
+function refusalForWindow(window: MarksWindow): MarksDecision {
+  return {
+    allowed: false,
+    code: 'DEADLINE_PASSED',
+    reason: window.reopenedUntil
+      ? `This paper was reopened until ${readableDate(window.reopenedUntil)}. That time has passed — ask the office to reopen it again.`
+      : `The deadline for entering marks for this exam was ${readableDate(window.deadline ?? '')}. Ask the office to reopen this paper.`,
+  }
 }
 
 /**
@@ -81,6 +122,7 @@ function refusalForExam(examStatus: ExamStatusValue): MarksDecision {
 export function decideCanEnterMarks(
   viewer: MarksViewer,
   context: MarkingContext,
+  window?: MarksWindow,
 ): MarksDecision {
   if (!viewer.canEnter) {
     return {
@@ -102,13 +144,18 @@ export function decideCanEnterMarks(
     }
   }
 
-  return context.hasActiveAssignment
-    ? { allowed: true }
-    : {
-        allowed: false,
-        code: 'NOT_ASSIGNED',
-        reason: 'You are not assigned to teach this subject in this section.',
-      }
+  if (!context.hasActiveAssignment) {
+    return {
+      allowed: false,
+      code: 'NOT_ASSIGNED',
+      reason: 'You are not assigned to teach this subject in this section.',
+    }
+  }
+
+  // The office's deadline binds teachers only (Phase 21).
+  if (window && !isWithinMarksWindow(window)) return refusalForWindow(window)
+
+  return { allowed: true }
 }
 
 /**
@@ -124,6 +171,7 @@ export function decideCanEditMarks(
   viewer: MarksViewer,
   context: MarkingContext,
   sheet: { status: 'DRAFT' | 'SUBMITTED' | 'PUBLISHED' },
+  window?: MarksWindow,
 ): MarksDecision {
   if (!viewer.canUpdate) {
     return {
@@ -133,15 +181,28 @@ export function decideCanEditMarks(
     }
   }
 
-  const entering = decideCanEnterMarks({ ...viewer, canEnter: true }, context)
+  const entering = decideCanEnterMarks({ ...viewer, canEnter: true }, context, window)
   if (!entering.allowed) return entering
 
-  if (sheet.status !== 'DRAFT' && !viewer.canUpdateSubmitted) {
+  if (sheet.status === 'DRAFT') return { allowed: true }
+
+  if (!viewer.canUpdateSubmitted) {
     return {
       allowed: false,
       code: 'SHEET_SUBMITTED',
       reason:
         'These marks have already been submitted and cannot be edited. Please contact the administrator if a correction is required.',
+    }
+  }
+
+  // Published marks are the source of a result card. Correcting one is the
+  // office's decision, never a teacher's: theirs would silently disagree with
+  // a card a student is already holding.
+  if (sheet.status === 'PUBLISHED' && viewer.role !== 'ADMIN') {
+    return {
+      allowed: false,
+      code: 'SHEET_PUBLISHED',
+      reason: 'These marks have been published, so a result has been made from them. Only the office can correct them now.',
     }
   }
 
@@ -159,6 +220,7 @@ export function decideCanSubmitMarks(
   viewer: MarksViewer,
   context: MarkingContext,
   sheet: { status: 'DRAFT' | 'SUBMITTED' | 'PUBLISHED' },
+  window?: MarksWindow,
 ): MarksDecision {
   if (sheet.status !== 'DRAFT') {
     return {
@@ -167,7 +229,7 @@ export function decideCanSubmitMarks(
       reason: 'These marks have already been submitted.',
     }
   }
-  return decideCanEditMarks(viewer, context, sheet)
+  return decideCanEditMarks(viewer, context, sheet, window)
 }
 
 /**
