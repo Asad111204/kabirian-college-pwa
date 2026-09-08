@@ -19,7 +19,17 @@ const ROLE_VARIANT = {
   STUDENT: 'neutral',
 } as const
 
-export function RoleBadge({ role }: { role: UserRole }) {
+export function RoleBadge({ role, adminAccess = false }: { role: UserRole; adminAccess?: boolean }) {
+  // A staff member who also works in the office says so beside their role,
+  // because "Staff" alone would understate what the account can reach.
+  if (role === 'STAFF' && adminAccess) {
+    return (
+      <span className="inline-flex flex-wrap items-center gap-1">
+        <Badge variant={ROLE_VARIANT[role]}>{ROLE_LABEL[role]}</Badge>
+        <Badge variant="brand">+ Office</Badge>
+      </span>
+    )
+  }
   return <Badge variant={ROLE_VARIANT[role]}>{ROLE_LABEL[role]}</Badge>
 }
 

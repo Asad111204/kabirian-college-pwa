@@ -61,7 +61,12 @@ export interface SessionUser {
   sessionId: string
   userId: string
   username: string
+  /** The account's own role. What portal it is *working in* is `activeRole`. */
   role: 'ADMIN' | 'STAFF' | 'STUDENT'
+  /** Office access held in addition to STAFF (Phase 24). */
+  adminAccess: boolean
+  /** The portal this device last switched to; null means the account's own. */
+  activeRole: 'ADMIN' | 'STAFF' | 'STUDENT' | null
   status: 'ACTIVE' | 'INACTIVE'
   mustChangePassword: boolean
   isSystemOwner: boolean
@@ -127,6 +132,8 @@ export async function validateSessionToken(token: string): Promise<SessionUser |
     userId: user.id,
     username: user.username,
     role: user.role,
+    adminAccess: user.adminAccess,
+    activeRole: session.activeRole,
     status: user.status,
     mustChangePassword: user.mustChangePassword,
     isSystemOwner: user.isSystemOwner,
@@ -137,6 +144,17 @@ export async function validateSessionToken(token: string): Promise<SessionUser |
     fullName: user.student?.fullName ?? user.staff?.fullName ?? user.fullName ?? user.username,
     permissionOverrides: user.userPermissions,
   }
+}
+
+/**
+ * Records which portal a device is working in (Phase 24).
+ *
+ * Kept on the session row rather than in a cookie: the browser then has
+ * nothing to edit, and the value is checked against what the account may
+ * actually use on every request anyway.
+ */
+export async function setSessionActiveRole(sessionId: string, role: 'ADMIN' | 'STAFF' | 'STUDENT'): Promise<void> {
+  await prisma.session.update({ where: { id: sessionId }, data: { activeRole: role } })
 }
 
 export async function invalidateSession(sessionId: string): Promise<void> {

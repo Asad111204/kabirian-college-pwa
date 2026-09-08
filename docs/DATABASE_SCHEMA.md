@@ -128,6 +128,25 @@ erDiagram
 
 Indexes: `unique(lower(username))` [SQL], `unique(email)`, `(role, status)`.
 
+### Two portals on one account (Phase 24)
+
+`users.admin_access` (boolean, default false) marks a **staff** account that
+may also work in the office portal. A CHECK constraint,
+`users_admin_access_is_staff_only`, keeps it false for every other role: an
+administrator already has the office and a student never does, so the database
+refuses the combination rather than trusting each code path to remember.
+
+`sessions.active_role` (`user_role`, nullable) is which portal one device is
+working in. Null means the account's own role, which is what every session
+meant before this phase. It is checked against what the account may actually
+use on every request, so taking office access away puts a session that was in
+the office straight back into the staff portal, with nobody signed out.
+
+The portal a request is in - not the account's role - is what `ctx.role` means
+everywhere else in the codebase, so a principal working in the staff portal is
+a teacher, with a teacher's permissions and a teacher's scope. The rules live
+in `src/server/auth/portals.ts` (ADR-173).
+
 ### `sessions`
 | Column | Type | Notes |
 |---|---|---|

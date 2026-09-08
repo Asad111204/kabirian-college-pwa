@@ -26,6 +26,8 @@ export interface UserRow {
   isLocked: boolean
   mustChangePassword: boolean
   isSystemOwner: boolean
+  /** A staff account that may also work in the office portal (Phase 24). */
+  adminAccess: boolean
   lastLoginAt: string | null
   createdAt: string
   profile: { type: 'STAFF' | 'STUDENT'; id: string; name: string; code: string } | null
@@ -268,7 +270,7 @@ export function UsersTable({
                     </TD>
 
                     <TD>
-                      <RoleBadge role={user.role} />
+                      <RoleBadge role={user.role} adminAccess={user.adminAccess} />
                     </TD>
 
                     <TD>

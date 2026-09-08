@@ -222,6 +222,12 @@ for (const [key, section, subject, staff, day, period, room] of slots) {
   )
 }
 
+// Phase 24: teacher B is also an administrator — one account, both portals.
+// Everything else about them is unchanged, so every check that expects a
+// teacher to be refused something in the staff portal is also a check that
+// holding the office does not leak into the portal they are working in.
+await client.query(`UPDATE users SET admin_access = true WHERE id = $1`, [ID.userB])
+
 writeFileSync(
   new URL('./ids.json', import.meta.url),
   JSON.stringify({ ...ID, slots: slotIds, weekday, otherDay, password: PASSWORD }, null, 2),

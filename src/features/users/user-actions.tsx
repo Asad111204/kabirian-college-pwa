@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
-import { KeyRound, LogOut, Pencil, Power, ShieldCheck, Unlock } from 'lucide-react'
+import { ArrowLeftRight, KeyRound, LogOut, Pencil, Power, ShieldCheck, Unlock } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -25,6 +25,8 @@ export interface UserActionsProps {
     status: UserStatus
     isLocked: boolean
     isSystemOwner: boolean
+    /** A staff account that may also work in the office portal (Phase 24). */
+    adminAccess: boolean
     activeSessionCount: number
     hasProfile: boolean
   }
@@ -143,6 +145,38 @@ export function UserActions({ user, isSelf, activeAdminCount }: UserActionsProps
                 }}
               >
                 Change
+              </Button>
+            }
+          />
+
+          {/* One account, both portals (Phase 24). Only ever offered for a
+              staff account: an administrator already has the office, and a
+              student never does. */}
+          <ActionRow
+            icon={ArrowLeftRight}
+            title="Office access"
+            description={
+              user.role !== 'STAFF'
+                ? user.role === 'ADMIN'
+                  ? 'This account is already an administrator.'
+                  : 'Only a member of staff can be given office access.'
+                : isSelf
+                  ? 'You cannot change your own office access.'
+                  : user.adminAccess
+                    ? 'This member of staff can also work in the office portal, and switch between the two.'
+                    : 'Lets this member of staff work in the office portal as well, with one account.'
+            }
+            disabled={user.role !== 'STAFF' || isSelf}
+            action={
+              <Button
+                variant={user.adminAccess ? 'secondary' : 'primary'}
+                size="sm"
+                disabled={user.role !== 'STAFF' || isSelf || busy}
+                onClick={() => void run(async () => {
+                  await api.patch(`/api/v1/users/${user.id}/admin-access`, { adminAccess: !user.adminAccess })
+                })}
+              >
+                {user.adminAccess ? 'Take away' : 'Give access'}
               </Button>
             }
           />

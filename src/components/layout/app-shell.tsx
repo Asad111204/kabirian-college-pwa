@@ -4,7 +4,7 @@ import * as React from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
-import { ChevronDown, Download, LogOut, Menu, MonitorSmartphone, X, KeyRound } from 'lucide-react'
+import { ArrowLeftRight, ChevronDown, Download, LogOut, Menu, MonitorSmartphone, X, KeyRound } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { api } from '@/lib/api-client'
 import { Button } from '@/components/ui/button'
@@ -12,6 +12,8 @@ import { Badge } from '@/components/ui/badge'
 import { Avatar } from '@/components/ui/avatar'
 import { LogoWordmark } from './logo'
 import { NAVIGATION, PORTAL_LABELS, type NavSection } from './nav-config'
+// Pure, and shared with the server so both name the portals the same way.
+import { PORTAL_LABEL } from '@/server/auth/portals'
 import { OfflineBanner } from '@/components/pwa/offline-banner'
 import { IosInstallDialog, useInstallMethod } from '@/components/pwa/install-prompt'
 import type { UserRole } from '@/generated/prisma/enums'
@@ -19,7 +21,10 @@ import type { UserRole } from '@/generated/prisma/enums'
 export interface AppShellUser {
   fullName: string
   username: string
+  /** The portal they are working in now. */
   role: UserRole
+  /** Every portal they may work in; more than one only for a staff-admin. */
+  portals: UserRole[]
   /** Their own photo endpoint, when they have a photograph on file. */
   photoUrl: string | null
 }
@@ -202,8 +207,24 @@ function SidebarFooter({ sessionLabel }: { sessionLabel?: string | null }) {
 function UserMenu({ user }: { user: AppShellUser }) {
   const router = useRouter()
   const [signingOut, setSigningOut] = React.useState(false)
+  const [switching, setSwitching] = React.useState<UserRole | null>(null)
   const { method: installMethod, install } = useInstallMethod()
   const [iosInstallOpen, setIosInstallOpen] = React.useState(false)
+
+  /**
+   * Moving to the other portal of a two-portal account. The server decides
+   * whether it is allowed and where it lands; this only follows.
+   */
+  async function switchTo(role: UserRole) {
+    setSwitching(role)
+    try {
+      const result = await api.post<{ role: UserRole; path: string }>('/api/v1/auth/switch-portal', { role })
+      router.push(result.path)
+      router.refresh()
+    } finally {
+      setSwitching(null)
+    }
+  }
 
   async function handleSignOut() {
     setSigningOut(true)
@@ -247,6 +268,25 @@ function UserMenu({ user }: { user: AppShellUser }) {
           </div>
 
           <DropdownMenu.Separator className="my-1 h-px bg-border" />
+
+          {/* One account, two portals (Phase 24). Switching is recorded, and
+              what it changes is which hat they are wearing — not what they
+              are allowed to hold. */}
+          {user.portals
+            .filter((role) => role !== user.role)
+            .map((role) => (
+              <DropdownMenu.Item asChild key={role}>
+                <button
+                  type="button"
+                  onClick={() => void switchTo(role)}
+                  disabled={switching !== null}
+                  className="flex w-full cursor-pointer items-center gap-2 rounded-[var(--radius-control)] px-2 py-2 text-sm text-foreground outline-none hover:bg-surface-muted"
+                >
+                  <ArrowLeftRight className="h-4 w-4" />
+                  {switching === role ? 'Switching…' : `Switch to the ${PORTAL_LABEL[role].toLowerCase()} portal`}
+                </button>
+              </DropdownMenu.Item>
+            ))}
 
           {installMethod ? (
             <DropdownMenu.Item asChild>

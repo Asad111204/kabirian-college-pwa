@@ -34,3 +34,13 @@ export const changePasswordSchema = z
   })
 
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>
+
+/**
+ * Moving between the portals of a two-portal account (Phase 24).
+ * Only the two the college asked for: a student account never switches.
+ */
+export const portalSwitchSchema = z.object({
+  role: z.enum(['ADMIN', 'STAFF'], { error: 'That is not a portal you can switch to.' }),
+})
+
+export type PortalSwitchInput = z.infer<typeof portalSwitchSchema>

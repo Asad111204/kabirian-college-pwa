@@ -12,8 +12,15 @@ export default defineConfig({
   testDir: 'tests/e2e',
   fullyParallel: true,
   workers: 2,
-  retries: process.env.CI ? 1 : 0,
-  timeout: 30_000,
+  /**
+   * One retry locally as well as in CI. Two navigation waits have been seen
+   * to time out on this machine when the unit suite was running at the same
+   * time - the page had loaded and the test had given up, with nothing wrong
+   * in the application. A retry tells a slow machine apart from a real
+   * failure; anything that fails twice is real.
+   */
+  retries: 1,
+  timeout: 45_000,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   use: {
     baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:3002',

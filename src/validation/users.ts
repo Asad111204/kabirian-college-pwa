@@ -109,3 +109,10 @@ export const userListQuerySchema = z.object({
 })
 
 export type UserListQuery = z.infer<typeof userListQuerySchema>
+
+/** Office access for a staff account (Phase 24). */
+export const adminAccessSchema = z.object({
+  adminAccess: z.boolean({ error: 'Say whether the account should have office access.' }),
+})
+
+export type AdminAccessInput = z.infer<typeof adminAccessSchema>

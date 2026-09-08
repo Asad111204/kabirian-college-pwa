@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | **Phase 23 complete: complaints.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Every module is live on Neon (fourteen migrations, zero drift); the roadmap is built and the college's own requests (§23A) are under way. A student now writes an application to the office and the office answers it, with nobody else able to read a word of it — not another student, not a teacher. Next: Phase 24, a staff member who is also an admin. |
-| **Last updated** | 2026-09-09 (rev. 41 — Phase 23 complete) |
+| **Status** | **Phase 24 complete: one account, two portals.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Every module through Phase 23 is live on Neon (fourteen migrations, zero drift); the roadmap is built and the college's own requests (§23A) are under way. A member of staff can now also be an administrator on one account, switching between the staff portal and the office portal without signing out — and is a teacher, with a teacher's scope, whenever they are in the staff portal. **The Phase 24 migration is written and tested but not yet applied to Neon; it awaits the go-ahead.** Next: Phase 25, fees. |
+| **Last updated** | 2026-09-09 (rev. 42 — Phase 24 complete) |
 | **Companion docs** | [DECISIONS.md](DECISIONS.md) · [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) · [README.md](README.md) |
 
 ---
@@ -738,7 +738,7 @@ Everything else in §20 will proceed on the stated defaults.
 
 ## 22. Progress tracker
 
-**Current phase:** 23 — complete and live on Neon. Next: Phase 24, a staff member who is also an admin (§23A).
+**Current phase:** 24 — complete, apart from the Neon migration, which is waiting for the go-ahead. Next: Phase 25, fees (§23A).
 
 | Phase | Status | Notes |
 |---|---|---|
@@ -766,7 +766,8 @@ Everything else in §20 will proceed on the stated defaults.
 | 21 Marks deadline & corrections | ✅ Done (2026-09-08) | Deadline per exam; teachers correct their own submitted sheets until it passes; the office reopens one paper with a reason. Migration 12 live on Neon. See §22.49 |
 | 22 | ✅ Done (2026-09-08) | Staff attendance taken by the office; live on Neon (thirteen migrations, zero drift) |
 | 23 | ✅ Done (2026-09-09) | Complaints; live on Neon (fourteen migrations, zero drift) |
-| 24 – 26 | ⏳ Not started | The college's requests (§23A). Next: a staff member who is also an admin |
+| 24 | ✅ Done (2026-09-09) | A staff member who is also an admin; migration written, not yet on Neon |
+| 25 – 26 | ⏳ Not started | The college's requests (§23A). Next: fees |
 
 **Live database:** the college's Neon PostgreSQL instance is connected and holds the real academic structure (2026-27, 20 groups, 20 sections). All **ten** migrations are applied to it, along with the reference data (12 designations, 10 departments, **8 document types**, and the confirmed **grading scale**).
 
@@ -1951,6 +1952,26 @@ The first of the college's own requests (§23A). The **colour bands** were deliv
 
 **One defect fixed on the way past.** The permission table said a teacher holds the two staff-attendance permissions, added by mistake in Phase 22. Staff attendance asserts the office before it checks any permission, so no teacher could ever have marked a register; the table was wrong all the same, and the account screens repeated it. A duplicated pair of homework entries went with it.
 
+### 22.52 Phase 24, a staff member who is also an admin (2026-09-09)
+
+**One account, both portals.** A member of staff can be given **office access**: Admin → User Accounts → their account → Office access. Their account stays a staff account, and a switcher appears in their user menu: *Switch to the office portal*, and back again. No second password, no second audit trail, and no way to lose track of the fact that Miss Sara the teacher and Miss Sara the clerk are one person.
+
+**The portal they are in is the role they are (ADR-173).** This is the decision the phase turns on. `ctx.role` is read in eighty-five places across fourteen services, and each of them means something precise by it. Rather than making it ambiguous, an account now has a **set** of portals it may use and exactly **one** it is working in — and the one it is working in is what `ctx.role` has always meant. A principal in the staff portal is a teacher: teacher's permissions, teacher's scope, teacher's screens. In the office portal the same person is the office. **Not one of those eighty-five call sites changed.**
+
+**The set is the boundary; the switch is a convenience.** Somebody holding both portals can always move between them, so a bookmark into the office does not fail for a principal — it offers the switch, on a page that asks rather than acting, because loading a page should never quietly change what a person is acting as. Switching is a POST and is audited with where they came from and where they went.
+
+**Taking access away needs nobody to remember anything.** Which portal a session is in lives on the session row and is checked against what the account actually holds on **every request**, so the moment office access is revoked, a session sitting in the office falls back to the staff portal — without signing the person out of what they were doing.
+
+**Two rules kept deliberately conservative.** Nobody changes their own office access, even from the office. And a staff-admin is not counted as an administrator by the rules that stop the college locking itself out of its own system — those refuse more often than strictly necessary, which is the right direction when the failure mode is nobody being able to get in.
+
+**Data:** two columns — `users.admin_access` with a CHECK that keeps it to staff accounts, and `sessions.active_role` — migration `20260909140000_staff_admin_access`. Both defaulted, so every existing account and session behaves exactly as before. **Written, tested against a throwaway PostgreSQL, and not yet applied to Neon: it is waiting for the go-ahead.**
+
+**Verified through the production build (40 new checks, all passing, alongside the 530 existing — 570 in total)**: a fixture teacher who also holds the office is refused the office's register, the accounts list and students' applications exactly like any teacher until they switch; a link into the office offers the switch while a single-portal teacher is still sent home; the switch page asks first; a teacher without access, a student and an administrator are each refused the switch, as is switching to the portal they are already in; after switching, the same person opens the register, the accounts list, the applications and the office dashboard, is offered the way back, and is still refused a portal they do not hold; their own staff record stays theirs in both portals; office access cannot be given to an administrator, a student, yourself, or by a teacher, and giving it to somebody who has it is a conflict rather than a silent no-op; granting lets an existing session switch at once and revoking puts it back in the staff portal on the next request; both are audited. **The other 530 checks are the real result** — the fixture teacher holds the office throughout every one of them, so anything leaking from the set into the portal would have turned them red.
+
+**Tests: 25 new** — the rules from both sides (which portals an account holds, which one a request is in, what happens when access is taken away mid-session, who may switch, who may grant) and the screens: the switcher appears only for two-portal accounts, moves the session through the API, and office access is offered on a staff account alone. **1,361 in total across 76 files.**
+
+**One thing fixed on the way past.** The unit suite started a worker on every core, and workers began timing out before they had finished starting whenever the machine was busy — red tests with nothing wrong in them. Worker count is now capped, and the browser tests retry once locally as well as in CI, so a slow machine is told apart from a real failure.
+
 ### 22.7 What Phase 4 delivered
 
 Student records and academic enrollment, built on the Phase 1–3 architecture. Nothing existing was rebuilt.
@@ -2159,7 +2180,7 @@ ones, so a mistake in them cannot be carried into everything else.
 | 21 | Marks correction for teachers | **Done.** Their own submitted sheets, within the deadline; never a PUBLISHED sheet — a result was made from it (ADR-170) |
 | 22 | Staff attendance | **Done.** The office's own daily register: Present, Absent, Short leave, Leave; approved leave is left out of the worked percentage, and each staff member sees their own month (ADR-171) |
 | 23 | Complaints | **Done.** A student writes an application, the office answers it, and the exchange stays between the two of them — a teacher cannot read one even holding every permission (ADR-172) |
-| 24 | A staff member who is also an admin | One account, both portals, with a switcher |
+| 24 | A staff member who is also an admin | **Done.** One account, both portals, with a switcher; the portal they are in is the role they are, so a principal teaching is a teacher (ADR-173) |
 | 25 | Fees | Named packages, per-student assignment, a per-student discount, monthly vouchers, late fine |
 | 26 | Finance | Admin records expenses; dashboard shows collection, outstanding and hand-drawn SVG graphs |
 | 26 | Admin delete | Erase only when nothing references the record; otherwise refuse and say why |

@@ -60,7 +60,7 @@ export default async function UserDetailPage({
         description={`Username: ${user.username}`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <RoleBadge role={user.role} />
+            <RoleBadge role={user.role} adminAccess={user.adminAccess} />
             <AccountStatusBadge status={user.status} isLocked={user.isLocked} />
             {user.isSystemOwner ? <Badge variant="brand">System owner</Badge> : null}
             {isSelf ? <Badge variant="info">This is you</Badge> : null}
@@ -138,6 +138,7 @@ export default async function UserDetailPage({
             status: user.status,
             isLocked: user.isLocked,
             isSystemOwner: user.isSystemOwner,
+            adminAccess: user.adminAccess,
             activeSessionCount: user.activeSessionCount,
             hasProfile: user.profile !== null,
           }}

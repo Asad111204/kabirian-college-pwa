@@ -314,6 +314,9 @@ const ACTION_DESCRIPTIONS: Record<string, string> = {
   'staff_attendance.marked': 'took the staff register for',
   'staff_attendance.corrected': 'corrected the staff register for',
   // homework (Phase 20)
+  'auth.portal_switched': 'switched portal',
+  'user.admin_access_granted': 'gave office access to',
+  'user.admin_access_revoked': 'took office access from',
   'complaint.submitted': 'wrote an application to the office',
   'complaint.replied': 'answered the application',
   'complaint.status_changed': 'changed the state of the application',

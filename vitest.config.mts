@@ -18,6 +18,15 @@ export default defineConfig({
      * here legitimately needs more than a few seconds, and CI is faster.
      */
     testTimeout: 30000,
+    /**
+     * Vitest would otherwise start one worker per core. Three of these files
+     * run an in-memory PostgreSQL and a dozen more start jsdom, and on this
+     * machine a worker on every core made them time out before they had
+     * finished starting whenever anything else was running — red tests with
+     * nothing wrong in them. Eight leaves headroom and costs no wall time.
+     */
+    maxWorkers: 8,
+    minWorkers: 1,
     include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx'],
     globals: false,
     /**

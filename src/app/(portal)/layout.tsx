@@ -26,7 +26,7 @@ export default async function PortalLayout({ children }: { children: React.React
 
   return (
     <AppShell
-      user={{ fullName: ctx.fullName, username: ctx.username, role: ctx.role, photoUrl }}
+      user={{ fullName: ctx.fullName, username: ctx.username, role: ctx.role, portals: ctx.portals, photoUrl }}
       collegeName={env.APP_COLLEGE_NAME}
       sessionLabel={currentSession?.name ?? null}
     >

@@ -11,13 +11,26 @@ import { redirect } from 'next/navigation'
 import type { UserRole } from '@/generated/prisma/enums'
 import { AuthenticationError, ForbiddenError } from '../api/errors'
 import { ROLE_DEFAULT_PERMISSIONS, resolveEffectivePermissions } from './permissions'
+import { portalPathFor, portalsFor, resolveActivePortal } from './portals'
 import { readSessionCookie, validateSessionToken, type SessionUser } from './session'
+import { headers } from 'next/headers'
 
 export interface AuthContext {
   userId: string
   username: string
   fullName: string
+  /**
+   * The portal this request is working in — which is what every check in the
+   * codebase means by "their role". For all but a staff member who also holds
+   * office access (Phase 24), it is simply the account's role.
+   */
   role: UserRole
+  /** The account's own role, whatever portal it is currently working in. */
+  accountRole: UserRole
+  /** Office access held in addition to STAFF (Phase 24). */
+  adminAccess: boolean
+  /** Every portal this account may work in; one entry for almost everybody. */
+  portals: UserRole[]
   /** Set when the account belongs to a student. Their own record — nothing else. */
   studentId: string | null
   /** Set when the account belongs to a staff member. Drives teaching scope. */
@@ -29,12 +42,21 @@ export interface AuthContext {
 }
 
 function toAuthContext(user: SessionUser): AuthContext {
-  const rolePermissions = ROLE_DEFAULT_PERMISSIONS[user.role] ?? []
+  // The portal they are in decides what they may do: a principal working in
+  // the staff portal is a teacher, with a teacher's permissions and a
+  // teacher's scope; the same person in the office portal is the office.
+  // Nothing else in the codebase had to learn about two-portal accounts.
+  const account = { role: user.role, adminAccess: user.adminAccess }
+  const active = resolveActivePortal(account, user.activeRole)
+  const rolePermissions = ROLE_DEFAULT_PERMISSIONS[active] ?? []
   return {
     userId: user.userId,
     username: user.username,
     fullName: user.fullName,
-    role: user.role,
+    role: active,
+    accountRole: user.role,
+    adminAccess: user.adminAccess,
+    portals: portalsFor(account),
     studentId: user.studentId,
     staffId: user.staffId,
     isSystemOwner: user.isSystemOwner,
@@ -65,17 +87,21 @@ export async function requireAuthContext(): Promise<AuthContext> {
   return ctx
 }
 
-/** Where each role lands after signing in. */
-export function portalPathForRole(role: UserRole): string {
-  switch (role) {
-    case 'ADMIN':
-      return '/admin'
-    case 'STAFF':
-      return '/staff'
-    case 'STUDENT':
-      return '/student'
-    default:
-      return '/'
+/** Where each role lands after signing in. Kept here for its many callers. */
+export const portalPathForRole = portalPathFor
+
+/**
+ * The path being rendered, when the framework tells us. Used only to send
+ * somebody back where they were going after switching portals.
+ */
+async function currentPath(): Promise<string | null> {
+  try {
+    const list = await headers()
+    const url = list.get('x-invoke-path') ?? list.get('x-matched-path') ?? list.get('next-url') ?? null
+    if (url && url.startsWith('/') && !url.startsWith('//')) return url
+    return null
+  } catch {
+    return null
   }
 }
 
@@ -93,6 +119,16 @@ export async function requirePortalAccess(allowedRoles: UserRole[]): Promise<Aut
   if (ctx.mustChangePassword) redirect('/change-password')
 
   if (!allowedRoles.includes(ctx.role)) {
+    // Somebody who holds this portal but is currently working in the other one
+    // is offered the change rather than bounced: a bookmark into the office
+    // should not silently land a principal back in the staff portal. The
+    // switch is a POST on the next page, never a side effect of loading this
+    // one.
+    const switchable = allowedRoles.find((role) => ctx.portals.includes(role))
+    if (switchable) {
+      const next = await currentPath()
+      redirect(`/switch?to=${switchable}${next ? `&next=${encodeURIComponent(next)}` : ''}`)
+    }
     // Signed in, but this is not their portal — send them to their own.
     redirect(portalPathForRole(ctx.role))
   }

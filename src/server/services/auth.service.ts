@@ -12,12 +12,13 @@
  */
 import 'server-only'
 import { prisma } from '../db/prisma'
-import { AppError, AuthenticationError, ValidationError } from '../api/errors'
+import { AppError, AuthenticationError, ForbiddenError, ValidationError } from '../api/errors'
 import { checkPasswordPolicy, hashPassword, verifyPassword } from '../auth/password'
-import { createSession, invalidateAllUserSessions, invalidateSession } from '../auth/session'
+import { createSession, invalidateAllUserSessions, invalidateSession, setSessionActiveRole } from '../auth/session'
 import { checkRateLimit, clearRateLimit, LOGIN_LIMITS } from '../auth/rate-limit'
 import { writeAuditLog } from '../audit/audit'
 import type { AuthContext } from '../auth/context'
+import { canUsePortal, decideCanSwitchPortal, portalPathFor } from '../auth/portals'
 import { logger } from '../logger'
 import type { UserRole } from '@/generated/prisma/enums'
 
@@ -191,6 +192,40 @@ export async function logout(ctx: AuthContext, request: LoginRequestInfo = {}): 
     entityLabel: ctx.username,
     request,
   })
+}
+
+/**
+ * Moves this device to the other portal (Phase 24).
+ *
+ * Only the set of portals the account holds decides whether it is allowed;
+ * the switch itself is a convenience, not a security boundary, since anybody
+ * who may use both can always come back. It is recorded all the same, so the
+ * audit log reads as one person rather than as two mysterious ones.
+ */
+export async function switchPortal(
+  ctx: AuthContext,
+  role: UserRole,
+  request: LoginRequestInfo = {},
+): Promise<{ role: UserRole; path: string }> {
+  const decision = decideCanSwitchPortal({ role: ctx.accountRole, adminAccess: ctx.adminAccess }, role, ctx.role)
+  if (!decision.allowed) {
+    if (canUsePortal({ role: ctx.accountRole, adminAccess: ctx.adminAccess }, role)) {
+      throw new ValidationError(decision.reason, { role: [decision.reason] })
+    }
+    throw new ForbiddenError(decision.reason, { userId: ctx.userId, role: ctx.role })
+  }
+
+  await setSessionActiveRole(ctx.sessionId, role)
+  await writeAuditLog(ctx, {
+    action: 'auth.portal_switched',
+    entityType: 'user',
+    entityId: ctx.userId,
+    entityLabel: ctx.username,
+    metadata: { from: ctx.role, to: role },
+    request,
+  })
+
+  return { role, path: portalPathFor(role) }
 }
 
 export async function changeOwnPassword(

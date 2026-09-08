@@ -167,6 +167,10 @@ export type AuditAction =
   | 'homework.created'
   | 'homework.updated'
   | 'homework.deleted'
+  // two-portal accounts (Phase 24)
+  | 'auth.portal_switched'
+  | 'user.admin_access_granted'
+  | 'user.admin_access_revoked'
   // complaints (Phase 23)
   | 'complaint.submitted'
   | 'complaint.replied'

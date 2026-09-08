@@ -12,9 +12,10 @@ import 'server-only'
 import { prisma } from '../db/prisma'
 import { authorize, type AuthContext } from '../auth/context'
 import { writeAuditLog } from '../audit/audit'
-import { ConflictError, NotFoundError, ValidationError } from '../api/errors'
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../api/errors'
 import { generateTemporaryPassword, hashPassword } from '../auth/password'
 import { invalidateAllUserSessions } from '../auth/session'
+import { decideCanSetAdminAccess } from '../auth/portals'
 import {
   ALL_PERMISSION_KEYS,
   PERMISSIONS,
@@ -53,6 +54,8 @@ export interface UserListItem {
   lockedUntil: Date | null
   mustChangePassword: boolean
   isSystemOwner: boolean
+  /** A staff account that may also work in the office portal (Phase 24). */
+  adminAccess: boolean
   lastLoginAt: Date | null
   createdAt: Date
   /** The staff or student record this account belongs to, if any. */
@@ -100,6 +103,7 @@ type UserWithProfiles = {
   lockedUntil: Date | null
   mustChangePassword: boolean
   isSystemOwner: boolean
+  adminAccess: boolean
   lastLoginAt: Date | null
   createdAt: Date
   staff: { id: string; fullName: string; staffCode: string } | null
@@ -125,6 +129,7 @@ function toListItem(user: UserWithProfiles): UserListItem {
     lockedUntil: user.lockedUntil,
     mustChangePassword: user.mustChangePassword,
     isSystemOwner: user.isSystemOwner,
+    adminAccess: user.adminAccess,
     lastLoginAt: user.lastLoginAt,
     createdAt: user.createdAt,
     profile,
@@ -541,7 +546,11 @@ export async function changeUserRole(
   })
 
   await prisma.$transaction(async (tx) => {
-    await tx.user.update({ where: { id }, data: { role } })
+    // Office access belongs to a staff account and to no other kind, so a
+    // role change takes it away rather than leaving a combination the
+    // database would refuse (Phase 24).
+    await tx.user.update({ where: { id }, data: { role, adminAccess: false } })
+    await tx.session.updateMany({ where: { userId: id }, data: { activeRole: null } })
 
     if (existingOverrides.length > 0) {
       await tx.userPermission.deleteMany({ where: { userId: id } })
@@ -557,12 +566,57 @@ export async function changeUserRole(
         entityType: 'user',
         entityId: id,
         entityLabel: `${target.fullName ?? target.username} (${target.username})`,
-        before: { role: target.role },
-        after: { role },
+        before: { role: target.role, adminAccess: target.adminAccess },
+        after: { role, adminAccess: false },
         metadata: {
           clearedOverrides: existingOverrides,
           sessionsRevoked: true,
         },
+      },
+      tx,
+    )
+  })
+
+  return toListItem(await loadUser(id))
+}
+
+/**
+ * Gives a member of staff office access, or takes it away (Phase 24).
+ *
+ * One account, both portals. Changing it does not end their sessions — it
+ * cannot leave anybody holding something they should not, because the portal
+ * a session is working in is checked against this on every request, so a
+ * session that was in the office falls back to the staff portal the moment
+ * the access goes.
+ */
+export async function setAdminAccess(ctx: AuthContext, id: string, next: boolean): Promise<UserListItem> {
+  authorize(ctx, 'users.manage')
+
+  const target = await loadUser(id)
+  const decision = decideCanSetAdminAccess(
+    { userId: ctx.userId },
+    { userId: target.id, role: target.role, isSystemOwner: target.isSystemOwner },
+    next,
+    target.adminAccess,
+  )
+  if (!decision.allowed) {
+    if (target.role !== 'STAFF' || target.id === ctx.userId) throw new ForbiddenError(decision.reason)
+    throw new ConflictError(decision.reason)
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({ where: { id }, data: { adminAccess: next } })
+    // A session that had switched to the office is put back where it belongs.
+    if (!next) await tx.session.updateMany({ where: { userId: id, activeRole: 'ADMIN' }, data: { activeRole: 'STAFF' } })
+    await writeAuditLog(
+      ctx,
+      {
+        action: next ? 'user.admin_access_granted' : 'user.admin_access_revoked',
+        entityType: 'user',
+        entityId: id,
+        entityLabel: `${target.fullName ?? target.username} (${target.username})`,
+        before: { adminAccess: target.adminAccess },
+        after: { adminAccess: next },
       },
       tx,
     )
