@@ -756,6 +756,71 @@ WHERE dt.owner_type = 'STUDENT' AND dt.is_required AND dt.is_active
   AND d.id IS NULL;
 ```
 
+
+## 8A. Fees (Phase 25)
+
+Every amount is a whole number of **paisa**: 12,500 rupees is 1,250,000. Nothing
+in the fee system holds a floating-point number of rupees, and CHECK constraints
+refuse a negative amount, a concession larger than the fee it comes off, and a
+payment of nothing.
+
+### `fee_packages` - a named fee with its monthly amount
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| name | varchar(120) | unique |
+| description | varchar(255) | |
+| monthly_amount_paisa | integer | what one month costs |
+| is_active | boolean | a retired package keeps its old vouchers; nobody new goes on it |
+| created_at / updated_at | timestamptz | |
+
+### `fee_vouchers` - one student's bill for one month
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| student_id | uuid | FK -> students `ON DELETE RESTRICT` |
+| academic_session_id | uuid | FK, `SET NULL` |
+| fee_package_id | uuid | FK, `SET NULL` |
+| package_name | varchar(120) | the package's name **as it was when issued** |
+| voucher_number | varchar(24) | unique, `FV-000001`, from `code_sequences` |
+| month / due_date | date | first day of the month billed; the day it falls due |
+| gross_paisa / discount_paisa | integer | the fee, and the student's concession, frozen at issue |
+| late_fine_paisa | integer | the fine actually charged; nought until money is taken late |
+| paid_paisa | integer | the sum of payments that have not been voided |
+| status | enum `fee_voucher_status` | `UNPAID`, `PARTIALLY_PAID`, `PAID`, `CANCELLED` |
+| issued_by_user_id | uuid | FK, `SET NULL` |
+| cancelled_at / cancelled_by_user_id / cancel_reason | | a half-recorded cancellation cannot exist |
+
+A **partial unique index** on `(student_id, month) WHERE status <> 'CANCELLED'`
+means running a month's billing twice cannot bill a family twice, while a
+voucher issued in error can be withdrawn and reissued. Indexes on
+`(student_id, month DESC)`, `(month, status)` and `(status, due_date)`.
+
+### `fee_payments` - money received
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| voucher_id | uuid | FK -> fee_vouchers `ON DELETE RESTRICT` |
+| amount_paisa | integer | must be greater than nought |
+| paid_on | date | college calendar |
+| method | enum `fee_payment_method` | `CASH`, `BANK_TRANSFER`, `CHEQUE`, `ONLINE`, `OTHER` |
+| reference / remarks | varchar | slip or cheque number, and a note |
+| received_by_user_id | uuid | FK, `SET NULL` |
+| voided_at / voided_by_user_id / void_reason | | never edited, never deleted: a mistake is voided |
+
+### On `students`
+`fee_package_id` (FK, `SET NULL`) and `fee_discount_paisa` - the package they
+are on and their own concession on top, both defaulted so every existing
+student was untouched.
+
+### What is not stored
+The late fine **still owed today** is worked out on every read from the due
+date and the rule, so the figures are right without a nightly job and nothing
+drifts when nobody opens the app for a week. The moment money is taken against
+a late voucher the fine is frozen onto it, because from then on it is part of
+what was actually charged. Voiding every payment puts it back. The arithmetic
+lives in `fees-policy.ts` (ADR-174).
+
 ---
 
 ## 9. System

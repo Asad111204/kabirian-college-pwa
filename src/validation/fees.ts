@@ -26,6 +26,17 @@ export const amountPaisa = z
     return paisa
   })
 
+/**
+ * An amount that must be more than nothing.
+ *
+ * A package may cost nothing and a concession may be nothing, but a payment
+ * of nothing is not a payment: the database refuses it, so it has to be
+ * refused here with a sentence rather than reaching the database as a 500.
+ */
+export const positiveAmountPaisa = amountPaisa.refine((paisa) => paisa > 0, {
+  error: 'Enter an amount greater than nought.',
+})
+
 export const feeVoucherStatusSchema = z.enum(FEE_VOUCHER_STATUSES)
 export const feePaymentMethodSchema = z.enum(FEE_PAYMENT_METHODS, { error: 'Choose how the money was received.' })
 
@@ -90,7 +101,7 @@ export const voucherListQuerySchema = z.object({
 /* -------------------------------------------------------------------------- */
 
 export const feePaymentSchema = z.object({
-  amountPaisa: amountPaisa,
+  amountPaisa: positiveAmountPaisa,
   paidOn: isoDate,
   method: feePaymentMethodSchema,
   reference: optionalText(60),

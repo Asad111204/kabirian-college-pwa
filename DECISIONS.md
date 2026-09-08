@@ -2917,3 +2917,29 @@ Switching is a POST, never a side effect of loading a page, and it is audited: `
 **One thing fixed on the way past.** The unit suite was starting a worker on every core, and workers began timing out before they had finished starting whenever the machine was busy — red tests with nothing wrong in them. Worker count is capped, and the browser tests now retry once locally as well as in CI, so a slow machine is told apart from a real failure.
 
 The migration was applied to Neon on 2026-09-09 (fifteen migrations, zero drift). No account holds office access there yet; the college gives it to whoever needs it.
+
+---
+
+## ADR-174 · Fees in whole paisa, frozen on the voucher, with the fine worked out rather than stored
+
+**Status:** Accepted · 2026-09-10 · Phase 25
+
+**Context.** The college asked for fees: **named packages** each with an amount, **one assigned to each student**, a **per-student discount** on top, **monthly vouchers** with a due date, and a **late fine** applied after it. This is the first module that handles money, and money is where a system either earns trust or loses it for good.
+
+**Decision.** Four choices carry the phase.
+
+**Every amount is a whole number of paisa.** Twelve and a half thousand rupees is 1,250,000. Nothing anywhere holds a floating-point number of rupees, because 0.1 + 0.2 is not 0.3 in binary floating point and a ledger that rounds differently on two screens is a ledger nobody trusts. Rupees exist only at the two edges: what somebody types, and what a screen prints. `src/lib/money.ts` is the single crossing point, and the database says the same thing with CHECK constraints — no negative amount, no concession larger than the fee it comes off, no payment of nothing.
+
+**A voucher's amounts are frozen when it is issued.** The package's name and its amount are copied onto the voucher rather than read through a join. Raising a package's price next year must not silently rewrite what a family was asked for last March; the bill is what was sent, not what the price list says today.
+
+**The late fine is worked out, not stored.** What is owed today comes from the due date and the rule on every read, so the figures are right without a nightly job and nothing drifts when nobody opens the app for a week — this college has no scheduler, and a fee system that needs one is a fee system that will be wrong every Monday. The moment money is taken against a late voucher the fine is **frozen** onto it, because from then on it is part of what was actually charged; voiding every payment puts it back to being worked out. The fine is flat, not per day: the college asked for "a fine after the due date", and a fine that grows every night is a different promise.
+
+**Money records are never edited and never deleted.** A payment recorded in error is **voided**, with a reason and a name, and both the payment and the void stay on the record. A voucher issued in error is **cancelled**, with a reason — but not while money sits against it: withdrawing a bill somebody has paid would leave the payment pointing at nothing, so the office voids the payments first, deliberately. A cancelled voucher is excluded from the unique index, so the month can be reissued for that student and only for that student.
+
+**Two smaller decisions.** Running a month's billing is **idempotent**, and it is the database that says so: a partial unique index on `(student_id, month)` for live vouchers means pressing the button twice cannot bill a family twice, rather than that being true only while the code remembers to check. And the run always offers a **dry run** first, because a bill run for four hundred families is not something anybody should press blind.
+
+**Alternatives.** *A decimal or money column* — Postgres `numeric` would be exact, but every value would still cross into JavaScript, where it becomes a float or a string that some future line will parse; integers are exact in both places. *A percentage concession as well as a fixed one* — two kinds of discount to reason about, two roundings to disagree about; a percentage concession is a package, which is what packages are for. *A per-day fine* — not what was asked, and it would make every historical figure depend on the day you looked at it. *Storing the fine nightly* — a scheduler this deployment does not have.
+
+**Consequences.** Through the production build: rupees typed with commas and decimals stored as exact paisa; a duplicate package name refused; a negative amount and an amount with an extra zero refused; a student put on a package with a concession billed 10,000 where the package is 12,500, and another on the same package billed 12,500; nobody put on a retired package; a dry run that wrote nothing and then a run that issued one voucher each, due on the day the office set; the same run again issuing nothing; a part payment leaving exactly 6,000 outstanding and the rest settling it; nothing taken against a settled or a cancelled voucher; a voucher with money on it refusing to cancel and saying to void the payments first; a void putting the voucher back to part paid and keeping the voided payment with its reason; a payment dated in the future refused; a cancelled voucher reissued by the next run; a family seeing their own voucher and their own total, without the office's buttons and without the clerk's name; another student getting a 404 and a teacher a 403. Sixty-four checks. **The harness found one real bug on the way**: a payment of nought passed validation and was stopped only by the database CHECK, so the office got a 500 where it should have got a sentence. That is now refused with words, and a test pins it.
+
+The migration is written and was **not** applied to Neon in this phase.

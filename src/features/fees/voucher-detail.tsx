@@ -53,8 +53,6 @@ export function VoucherDetailScreen({ voucher: initial, today }: { voucher: FeeV
     }
   }
 
-  const live = voucher.payments.filter((p) => p.voidedAt === null)
-
   return (
     <>
       <Card className="mb-4">
@@ -183,7 +181,8 @@ export function VoucherDetailScreen({ voucher: initial, today }: { voucher: FeeV
         }}
       />
 
-      {live.length === 0 && voucher.blockedReason && voucher.status !== 'CANCELLED' ? (
+      {/* The empty state already carries this when there are no payments. */}
+      {voucher.payments.length > 0 && voucher.blockedReason && voucher.status !== 'CANCELLED' ? (
         <Alert variant="info" className="mt-4">
           {voucher.blockedReason}
         </Alert>

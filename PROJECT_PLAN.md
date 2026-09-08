@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | **Phase 24 complete: one account, two portals.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Every module is live on Neon (fifteen migrations, zero drift); the roadmap is built and the college's own requests (§23A) are under way. A member of staff can now also be an administrator on one account, switching between the staff portal and the office portal without signing out — and is a teacher, with a teacher's scope, whenever they are in the staff portal. Next: Phase 25, fees. |
-| **Last updated** | 2026-09-09 (rev. 42 — Phase 24 complete) |
+| **Status** | **Phase 25 complete: fees.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Every module through Phase 24 is live on Neon (fifteen migrations, zero drift); the roadmap is built and the college's own requests (§23A) are under way. The college now has named fee packages, a package and a concession per student, monthly vouchers with a due date and a late fine, payments recorded against them, and a family that can see its own bill. Every amount is whole paisa. **The Phase 25 migration is written and tested but not yet applied to Neon; it awaits the go-ahead.** Next: Phase 26, finance and admin delete. |
+| **Last updated** | 2026-09-10 (rev. 43 — Phase 25 complete) |
 | **Companion docs** | [DECISIONS.md](DECISIONS.md) · [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) · [README.md](README.md) |
 
 ---
@@ -738,7 +738,7 @@ Everything else in §20 will proceed on the stated defaults.
 
 ## 22. Progress tracker
 
-**Current phase:** 24 — complete and live on Neon. Next: Phase 25, fees (§23A).
+**Current phase:** 25 — complete, apart from the Neon migration, which is waiting for the go-ahead. Next: Phase 26, finance and admin delete (§23A).
 
 | Phase | Status | Notes |
 |---|---|---|
@@ -767,7 +767,8 @@ Everything else in §20 will proceed on the stated defaults.
 | 22 | ✅ Done (2026-09-08) | Staff attendance taken by the office; live on Neon (thirteen migrations, zero drift) |
 | 23 | ✅ Done (2026-09-09) | Complaints; live on Neon (fourteen migrations, zero drift) |
 | 24 | ✅ Done (2026-09-09) | A staff member who is also an admin; live on Neon (fifteen migrations, zero drift) |
-| 25 – 26 | ⏳ Not started | The college's requests (§23A). Next: fees |
+| 25 | ✅ Done (2026-09-10) | Fees; migration written, not yet on Neon |
+| 26 | ⏳ Not started | The last of the college's requests (§23A): finance, and admin delete |
 
 **Live database:** the college's Neon PostgreSQL instance is connected and holds the real academic structure (2026-27, 20 groups, 20 sections). All **ten** migrations are applied to it, along with the reference data (12 designations, 10 departments, **8 document types**, and the confirmed **grading scale**).
 
@@ -1972,6 +1973,32 @@ The first of the college's own requests (§23A). The **colour bands** were deliv
 
 **One thing fixed on the way past.** The unit suite started a worker on every core, and workers began timing out before they had finished starting whenever the machine was busy — red tests with nothing wrong in them. Worker count is now capped, and the browser tests retry once locally as well as in CI, so a slow machine is told apart from a real failure.
 
+### 22.53 Phase 25, fees (2026-09-10)
+
+**Admin → Fees → Packages and rules.** The named fees the college charges, each with a monthly amount, plus the two rules that govern every voucher: which day of the month it falls due, and the flat late fine once that day has passed. A retired package keeps the vouchers already issued against it but takes nobody new.
+
+**On each student's record**, a fee plan: the package they are on, and their own **concession** on top of it in rupees per month. A concession never exceeds the fee it comes off, so a bill can never come out negative. A percentage concession is expressed as a package — that is what packages are for — so there is one kind of discount to reason about rather than two.
+
+**Admin → Fees** is one month at a time: what was billed, what came in, what is still owed, and how many are overdue. **Issue vouchers** bills everybody on a package who does not already have a live voucher for that month, and it offers a **dry run** first, because a bill run for four hundred families is not something anybody should press blind. Running it twice bills nobody twice, and it is the **database** that guarantees that, not a check in the code.
+
+**One voucher** shows the sum in full — fee, concession, late fine, payable, outstanding — and the payments against it. Money is recorded with the day it arrived, how it arrived and a slip number. A payment recorded in error is **voided**, with a reason; it is kept, struck through, and the voucher goes back to what it was. A voucher issued in error is **cancelled**, with a reason, but never while money sits against it: the office voids the payments first, deliberately.
+
+**Student → My Fees** shows a family their own vouchers and what is still to pay, with the office's buttons absent and the clerk's name withheld: a reply from the college is the college's. Another student asking after a voucher is told it does not exist, and a teacher is refused outright.
+
+**Every amount is whole paisa (ADR-174).** Twelve and a half thousand rupees is 1,250,000. Rupees exist only where somebody types them and where a screen prints them; in between, integers, which add and subtract exactly. The database says the same with CHECK constraints. And a voucher's amounts are **frozen when it is issued**, so raising a package's price next year cannot rewrite what a family was asked for last March.
+
+**The late fine is worked out, not stored.** What is owed today comes from the due date on every read, so the figures are right without a nightly job — this deployment has no scheduler, and a fee system that needs one would be wrong every Monday. Once money is taken against a late voucher the fine is frozen onto it, because from then on it is part of what was charged.
+
+**Data:** three tables and two enums, plus two defaulted columns on `students` — migration `20260910090000_fees`. **Written, tested against a throwaway PostgreSQL, and not yet applied to Neon: it is waiting for the go-ahead.** Nothing that worked before touches it.
+
+**Verified through the production build (64 new checks, all passing, alongside the 570 existing — 634 in total)**: rupees typed with commas and decimals stored as exact paisa; a duplicate package name, a negative amount and an amount with an extra zero all refused; a student on a package with a concession billed 10,000 where the package is 12,500; nobody put on a retired package; a dry run that wrote nothing, then a run that issued one voucher each on the day the office set, then the same run issuing nothing; a part payment leaving exactly 6,000 and the rest settling it; nothing taken against a settled or cancelled voucher; a voucher with money on it refusing to cancel and saying what to do first; a void restoring the voucher and keeping the record; a payment dated in the future refused; a cancelled voucher reissued by the next run; a family seeing only their own; a teacher refused everything.
+
+**Tests: 68 new** — the money helper (what a typed amount becomes, and that no paisa is lost on the way back), the arithmetic of a voucher, the fine at every boundary, who is billed for a month, what may still be done, what the endpoints accept, and the five screens. **1,429 in total across 80 files.**
+
+**One real bug the harness found.** A payment of nought passed validation and was stopped only by the database, so the office got a 500 where it should have got a sentence. It is now refused with words, and a test pins it.
+
+**Also fixed on the way past.** The student record still carried a "Not built yet" card listing attendance, exams and results — all three of which have existed since Phases 7 to 9. It was telling the office that three working modules were missing. The card is gone, and the fee plan sits in its place.
+
 ### 22.7 What Phase 4 delivered
 
 Student records and academic enrollment, built on the Phase 1–3 architecture. Nothing existing was rebuilt.
@@ -2181,7 +2208,7 @@ ones, so a mistake in them cannot be carried into everything else.
 | 22 | Staff attendance | **Done.** The office's own daily register: Present, Absent, Short leave, Leave; approved leave is left out of the worked percentage, and each staff member sees their own month (ADR-171) |
 | 23 | Complaints | **Done.** A student writes an application, the office answers it, and the exchange stays between the two of them — a teacher cannot read one even holding every permission (ADR-172) |
 | 24 | A staff member who is also an admin | **Done.** One account, both portals, with a switcher; the portal they are in is the role they are, so a principal teaching is a teacher (ADR-173) |
-| 25 | Fees | Named packages, per-student assignment, a per-student discount, monthly vouchers, late fine |
+| 25 | Fees | **Done.** Named packages, one per student with a concession on top, monthly vouchers with a due date, a flat late fine, and payments recorded against them — all in whole paisa (ADR-174) |
 | 26 | Finance | Admin records expenses; dashboard shows collection, outstanding and hand-drawn SVG graphs |
 | 26 | Admin delete | Erase only when nothing references the record; otherwise refuse and say why |
 

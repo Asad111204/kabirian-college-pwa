@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, BookOpen, Clock, FileText } from 'lucide-react'
+import { ArrowLeft, BookOpen, Clock } from 'lucide-react'
 import { requirePortalAccess } from '@/server/auth/context'
 import { getStudent } from '@/server/services/students.service'
 import { listAcademicSessions } from '@/server/services/academic-structure.service'

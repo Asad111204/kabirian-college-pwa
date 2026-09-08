@@ -211,9 +211,11 @@ describe('describeAuditEntry', () => {
   })
 
   it('stays readable for an action added in a future phase', () => {
-    // Fees arrive in a later phase; until then this key has no sentence of its own.
-    const item = describeAuditEntry(auditEntry({ action: 'fee_voucher.issued' }))
-    expect(item.description).toBe('issued')
+    // Fees had their own sentence from Phase 25, so this now uses an action
+    // that genuinely does not exist yet: the point is the fallback, which
+    // reads the verb out of the key rather than printing the key itself.
+    const item = describeAuditEntry(auditEntry({ action: 'expense.recorded' }))
+    expect(item.description).toBe('recorded')
   })
 
   /**

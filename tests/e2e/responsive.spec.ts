@@ -7,9 +7,9 @@ import { expectNoHorizontalOverflow, isPhone, signIn } from './helpers'
  * phone the navigation lives in a drawer that opens from the top bar.
  */
 const PAGES: Record<'admin' | 'teacher' | 'student', string[]> = {
-  admin: ['/admin', '/admin/students', '/admin/staff', '/admin/staff-attendance', '/admin/staff-attendance/month', '/admin/users', '/admin/attendance', '/admin/exams', '/admin/timetable', '/admin/notices', '/admin/complaints', '/admin/reports', '/admin/audit', '/admin/settings', '/account/devices'],
+  admin: ['/admin', '/admin/students', '/admin/staff', '/admin/staff-attendance', '/admin/staff-attendance/month', '/admin/users', '/admin/attendance', '/admin/exams', '/admin/timetable', '/admin/notices', '/admin/complaints', '/admin/fees', '/admin/fees/packages', '/admin/reports', '/admin/audit', '/admin/settings', '/account/devices'],
   teacher: ['/staff', '/staff/profile', '/staff/attendance', '/staff/exams', '/staff/timetable', '/staff/notices', '/staff/students'],
-  student: ['/student', '/student/attendance', '/student/results', '/student/notices', '/student/events', '/student/complaints'],
+  student: ['/student', '/student/attendance', '/student/results', '/student/notices', '/student/events', '/student/complaints', '/student/fees'],
 }
 
 for (const [who, paths] of Object.entries(PAGES) as [keyof typeof PAGES, string[]][]) {
