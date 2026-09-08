@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | **Phase 24 complete: one account, two portals.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Every module through Phase 23 is live on Neon (fourteen migrations, zero drift); the roadmap is built and the college's own requests (§23A) are under way. A member of staff can now also be an administrator on one account, switching between the staff portal and the office portal without signing out — and is a teacher, with a teacher's scope, whenever they are in the staff portal. **The Phase 24 migration is written and tested but not yet applied to Neon; it awaits the go-ahead.** Next: Phase 25, fees. |
+| **Status** | **Phase 24 complete: one account, two portals.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Every module is live on Neon (fifteen migrations, zero drift); the roadmap is built and the college's own requests (§23A) are under way. A member of staff can now also be an administrator on one account, switching between the staff portal and the office portal without signing out — and is a teacher, with a teacher's scope, whenever they are in the staff portal. Next: Phase 25, fees. |
 | **Last updated** | 2026-09-09 (rev. 42 — Phase 24 complete) |
 | **Companion docs** | [DECISIONS.md](DECISIONS.md) · [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) · [README.md](README.md) |
 
@@ -738,7 +738,7 @@ Everything else in §20 will proceed on the stated defaults.
 
 ## 22. Progress tracker
 
-**Current phase:** 24 — complete, apart from the Neon migration, which is waiting for the go-ahead. Next: Phase 25, fees (§23A).
+**Current phase:** 24 — complete and live on Neon. Next: Phase 25, fees (§23A).
 
 | Phase | Status | Notes |
 |---|---|---|
@@ -766,7 +766,7 @@ Everything else in §20 will proceed on the stated defaults.
 | 21 Marks deadline & corrections | ✅ Done (2026-09-08) | Deadline per exam; teachers correct their own submitted sheets until it passes; the office reopens one paper with a reason. Migration 12 live on Neon. See §22.49 |
 | 22 | ✅ Done (2026-09-08) | Staff attendance taken by the office; live on Neon (thirteen migrations, zero drift) |
 | 23 | ✅ Done (2026-09-09) | Complaints; live on Neon (fourteen migrations, zero drift) |
-| 24 | ✅ Done (2026-09-09) | A staff member who is also an admin; migration written, not yet on Neon |
+| 24 | ✅ Done (2026-09-09) | A staff member who is also an admin; live on Neon (fifteen migrations, zero drift) |
 | 25 – 26 | ⏳ Not started | The college's requests (§23A). Next: fees |
 
 **Live database:** the college's Neon PostgreSQL instance is connected and holds the real academic structure (2026-27, 20 groups, 20 sections). All **ten** migrations are applied to it, along with the reference data (12 designations, 10 departments, **8 document types**, and the confirmed **grading scale**).
@@ -1964,7 +1964,7 @@ The first of the college's own requests (§23A). The **colour bands** were deliv
 
 **Two rules kept deliberately conservative.** Nobody changes their own office access, even from the office. And a staff-admin is not counted as an administrator by the rules that stop the college locking itself out of its own system — those refuse more often than strictly necessary, which is the right direction when the failure mode is nobody being able to get in.
 
-**Data:** two columns — `users.admin_access` with a CHECK that keeps it to staff accounts, and `sessions.active_role` — migration `20260909140000_staff_admin_access`. Both defaulted, so every existing account and session behaves exactly as before. **Written, tested against a throwaway PostgreSQL, and not yet applied to Neon: it is waiting for the go-ahead.**
+**Data:** two columns — `users.admin_access` with a CHECK that keeps it to staff accounts, and `sessions.active_role` — migration `20260909140000_staff_admin_access`. Both defaulted, so every existing account and session behaves exactly as before. Applied to Neon on 2026-09-09 (fifteen migrations, zero drift); the census before and after was identical, and no account holds office access yet.
 
 **Verified through the production build (40 new checks, all passing, alongside the 530 existing — 570 in total)**: a fixture teacher who also holds the office is refused the office's register, the accounts list and students' applications exactly like any teacher until they switch; a link into the office offers the switch while a single-portal teacher is still sent home; the switch page asks first; a teacher without access, a student and an administrator are each refused the switch, as is switching to the portal they are already in; after switching, the same person opens the register, the accounts list, the applications and the office dashboard, is offered the way back, and is still refused a portal they do not hold; their own staff record stays theirs in both portals; office access cannot be given to an administrator, a student, yourself, or by a teacher, and giving it to somebody who has it is a conflict rather than a silent no-op; granting lets an existing session switch at once and revoking puts it back in the staff portal on the next request; both are audited. **The other 530 checks are the real result** — the fixture teacher holds the office throughout every one of them, so anything leaking from the set into the portal would have turned them red.
 
