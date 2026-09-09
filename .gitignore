@@ -73,3 +73,7 @@ Thumbs.db
 # student portal logins made by the importer — passwords in readable form,
 # printed and handed out, then deleted. Never committed.
 /student-logins.csv
+
+# the fee ledger converted from the old system — real families' money
+/old-fee-plans.csv
+/old-fee-payments.csv
