@@ -39,6 +39,26 @@ function argValue(flag: string): string | undefined {
   return index === -1 ? undefined : process.argv[index + 1]
 }
 
+/**
+ * Asks for something without putting it on the screen.
+ *
+ * A terminal echoes what is typed, which puts the administrator's password in
+ * the scrollback — and in any screenshot of it. Once the prompt itself is
+ * written, everything after is swallowed.
+ */
+async function askSecret(rl: ReturnType<typeof createInterface>, prompt: string): Promise<string> {
+  const internals = rl as unknown as { _writeToOutput?: (text: string) => void }
+  const original = internals._writeToOutput
+  const pending = rl.question(prompt)
+  internals._writeToOutput = () => {}
+  try {
+    return await pending
+  } finally {
+    internals._writeToOutput = original
+    stdout.write('\n')
+  }
+}
+
 /** Rupees in the old system, paisa here. */
 const toPaisa = (rupees: string): number => Math.round(Number(rupees) * 100)
 const rupees = (paisa: number) => `Rs ${(paisa / 100).toLocaleString('en-PK')}`
@@ -117,7 +137,7 @@ async function main() {
   if (!username || !password) {
     const rl = createInterface({ input: stdin, output: stdout })
     username = await rl.question('Administrator username: ')
-    password = await rl.question('Password (not shown afterwards): ')
+    password = await askSecret(rl, 'Password (not shown as you type): ')
     rl.close()
   }
 

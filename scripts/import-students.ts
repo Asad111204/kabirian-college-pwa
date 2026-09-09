@@ -85,6 +85,26 @@ interface OptionGroup {
 const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ')
 
 /**
+ * Asks for something without putting it on the screen.
+ *
+ * A terminal echoes what is typed, which puts the administrator's password in
+ * the scrollback — and in any screenshot of it. Once the prompt itself is
+ * written, everything after is swallowed.
+ */
+async function askSecret(rl: ReturnType<typeof createInterface>, prompt: string): Promise<string> {
+  const internals = rl as unknown as { _writeToOutput?: (text: string) => void }
+  const original = internals._writeToOutput
+  const pending = rl.question(prompt)
+  internals._writeToOutput = () => {}
+  try {
+    return await pending
+  } finally {
+    internals._writeToOutput = original
+    stdout.write('\n')
+  }
+}
+
+/**
  * A username from a name, the same way the admission form suggests one:
  * "Muhammad Ali" becomes "muhammad.ali".
  *
@@ -131,7 +151,7 @@ async function main() {
   if (!username || !password) {
     const rl = createInterface({ input: stdin, output: stdout })
     username = await rl.question('Administrator username: ')
-    password = await rl.question('Password (not shown afterwards): ')
+    password = await askSecret(rl, 'Password (not shown as you type): ')
     rl.close()
   }
 

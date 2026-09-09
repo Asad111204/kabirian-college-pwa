@@ -648,36 +648,54 @@ export async function runVouchers(ctx: AuthContext, input: VoucherRunInput): Pro
 
   const created: { userId: string | null; voucherId: string; voucherNumber: string }[] = []
 
-  await prisma.$transaction(async (tx) => {
-    for (const voucher of toIssue) {
-      const voucherNumber = await nextCode('FEE_VOUCHER', tx)
-      const row = await tx.feeVoucher.create({
-        data: {
-          studentId: voucher.studentId,
-          academicSessionId: session.id,
-          voucherNumber,
-          dueDate: dueDate ? collegeDateToStorage(dueDate) : null,
-          grossPaisa: voucher.gross,
-          discountPaisa: voucher.discount,
-          issuedByUserId: ctx.userId,
-          lines: { create: voucher.lines.map((l) => ({ head: l.head as FeeHeadValue, label: l.label, amountPaisa: l.amountPaisa })) },
-        },
-        select: { id: true },
-      })
-      created.push({ userId: voucher.userId, voucherId: row.id, voucherNumber })
-    }
+  // A whole college at once is more than one transaction should hold. Each
+  // voucher costs a code from the shared counter and an insert with its lines,
+  // so a session of two hundred students is the better part of a thousand
+  // round trips — over a hosted database that runs past the transaction's
+  // deadline and the run fails having issued nothing. Issued in batches, each
+  // one commits on its own; and because a student who already has a voucher is
+  // skipped, running it again after a failure carries on where it stopped
+  // rather than billing anybody twice.
+  const BATCH = 25
 
-    await writeAuditLog(
-      ctx,
-      {
-        action: 'fee_voucher.issued',
-        entityType: 'fee_voucher',
-        entityLabel: `Fee run · ${session.name}`,
-        metadata: { academicSession: session.name, dueDate, issued: result.issued, totalBilledPaisa: result.totalBilledPaisa },
-      },
-      tx,
-    )
-  })
+  for (let at = 0; at < toIssue.length; at += BATCH) {
+    const batch = toIssue.slice(at, at + BATCH)
+
+    await prisma.$transaction(async (tx) => {
+      let billedPaisa = 0
+      for (const voucher of batch) {
+        const voucherNumber = await nextCode('FEE_VOUCHER', tx)
+        const row = await tx.feeVoucher.create({
+          data: {
+            studentId: voucher.studentId,
+            academicSessionId: session.id,
+            voucherNumber,
+            dueDate: dueDate ? collegeDateToStorage(dueDate) : null,
+            grossPaisa: voucher.gross,
+            discountPaisa: voucher.discount,
+            issuedByUserId: ctx.userId,
+            lines: { create: voucher.lines.map((l) => ({ head: l.head as FeeHeadValue, label: l.label, amountPaisa: l.amountPaisa })) },
+          },
+          select: { id: true },
+        })
+        created.push({ userId: voucher.userId, voucherId: row.id, voucherNumber })
+        billedPaisa += Math.max(0, voucher.gross - voucher.discount)
+      }
+
+      // Written with this batch rather than after all of them, so a run that
+      // stops half way is still recorded for exactly what it did.
+      await writeAuditLog(
+        ctx,
+        {
+          action: 'fee_voucher.issued',
+          entityType: 'fee_voucher',
+          entityLabel: `Fee run · ${session.name}`,
+          metadata: { academicSession: session.name, dueDate, issued: batch.length, totalBilledPaisa: billedPaisa },
+        },
+        tx,
+      )
+    })
+  }
 
   // Each family is told, and lands on their own fees — one notification for
   // the whole run rather than one query each, because the page they open is
