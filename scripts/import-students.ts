@@ -32,8 +32,7 @@
  * out, and then deleted.
  */
 import { readFileSync, writeFileSync } from 'node:fs'
-import { createInterface } from 'node:readline/promises'
-import { stdin, stdout } from 'node:process'
+import { askCredentials } from './prompt'
 import { studentCreateSchema } from '../src/validation/students'
 import { normaliseHeader, parseCsv } from '../src/lib/csv-read'
 
@@ -85,26 +84,6 @@ interface OptionGroup {
 const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ')
 
 /**
- * Asks for something without putting it on the screen.
- *
- * A terminal echoes what is typed, which puts the administrator's password in
- * the scrollback — and in any screenshot of it. Once the prompt itself is
- * written, everything after is swallowed.
- */
-async function askSecret(rl: ReturnType<typeof createInterface>, prompt: string): Promise<string> {
-  const internals = rl as unknown as { _writeToOutput?: (text: string) => void }
-  const original = internals._writeToOutput
-  const pending = rl.question(prompt)
-  internals._writeToOutput = () => {}
-  try {
-    return await pending
-  } finally {
-    internals._writeToOutput = original
-    stdout.write('\n')
-  }
-}
-
-/**
  * A username from a name, the same way the admission form suggests one:
  * "Muhammad Ali" becomes "muhammad.ali".
  *
@@ -144,16 +123,7 @@ async function main() {
     }
   }
 
-  // Asked on the terminal; the harness drill supplies them through the
-  // environment instead. Neither is ever written anywhere.
-  let username = process.env.KC_ADMIN_USERNAME ?? ''
-  let password = process.env.KC_ADMIN_PASSWORD ?? ''
-  if (!username || !password) {
-    const rl = createInterface({ input: stdin, output: stdout })
-    username = await rl.question('Administrator username: ')
-    password = await askSecret(rl, 'Password (not shown as you type): ')
-    rl.close()
-  }
+  const { username, password } = await askCredentials()
 
   const loginRes = await fetch(`${url}/api/v1/auth/login`, {
     method: 'POST',

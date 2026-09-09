@@ -30,8 +30,7 @@
  * anywhere.
  */
 import { readFileSync } from 'node:fs'
-import { createInterface } from 'node:readline/promises'
-import { stdin, stdout } from 'node:process'
+import { askCredentials } from './prompt'
 import { parseCsv, normaliseHeader } from '../src/lib/csv-read'
 
 function argValue(flag: string): string | undefined {
@@ -39,29 +38,13 @@ function argValue(flag: string): string | undefined {
   return index === -1 ? undefined : process.argv[index + 1]
 }
 
-/**
- * Asks for something without putting it on the screen.
- *
- * A terminal echoes what is typed, which puts the administrator's password in
- * the scrollback — and in any screenshot of it. Once the prompt itself is
- * written, everything after is swallowed.
- */
-async function askSecret(rl: ReturnType<typeof createInterface>, prompt: string): Promise<string> {
-  const internals = rl as unknown as { _writeToOutput?: (text: string) => void }
-  const original = internals._writeToOutput
-  const pending = rl.question(prompt)
-  internals._writeToOutput = () => {}
-  try {
-    return await pending
-  } finally {
-    internals._writeToOutput = original
-    stdout.write('\n')
-  }
-}
-
 /** Rupees in the old system, paisa here. */
 const toPaisa = (rupees: string): number => Math.round(Number(rupees) * 100)
 const rupees = (paisa: number) => `Rs ${(paisa / 100).toLocaleString('en-PK')}`
+
+interface OptionGroup {
+  sections: { id: string; name: string }[]
+}
 
 interface PlanRow {
   line: number
@@ -130,16 +113,7 @@ async function main() {
       }))
     : []
 
-  // Asked on the terminal; the harness drill supplies them through the
-  // environment instead. Neither is ever written anywhere.
-  let username = process.env.KC_ADMIN_USERNAME ?? ''
-  let password = process.env.KC_ADMIN_PASSWORD ?? ''
-  if (!username || !password) {
-    const rl = createInterface({ input: stdin, output: stdout })
-    username = await rl.question('Administrator username: ')
-    password = await askSecret(rl, 'Password (not shown as you type): ')
-    rl.close()
-  }
+  const { username, password } = await askCredentials()
 
   const loginRes = await fetch(`${url}/api/v1/auth/login`, {
     method: 'POST',
@@ -229,20 +203,34 @@ async function main() {
   /* ------------------------------------------------------------- vouchers */
 
   if (apply && !skipVouchers && plansOk > 0) {
-    const res = await fetch(`${url}/api/v1/fees/run`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ academicSessionId: current.id }),
-    })
-    const body = (await res.json()) as { data?: { issued: number; skippedExisting: number; skippedNoFee: number; totalBilledPaisa: number }; error?: { message?: string } }
-    if (!res.ok) {
-      console.error(`\nIssuing vouchers failed: ${body.error?.message ?? res.status}\n`)
-      process.exit(1)
+    // One section at a time, then a sweep for anybody the sections missed.
+    //
+    // A whole college in one request is a great many vouchers inside a single
+    // transaction, and against a hosted database that runs past its deadline
+    // and issues nothing — which is exactly what happened the first time this
+    // was run for real. A section is a few dozen students at most, and a
+    // student who already has a voucher is skipped, so the sweep at the end
+    // costs almost nothing and still catches anyone not in a section.
+    const groups = await get<OptionGroup[]>(`/api/v1/students/enrollment-options?sessionId=${current.id}`)
+    const sectionIds = groups.flatMap((group) => group.sections.map((section) => section.id))
+
+    let issued = 0
+    let billed = 0
+    const issueVouchers = async (body: Record<string, unknown>, what: string) => {
+      const res = await fetch(`${url}/api/v1/fees/run`, { method: 'POST', headers, body: JSON.stringify(body) })
+      const json = (await res.json()) as { data?: { issued: number; totalBilledPaisa: number }; error?: { message?: string } }
+      if (!res.ok) {
+        problems.push(`vouchers for ${what}: ${json.error?.message ?? res.status}`)
+        return
+      }
+      issued += json.data?.issued ?? 0
+      billed += json.data?.totalBilledPaisa ?? 0
     }
-    console.log(
-      `  Issued ${body.data?.issued ?? 0} voucher(s); ${body.data?.skippedExisting ?? 0} already had one, ${body.data?.skippedNoFee ?? 0} have no fee set. ` +
-        `${rupees(body.data?.totalBilledPaisa ?? 0)} billed.`,
-    )
+
+    for (const [at, sectionId] of sectionIds.entries()) await issueVouchers({ academicSessionId: current.id, sectionId }, `section ${at + 1}`)
+    await issueVouchers({ academicSessionId: current.id }, 'the rest of the session')
+
+    console.log(`  Issued ${issued} voucher${issued === 1 ? '' : 's'} — ${rupees(billed)} billed.`)
   } else if (!apply) {
     console.log('  Would issue one voucher per student with a fee, the same as the "Issue vouchers" button.')
   }
