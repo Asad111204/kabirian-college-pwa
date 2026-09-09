@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | **Phase 28 complete: the fee is annual, made of optional heads, and paid in instalments.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Everything through Phase 29 is live on Neon (nineteen migrations, zero drift). The college charges one fee per student per year, built from tuition, annual funds, events, board registration, board admission, a tour and anything else, all optional and all set at admission; families pay whenever they can, and a printed voucher shows only what has been paid and what is left. Documents are attached at the counter, and a salary is recorded when staff are added. The college now has a printable **handbook** covering every part of the system, and the app finally shows the college's own logo rather than a placeholder. **The Phase 28 migration was applied to Neon on 2026-09-09.** The college's previous FoxPro system has been read into this one: **188 of its 192 enrolled students are live, each with a portal login**, every class counted back against the old file. |
-| **Last updated** | 2026-09-09 (rev. 49 — the old system's 192 students imported) |
+| **Last updated** | 2026-09-09 (rev. 50 — many sections and subjects in one assignment) |
 | **Companion docs** | [DECISIONS.md](DECISIONS.md) · [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) · [README.md](README.md) |
 
 ---
@@ -2081,6 +2081,20 @@ The college looked at the finished fee module and corrected the assumption under
 **Verified through the production build (65 fee checks, all passing, alongside the rest — 731 in total)**: a fee set from three heads adding to the year with the concession off, keeping the office's own words for the "Others" line; another student charged tuition alone; a head the college does not charge, a line of nothing and an amount with an extra zero each refused, with the fee unchanged after every refusal; a dry run that wrote nothing, then a run issuing one voucher each with no due date, then the same run issuing nothing; the fee changed afterwards without rewriting the voucher already issued; two instalments, the first leaving exactly 24,500 and reporting 29% collected, the second settling it; a void putting it back to part paid; a voucher with no due date carrying no fine and never overdue; a cancelled voucher reissued; a family seeing only their own; the admission form offering every head and the document checklist; and the staff form asking for a salary.
 
 **Tests: 1,497 across 85 files.** The fee policy, validation and screens were reworked rather than added to, because the model underneath them changed.
+
+### 22.60 Assigning a teacher to many sections at once (2026-09-09)
+
+The college's own timetable made the case: Sir Arish takes English in six of its seven columns, and the assignment dialogue asked him to be entered six times, walking a cascade of five dropdowns each time. **Staff, a teacher, Assign subjects** now lists every section in the session under its class, division and program — no cascade, because a teacher crossing classes and campuses is the normal case here, not the exception. Tick the sections, tick the subjects, and every pairing is made in one save.
+
+**The subjects offered are the ones those sections are actually taught.** Ticking sections from two programs shows the union of both curricula; a pairing only one of them allows — Biology offered to an ICS section — is skipped and reported by name, while every other pairing is still made. The office gets three plain lists back: what was assigned, what the teacher already held, and what the curriculum refused and why.
+
+**The older single-pairing shape still works.** The endpoint reads the body and picks the schema, so anything sending one section and one subject is unaffected.
+
+**Verified through the production build (17 new checks)**: the cross product is made, a second identical save makes nothing twice, a subject on no curriculum is refused with the curriculum named, a section from another session cannot be smuggled in, an empty list of either is refused, and neither a teacher nor a student may assign anybody.
+
+**Tests: 15 new** — five on the schema and ten on the dialogue, including that the subject list is the union of two curricula with no duplicate, that the count of assignments is shown before the save is made, and that a failed save leaves every tick where the office put it. **1,525 in total across 87 files.**
+
+**One thing the harness was quietly not doing.** It runs `next start` against whatever build is on disk — it does not build. The first run of these checks failed eleven ways against a build made before the change, which looked like eleven bugs and was one stale directory. Worth remembering: **`npm run build` before `node tests/harness/run.mjs`**, or the harness is testing the past.
 
 ### 22.59 The college's old system, read into this one (2026-09-09)
 

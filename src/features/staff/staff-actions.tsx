@@ -12,6 +12,7 @@ import { Alert } from '@/components/ui/feedback'
 import { api, ApiError } from '@/lib/api-client'
 import { EMPLOYMENT_STATUSES, EMPLOYMENT_STATUS_LABEL } from '@/validation/staff'
 import { TemporaryPasswordPanel } from '@/features/users/shared'
+import { AssignSubjectsDialog } from './assign-subjects-dialog'
 import type { AssignmentOptionGroup } from '@/server/services/staff.service'
 
 type DialogKind = 'assign' | 'incharge' | 'status' | 'account' | 'unlink' | null
@@ -80,13 +81,13 @@ export function StaffActions({
         <CardContent className="space-y-2">
           <ActionRow
             icon={BookOpen}
-            title="Assign a subject"
+            title="Assign subjects"
             description={
               !isTeaching
                 ? 'Only teaching staff can be assigned subjects.'
                 : !isActive
                   ? 'Only active staff can receive new assignments.'
-                  : 'Teach a subject in one section.'
+                  : 'Tick the sections and the subjects; every pairing is made.'
             }
             disabled={!isTeaching || !isActive}
             action={
@@ -159,9 +160,18 @@ export function StaffActions({
         </CardContent>
       </Card>
 
-      {dialog === 'assign' || dialog === 'incharge' ? (
+      {dialog === 'assign' ? (
+        <AssignSubjectsDialog
+          staffId={staff.id}
+          staffName={staff.fullName}
+          sessions={sessions}
+          onClose={close}
+        />
+      ) : null}
+
+      {dialog === 'incharge' ? (
         <PlacementDialog
-          kind={dialog}
+          kind="incharge"
           staffName={staff.fullName}
           sessions={sessions}
           busy={busy}
@@ -170,13 +180,8 @@ export function StaffActions({
           onClose={close}
           onSubmit={(payload) =>
             run(async () => {
-              if (dialog === 'assign') {
-                await api.post(`/api/v1/staff/${staff.id}/assignments`, payload)
-                toast.success('Subject assigned.')
-              } else {
-                await api.post(`/api/v1/staff/${staff.id}/incharge`, payload)
-                toast.success('Section in-charge assigned.')
-              }
+              await api.post(`/api/v1/staff/${staff.id}/incharge`, payload)
+              toast.success('Section in-charge assigned.')
               close()
             })
           }

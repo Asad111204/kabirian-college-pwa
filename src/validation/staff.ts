@@ -175,6 +175,36 @@ export const assignmentCreateSchema = z.object({
 
 export type AssignmentCreateInput = z.infer<typeof assignmentCreateSchema>
 
+/**
+ * Several sections and several subjects in one go.
+ *
+ * A teacher who takes English usually takes it for most of the college, and
+ * one section at a time meant the same dialogue six times over. Here the
+ * office ticks the sections and ticks the subjects, and every pairing of the
+ * two is made.
+ *
+ * No class, division or program: the sections may come from several at once,
+ * and each one already knows which it belongs to. The session is still sent,
+ * and the server checks every section really is in it.
+ *
+ * A pairing the curriculum does not allow — Biology to an ICS section — is not
+ * an error that stops the rest; it is reported back and the others are made.
+ */
+export const assignmentBulkCreateSchema = z.object({
+  academicSessionId: uuid,
+  sectionIds: z
+    .array(uuid)
+    .min(1, 'Choose at least one section.')
+    .max(60, 'That is more sections than the college has.'),
+  subjectIds: z
+    .array(uuid)
+    .min(1, 'Choose at least one subject.')
+    .max(20, 'That is more subjects than one teacher takes.'),
+  assignedAt: optionalIsoDate,
+})
+
+export type AssignmentBulkCreateInput = z.infer<typeof assignmentBulkCreateSchema>
+
 export const assignmentCloseSchema = z.object({
   reason: optionalText(255),
 })

@@ -22,6 +22,7 @@ import { generateTemporaryPassword, hashPassword } from '../auth/password'
 import { nextCode } from './code-sequence'
 import { paginate, paginatedResult, withUniqueConstraintHandling, type PaginatedResult, assertAdminArea as assertAdminAreaFor } from './service-utils'
 import type {
+  AssignmentBulkCreateInput,
   AssignmentCreateInput,
   InchargeAssignInput,
   StaffAccountInput,
@@ -747,6 +748,154 @@ export async function createAssignment(
   )
 
   return getStaff(ctx, staffId)
+}
+
+/** What one run of `createAssignments` did, pairing by pairing. */
+export interface AssignmentBulkResult {
+  staff: StaffDetail
+  /** Every pairing that became an assignment, as the office would read it. */
+  created: string[]
+  /** Pairings the teacher already had; not an error, and not made twice. */
+  alreadyHeld: string[]
+  /** Pairings the curriculum does not allow, each with the reason. */
+  refused: string[]
+}
+
+/**
+ * Assigns a teacher to every pairing of the chosen sections and subjects.
+ *
+ * One dialogue instead of a dozen: a teacher who takes English across six
+ * columns of the college timetable is six ticks and one save. The sections may
+ * span classes, divisions and programs, so each pairing is checked on its own
+ * against that section's own curriculum — Biology offered to an ICS section is
+ * reported and skipped, and every other pairing is still made. A pairing the
+ * teacher already holds is left exactly as it is.
+ */
+export async function createAssignments(
+  ctx: AuthContext,
+  staffId: string,
+  input: AssignmentBulkCreateInput,
+): Promise<AssignmentBulkResult> {
+  authorize(ctx, 'staff.assign')
+  assertAdminArea(ctx)
+
+  const staff = await prisma.staff.findFirst({ where: { id: staffId, deletedAt: null } })
+  if (!staff) throw new NotFoundError('staff member')
+  assertEmployable(staff)
+
+  if (staff.staffType !== 'TEACHING') {
+    throw new ConflictError(
+      `${staff.fullName} is recorded as ${staff.staffType.toLowerCase()} staff. Change their staff type to Teaching before assigning subjects.`,
+    )
+  }
+
+  const sections = await prisma.section.findMany({
+    where: { id: { in: input.sectionIds }, isActive: true },
+    include: { academicGroup: { include: { class: true, division: true, program: true } } },
+  })
+
+  const missing = input.sectionIds.filter((id) => !sections.some((section) => section.id === id))
+  if (missing.length > 0) throw new NotFoundError('section')
+
+  // The session comes from the sections themselves; one from another year
+  // would quietly file the assignment in the wrong place.
+  const wrongSession = sections.find((section) => section.academicSessionId !== input.academicSessionId)
+  if (wrongSession) {
+    throw new ValidationError('One of those sections is not in the session you chose. Please choose again.', {
+      sectionIds: ['This section belongs to a different academic session.'],
+    })
+  }
+
+  const subjects = await prisma.subject.findMany({ where: { id: { in: input.subjectIds } } })
+  if (subjects.length !== input.subjectIds.length) throw new NotFoundError('subject')
+
+  const [curriculum, held] = await Promise.all([
+    prisma.curriculumSubject.findMany({
+      where: {
+        academicSessionId: input.academicSessionId,
+        classId: { in: sections.map((section) => section.academicGroup.classId) },
+        programId: { in: sections.map((section) => section.academicGroup.programId) },
+        subjectId: { in: input.subjectIds },
+      },
+      select: { classId: true, programId: true, subjectId: true },
+    }),
+    prisma.teacherAssignment.findMany({
+      where: { staffId, isActive: true, sectionId: { in: input.sectionIds }, subjectId: { in: input.subjectIds } },
+      select: { sectionId: true, subjectId: true },
+    }),
+  ])
+
+  const offered = new Set(curriculum.map((entry) => `${entry.classId}|${entry.programId}|${entry.subjectId}`))
+  const alreadyThere = new Set(held.map((row) => `${row.sectionId}|${row.subjectId}`))
+
+  const result: AssignmentBulkResult = { staff: null as unknown as StaffDetail, created: [], alreadyHeld: [], refused: [] }
+  const toCreate: { sectionId: string; subjectId: string; academicSessionId: string; label: string }[] = []
+
+  for (const section of sections) {
+    const group = section.academicGroup
+    const place = `${group.class.name} · ${group.division.name} · ${group.program.name} · Section ${section.name}`
+
+    for (const subject of subjects) {
+      const label = `${place} · ${subject.name}`
+
+      if (alreadyThere.has(`${section.id}|${subject.id}`)) {
+        result.alreadyHeld.push(label)
+        continue
+      }
+      if (!offered.has(`${group.classId}|${group.programId}|${subject.id}`)) {
+        result.refused.push(`${label} — not in the ${group.class.name} · ${group.program.name} curriculum`)
+        continue
+      }
+      toCreate.push({ sectionId: section.id, subjectId: subject.id, academicSessionId: section.academicSessionId, label })
+    }
+  }
+
+  if (toCreate.length === 0 && result.refused.length > 0 && result.alreadyHeld.length === 0) {
+    throw new ConflictError('None of those subjects are in the curriculum for the sections you chose.', {
+      subjectIds: result.refused,
+    })
+  }
+
+  if (toCreate.length > 0) {
+    const assignedAt = input.assignedAt ? new Date(input.assignedAt) : new Date()
+
+    await prisma.$transaction(async (tx) => {
+      await tx.teacherAssignment.createMany({
+        data: toCreate.map((pair) => ({
+          staffId,
+          sectionId: pair.sectionId,
+          subjectId: pair.subjectId,
+          academicSessionId: pair.academicSessionId,
+          isActive: true,
+          assignedAt,
+          createdByUserId: ctx.userId,
+        })),
+        // Two administrators saving the same pairing at once is a duplicate,
+        // not a failure: the partial unique index settles it and the row that
+        // is already there is the right one.
+        skipDuplicates: true,
+      })
+
+      // One entry for the run rather than one per pairing: the office did one
+      // thing, and the log should read as one thing.
+      await writeAuditLog(
+        ctx,
+        {
+          action: 'assignment.created',
+          entityType: 'teacher_assignment',
+          entityId: staffId,
+          entityLabel: `${staff.staffCode} ${staff.fullName}`,
+          after: { assignments: toCreate.map((pair) => pair.label) },
+        },
+        tx,
+      )
+    })
+
+    result.created = toCreate.map((pair) => pair.label)
+  }
+
+  result.staff = await getStaff(ctx, staffId)
+  return result
 }
 
 /**
