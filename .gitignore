@@ -64,3 +64,8 @@ Thumbs.db
 
 # local database backups (npm run backup:export) — sensitive, never committed
 /backups
+
+# the college's old FoxPro files and the CSV converted from them — real
+# students' B-Forms, CNICs and addresses, never committed
+/Old System data
+/old-students.csv
