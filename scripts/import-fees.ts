@@ -24,7 +24,10 @@
  * to paisa, which is how money is stored here.
  *
  * A voucher that already has money against it is left alone unless --force is
- * given, so running this twice cannot record the same payment twice.
+ * given, so running this twice cannot record the same payment twice. All three
+ * steps skip what is already done, so an interrupted run is finished by
+ * running it again; `--no-plans` skips the first step outright when the plans
+ * are known to be right already.
  *
  * The administrator's password is asked for on the terminal and never written
  * anywhere.
@@ -86,6 +89,9 @@ async function main() {
   const apply = process.argv.includes('--apply')
   const force = process.argv.includes('--force')
   const skipVouchers = process.argv.includes('--no-vouchers')
+  // A run that was interrupted has the plans already: they are set by a PUT
+  // that replaces, so re-sending them changes nothing but costs a request each.
+  const skipPlans = process.argv.includes('--no-plans')
 
   if (!plansFile) {
     console.error('\nGive the plans CSV: --plans old-fee-plans.csv [--payments old-fee-payments.csv] [--url https://…] [--apply]\n')
@@ -182,7 +188,7 @@ async function main() {
       { head: 'EVENTS_FUNDS', amountPaisa: plan.eventsFunds },
     ].filter((line) => line.amountPaisa > 0)
 
-    if (apply) {
+    if (apply && !skipPlans) {
       const res = await fetch(`${url}/api/v1/students/${student.id}/fee-plan`, {
         method: 'PUT',
         headers,
@@ -198,7 +204,11 @@ async function main() {
     charged += plan.tuition + plan.annualFunds + plan.eventsFunds - plan.concession
     if (apply && plansOk % 25 === 0) console.log(`  ${plansOk} fee plans set…`)
   }
-  console.log(`  ${apply ? 'Set' : 'Would set'} ${plansOk} fee plan${plansOk === 1 ? '' : 's'} — ${rupees(charged)} charged for the year.`)
+  console.log(
+    skipPlans && apply
+      ? `  Left ${plansOk} fee plan${plansOk === 1 ? '' : 's'} as they are — ${rupees(charged)} charged for the year.`
+      : `  ${apply ? 'Set' : 'Would set'} ${plansOk} fee plan${plansOk === 1 ? '' : 's'} — ${rupees(charged)} charged for the year.`,
+  )
 
   /* ------------------------------------------------------------- vouchers */
 
