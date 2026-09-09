@@ -3049,3 +3049,17 @@ The migration is written and was **not** applied to Neon in this phase.
 **Consequences.** Through the production build: the handbook renders cover to close, carries the college's own logo, explains the money rules it keeps, and keeps the print button off the paper; a teacher, a student and a signed-out visitor are each sent away from it. Thirteen tests cover the cover, the contents, every part, the step lists, the rules, the page breaks and the print dialogue.
 
 **One gap in the harness closed on the way.** A verifier that crashes while loading prints a stack and no checks, and the run then ended looking calm with only the exit code disagreeing — which is how a whole file went missing from a run unnoticed while this phase was being built. The harness now says "All steps passed" or names how many failed.
+
+---
+
+## ADR-179 · Code that needs a migration is not deployed until the migration is applied
+
+**Status:** Accepted · 2026-09-09 · after Phase 29
+
+**Context.** Two rules of this project met and produced an outage. The first: a migration that deletes rows on the live database stops and waits for the college to say "apply" — `20260911140000_annual_fees` removes the fee rows the office created while trying the module out, so it waited. The second: a finished phase is committed and pushed. Phases 28 and 29 were pushed, Vercel deployed them, and the live app began asking Neon for `student_fee_lines`, `fee_voucher_lines` and `staff.salary_paisa` — none of which existed yet. Sign-in and most of the system carried on; the admin dashboard, every fee page and the staff pages answered "Something went wrong". The college found it before I reported it, which is the part that matters.
+
+**Decision.** **The deploy waits with the migration, not ahead of it.** When a phase's code cannot run against the current shape of the live database, the order is: get the go-ahead → apply the migration → then push. If a phase has to be put down before the go-ahead arrives, it is committed to a branch and `main` stays deployable. `main` is what the college is using, not a place to park finished work.
+
+**Why not the other orders.** *Applying the migration first without asking* breaks the standing rule that nothing destructive touches Neon unattended, and that rule exists because the college's records are not mine to delete. *Feature-flagging the new code* is a second code path to write and test for a database change measured in days. *Pushing and applying immediately after* is what was intended here and is exactly what went wrong: "immediately" turned into two days because the go-ahead is a person's decision, not a step in a script.
+
+**Consequences.** A phase that carries a migration now has one more thing that must be true before it is called done: either the migration is on Neon, or the code is not on `main`. The pre-flight census, the go-ahead and the after-census stay exactly as they were — this only fixes when the code moves.
