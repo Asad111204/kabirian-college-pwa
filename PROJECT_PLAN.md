@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | **Phase 26 complete: finance and permanent deletion. Every phase of the roadmap and every one of the college's own requests (§23A) is now built.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Everything is live on Neon (seventeen migrations, zero drift). The office now records what the college spends, sees it against what the fees brought in with a hand-drawn graph of the year, and can erase a record for good — but only when nothing at all refers to it. |
+| **Status** | **Phase 26 complete: finance and permanent deletion. Every phase of the roadmap and every one of the college's own requests (§23A) is now built.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Everything is live on Neon (seventeen migrations, zero drift). The office now records what the college spends, sees it against what the fees brought in with a hand-drawn graph of the year — on the Finance page and on the dashboard itself — and can erase a record for good, but only when nothing at all refers to it. |
 | **Last updated** | 2026-09-10 (rev. 44 — Phase 26 complete; the roadmap is finished) |
 | **Companion docs** | [DECISIONS.md](DECISIONS.md) · [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) · [README.md](README.md) |
 
@@ -2020,6 +2020,16 @@ The last phase. Two things the college asked for, and with them the whole of §2
 **Verified through the production build (53 new checks, all passing, alongside the 634 existing — 687 in total)**: an expense recorded in exact paisa and another under a different heading; spending nothing, spending tomorrow, and a heading the college does not have all refused; a teacher and a student refused the module entirely; the month totalled with the biggest heading first and twelve months ready for the graph; an expense voided with a reason, not voided twice, leaving the month's figures while staying on the list, marked; a student with a history refused with the list of what holds them; a teacher who has taught refused; an account that has acted refused, naming the audit log; your own account refused outright; a student created by mistake erased at the second attempt, after the wrong code was refused and left them untouched; and the finance page rendering its graph as plain SVG with the figures available as a table.
 
 **Tests: 33 new** — the months a graph covers and how tall its bars are, the sum of a month, voiding, every refusal a delete can give, the rules that stop the college locking itself out, the confirmation, and the screens. **1,462 in total across 83 files.**
+
+### 22.55 The money on the dashboard (2026-09-10)
+
+Asked for straight after Phase 26: everything about money on the **admin dashboard**, not only on its own page.
+
+The dashboard now opens with five figures for the month — **fees collected, still owed, billed, spent, left over** — then the year drawn month by month, then where this month's spending went. "Still owed" is emphasised whenever anything is owing and links straight to the overdue vouchers, because that is the number the office acts on.
+
+It reads the **same summary the Finance page reads** rather than counting anything again, so the two screens cannot disagree about a figure. The whole block is absent for an administrator whose fee or finance permission has been revoked, rather than showing them a row of zeroes.
+
+**Verified through the production build (3 new checks, 690 in total)** and **5 new tests (1,467 in total across 83 files)**: the figures, the graph, the links to the two pages the numbers come from, a month that cost more than it took shown as a negative, and nothing at all rendered for a reader who may not see the money.
 
 ### 22.7 What Phase 4 delivered
 

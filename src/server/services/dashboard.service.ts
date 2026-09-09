@@ -22,6 +22,7 @@ import { ForbiddenError } from '../api/errors'
 import { listAcademicGroups } from './academic-structure.service'
 import { collegeDateToStorage, todayInCollegeTimezone } from '../time/college-date'
 import { getMyAttendance } from './attendance.service'
+import { getFinanceSummary, type FinanceSummary } from './finance.service'
 import {
   percentageOf,
   buildQuickActions,
@@ -119,6 +120,12 @@ export interface AdminDashboardData {
   people: PeopleStatistics | null
   /** Present only when the administrator may view the audit log. */
   recentActivity: ActivityItem[] | null
+  /**
+   * The college's money: this month's collection and spending, what is still
+   * owed, and a year of both for the graph. Present only when the
+   * administrator may see the fee ledger and the finances.
+   */
+  finance: FinanceSummary | null
 
   quickActions: QuickActionDefinition[]
   upcomingModules: UpcomingModule[]
@@ -236,6 +243,14 @@ export async function getAdminDashboard(ctx: AuthContext): Promise<AdminDashboar
 
   const operations = await operationsFor(ctx, currentSession?.id ?? null)
 
+  // The money picture is the same summary the Finance page reads, so the two
+  // screens can never disagree about a figure. Skipped entirely for an
+  // administrator whose fee or finance permission has been revoked.
+  const finance =
+    ctx.permissions.has('finance.view') && ctx.permissions.has('fees.view')
+      ? await getFinanceSummary(ctx, { month: todayInCollegeTimezone(), months: 12 })
+      : null
+
   return {
     operations,
     today: todayInCollegeTimezone(),
@@ -249,6 +264,7 @@ export async function getAdminDashboard(ctx: AuthContext): Promise<AdminDashboar
     structure,
     people: { students, staff, studentsEnrolledThisSession },
     recentActivity,
+    finance,
     quickActions: buildQuickActions(ctx.permissions),
     upcomingModules: UPCOMING_MODULES,
   }

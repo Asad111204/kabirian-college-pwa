@@ -21,6 +21,7 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 const { FinanceScreen } = await import('@/features/finance/finance-screen')
 const { MoneyChart } = await import('@/features/finance/money-chart')
 const { DangerZone } = await import('@/features/admin/danger-zone')
+const { FinanceTiles } = await import('@/features/dashboard/finance-tiles')
 const { NAVIGATION } = await import('@/components/layout/nav-config')
 
 afterEach(() => {
@@ -143,6 +144,42 @@ describe('the graph', () => {
   it('says so when there is nothing to draw', () => {
     render(<MoneyChart history={[{ month: '2026-09-01', label: 'Sep 26', collectedPaisa: 0, spentPaisa: 0 }]} />)
     expect(screen.getByText(/Nothing has been collected or spent/)).toBeTruthy()
+  })
+})
+
+describe('the money on the dashboard', () => {
+  it('leads with what came in and what is still owed', () => {
+    render(<FinanceTiles finance={summary} />)
+    // The tile says it and the chart's legend says it again.
+    expect(screen.getAllByText('Fees collected').length).toBe(2)
+    expect(screen.getByText('Still owed')).toBeTruthy()
+    expect(screen.getByText('Rs 12,500')).toBeTruthy()
+    expect(screen.getByText(/2 vouchers overdue/)).toBeTruthy()
+  })
+
+  it('shows the spending, what is left over, and the year as a graph', () => {
+    render(<FinanceTiles finance={summary} />)
+    expect(screen.getAllByText('Spent').length).toBeGreaterThan(0)
+    expect(screen.getByText('Left over')).toBeTruthy()
+    expect(screen.getByRole('img').getAttribute('aria-label')).toMatch(/months/)
+    expect(screen.getByText('Where September 2026 went')).toBeTruthy()
+  })
+
+  it('links to the two pages the figures come from', () => {
+    render(<FinanceTiles finance={summary} />)
+    const links = screen.getAllByRole('link').map((a) => a.getAttribute('href'))
+    expect(links).toContain('/admin/fees')
+    expect(links).toContain('/admin/finance')
+  })
+
+  it('marks a month that cost more than it took', () => {
+    render(<FinanceTiles finance={{ ...summary, collectedPaisa: 100_000, netPaisa: -300_000 }} />)
+    expect(screen.getByText('−Rs 3,000')).toBeTruthy()
+  })
+
+  it('shows nothing at all to an administrator who may not see the money', () => {
+    const { container } = render(<FinanceTiles finance={null} />)
+    expect(container.textContent).toBe('')
   })
 })
 

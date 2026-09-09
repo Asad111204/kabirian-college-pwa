@@ -25,6 +25,7 @@ import { RecentActivity } from '@/features/dashboard/recent-activity'
 import { QuickActions } from '@/features/dashboard/quick-actions'
 import { UpcomingModules } from '@/features/dashboard/upcoming-modules'
 import { SessionTiles, TodayTiles } from '@/features/dashboard/operations-tiles'
+import { FinanceTiles } from '@/features/dashboard/finance-tiles'
 import { RefreshButton } from '@/features/dashboard/refresh-button'
 
 export const metadata: Metadata = { title: 'Dashboard' }
@@ -131,6 +132,7 @@ export default async function AdminDashboardPage() {
 
       <TodayTiles operations={data.operations} today={data.today} />
       <SessionTiles operations={data.operations} sessionName={currentSession?.name ?? null} />
+      <FinanceTiles finance={data.finance} />
 
       {/* ---------------------------------------------------------------- */}
       {/* Academic building blocks                                          */}
