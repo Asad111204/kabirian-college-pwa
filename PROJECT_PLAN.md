@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | **Phase 26 complete: finance and permanent deletion. Every phase of the roadmap and every one of the college's own requests (§23A) is now built.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Everything is live on Neon (seventeen migrations, zero drift). The office now records what the college spends, sees it against what the fees brought in with a hand-drawn graph of the year — on the Finance page and on the dashboard itself — and can erase a record for good, but only when nothing at all refers to it. |
-| **Last updated** | 2026-09-10 (rev. 44 — Phase 26 complete; the roadmap is finished) |
+| **Status** | **Phase 27 complete: notifications, a complaint thread that keeps itself current, a printable fee voucher, and Payments at the top of the dashboard.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Everything through Phase 26 is live on Neon (seventeen migrations, zero drift); the original roadmap and all sixteen of the college's own requests (§23A) are built. Every portal now carries a bell with a count, a red dot on the button each unread thing belongs to, and a number on the home-screen icon. **The Phase 27 migration is written and tested but not yet applied to Neon; it awaits the go-ahead.** |
+| **Last updated** | 2026-09-11 (rev. 45 — Phase 27: notifications, chat, printable voucher) |
 | **Companion docs** | [DECISIONS.md](DECISIONS.md) · [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) · [README.md](README.md) |
 
 ---
@@ -738,7 +738,7 @@ Everything else in §20 will proceed on the stated defaults.
 
 ## 22. Progress tracker
 
-**Current phase:** 26 — complete and live on Neon. **This was the last phase: the original roadmap (§20) and all sixteen of the college's own requests (§23A) are built.**
+**Current phase:** 27 — complete, apart from the Neon migration, which is waiting for the go-ahead. The original roadmap (§20) and all sixteen of the college's own requests (§23A) were finished at Phase 26; this and anything after it are asked for as the college uses the system.
 
 | Phase | Status | Notes |
 |---|---|---|
@@ -769,6 +769,7 @@ Everything else in §20 will proceed on the stated defaults.
 | 24 | ✅ Done (2026-09-09) | A staff member who is also an admin; live on Neon (fifteen migrations, zero drift) |
 | 25 | ✅ Done (2026-09-10) | Fees; live on Neon (sixteen migrations, zero drift) |
 | 26 | ✅ Done (2026-09-10) | Finance and permanent deletion; live on Neon (seventeen migrations, zero drift) |
+| 27 | ✅ Done (2026-09-11) | Notifications, complaint thread that refreshes itself, printable fee voucher, Payments first on the dashboard; migration written, not yet on Neon |
 
 **Live database:** the college's Neon PostgreSQL instance is connected and holds the real academic structure (2026-27, 20 groups, 20 sections). All **ten** migrations are applied to it, along with the reference data (12 designations, 10 departments, **8 document types**, and the confirmed **grading scale**).
 
@@ -2030,6 +2031,30 @@ The dashboard now opens with five figures for the month — **fees collected, st
 It reads the **same summary the Finance page reads** rather than counting anything again, so the two screens cannot disagree about a figure. The whole block is absent for an administrator whose fee or finance permission has been revoked, rather than showing them a row of zeroes.
 
 **Verified through the production build (3 new checks, 690 in total)** and **5 new tests (1,467 in total across 83 files)**: the figures, the graph, the links to the two pages the numbers come from, a month that cost more than it took shown as a negative, and nothing at all rendered for a reader who may not see the money.
+
+### 22.56 Phase 27, notifications and three things asked with them (2026-09-11)
+
+Four things, asked together once the college had the whole system in front of it.
+
+**Notifications, in every portal.** A bell in the top bar with what is unread behind it, a **red dot on the button** each unread thing belongs to, a **number on the home-screen icon**, and a page listing everything. Opening a page clears that part of the college and the dot goes; opening one notification clears just that one; "mark all read" empties it.
+
+The college is told about the things that matter: a **notice** published to the audience it was addressed to, an **event** published or cancelled, **homework** set for the section it was set for, a **date sheet** published to the classes sitting it, a **result** published to the students whose own result it is, an **application** to the office and its answer back to the student, and a **fee voucher** to the family it belongs to. Nobody is told about their own action, and nobody is told about something they could not open.
+
+**How it works (ADR-176).** One row per person per thing, written the moment it happens. Read state then belongs to each person rather than being shared, and a student admitted next week does not open the app to a wall of last week's news. Recipients are worked out on the server from the facts the module already had. A CHECK constraint keeps every link a path inside this app, and every link lands on a page that checks permission for itself: a notification is a nudge, never a way round a rule. Writing one can never break the thing it announces.
+
+**The complaint thread keeps itself current.** While an application is open and the tab is being looked at, it refreshes every five seconds, so a reply typed at the other end appears without anybody pressing anything. It is a poll, not a socket, and the reason is money: there is no push service and no socket in this deployment because neither is free to run. The count in the bell refreshes the same way, once a minute, and not at all while the tab is in the background.
+
+**The fee voucher prints.** Three copies on one A4 sheet — bank, college, student — each with the voucher number, the month, the due date, the student, the fee, the concession, any late fine, and what is payable, with a line for each signature. Saved as a PDF by the browser's own print dialogue, exactly as the result card has been since Phase 9: no PDF library and no headless browser, both of which were ruled out at the start.
+
+**Payments first on the dashboard.** The money section is renamed from "Money" to **Payments** and moved to the top, above today's registers.
+
+**Data:** one enum and one table, `notifications` — migration `20260911090000_notifications`. **Written, tested against a throwaway PostgreSQL, and not yet applied to Neon: it is waiting for the go-ahead.**
+
+**Verified through the production build (40 new checks, all passing, alongside the 690 existing — 730 in total)**: homework told the section and not the teacher who set it nor another section; an application told the office and the answer told the student, each linked to their own copy; a notice told the students it was addressed to, told nobody while it was a draft, and never told the staff; marking one read took one off the count and marking it twice changed nothing; opening a page cleared that part and left the rest; a path that would leave the site was refused; one person's count was never another's; and the voucher printed three copies, opened for the office and the family, and was refused to another student and to a teacher.
+
+**Tests: 27 new** — which button wears a dot, what the app icon says, where a notification may lead, the bell and its list, the dots in the menu, and the printed voucher. **1,494 in total across 85 files.**
+
+**Two real bugs found on the way, both in this phase's own work.** The unread counts were first read with a grouped query, which through the driver adapter bound its parameters wrongly and turned the whole dashboard into a **500 — but only for somebody who actually had notifications waiting**, which is why it survived the first pass and was caught by the two-portal account in the harness. Counting the rows instead is the same work at this size and cannot fail that way. And a malformed reply from the summary endpoint would have replaced the count on screen and crashed every signed-in page; only a well-formed summary is now allowed to. The harness itself learned to print unhandled server errors, which is how the first one was found at all.
 
 ### 22.7 What Phase 4 delivered
 

@@ -182,6 +182,15 @@ try {
   }
 
   const errors = nextLog.join('').split('\n').filter((l) => /"level":"error"/.test(l))
+  // Anything the framework itself threw: a server component that fails
+  // does not go through the app's logger, so it would otherwise be
+  // invisible here and a 500 would have no explanation.
+  const thrown = nextLog.join('').split('\n').filter((l) => /Error:|at async |TypeError/.test(l))
+  if (thrown.length > 0) {
+    console.log('\nunhandled server errors:')
+    for (const line of thrown.slice(0, 25)) console.log(`  ${line}`)
+  }
+
   console.log(`\nserver log errors: ${errors.length}${errors.length ? ' (storage errors are unexpected with the in-memory provider)' : ''}`)
 
   if (args.has('--keep')) {

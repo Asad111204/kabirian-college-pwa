@@ -60,12 +60,27 @@ const shellUser = (over: Partial<React.ComponentProps<typeof AppShell>['user']> 
 /** Nothing unread: this file is about portals, not notifications. */
 const quiet = { total: 0, byKind: {}, latest: [] }
 
+/**
+ * The shell asks the server what has been read the moment it renders. That
+ * call must answer, or the provider throws and nothing renders at all; the
+ * portal switch is what this file is actually about.
+ */
+function answerNotifications() {
+  post.mockImplementation((path: string) =>
+    Promise.resolve(path.startsWith('/api/v1/notifications') ? quiet : { role: 'ADMIN', path: '/admin' }),
+  )
+}
+
+/** The switch call, wherever it landed among the notification chatter. */
+const switchCall = () => post.mock.calls.find((call) => String(call[0]).includes('switch-portal'))
+
 async function openMenu(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: /Account: Sara Khan/ }))
 }
 
 describe('the switcher in the user menu', () => {
   it('is not there for an account with one portal', async () => {
+    answerNotifications()
     const user = userEvent.setup()
     render(
       <AppShell user={shellUser()} collegeName="Kabirian College" notifications={quiet}>
@@ -77,6 +92,7 @@ describe('the switcher in the user menu', () => {
   })
 
   it('offers the other portal, and never the one they are in', async () => {
+    answerNotifications()
     const user = userEvent.setup()
     render(
       <AppShell user={shellUser({ portals: ['STAFF', 'ADMIN'] })} collegeName="Kabirian College" notifications={quiet}>
@@ -89,7 +105,7 @@ describe('the switcher in the user menu', () => {
   })
 
   it('moves the session through the API, then follows where the server sends them', async () => {
-    post.mockResolvedValue({ role: 'ADMIN', path: '/admin' })
+    answerNotifications()
     const user = userEvent.setup()
     render(
       <AppShell user={shellUser({ portals: ['STAFF', 'ADMIN'] })} collegeName="Kabirian College" notifications={quiet}>
@@ -99,13 +115,13 @@ describe('the switcher in the user menu', () => {
     await openMenu(user)
     await user.click(screen.getByRole('menuitem', { name: /Switch to the office portal/ }))
 
-    await waitFor(() => expect(post).toHaveBeenCalledTimes(1))
-    expect(post.mock.calls[0]![0]).toBe('/api/v1/auth/switch-portal')
-    expect(post.mock.calls[0]![1]).toEqual({ role: 'ADMIN' })
+    await waitFor(() => expect(switchCall()).toBeDefined())
+    expect(switchCall()![1]).toEqual({ role: 'ADMIN' })
     await waitFor(() => expect(push).toHaveBeenCalledWith('/admin'))
   })
 
   it('shows the portal they are in, not the account’s own role', async () => {
+    answerNotifications()
     const user = userEvent.setup()
     render(
       <AppShell user={shellUser({ role: 'ADMIN', portals: ['STAFF', 'ADMIN'] })} collegeName="Kabirian College" notifications={quiet}>

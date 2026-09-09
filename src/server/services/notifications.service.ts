@@ -204,8 +204,17 @@ function toView(row: {
 
 /** What is unread, and the newest few. Read on every page load, so it is two queries. */
 export async function getNotificationSummary(ctx: AuthContext): Promise<NotificationSummary> {
-  const [grouped, latest] = await Promise.all([
-    prisma.notification.groupBy({ by: ['kind'], where: { userId: ctx.userId, readAt: null }, _count: { _all: true } }),
+  const [unread, latest] = await Promise.all([
+    // Counted by reading the kinds rather than with a GROUP BY. What one
+    // person has not read is a handful of rows, so the tally is the same
+    // work either way — and `groupBy` through the driver adapter was seen to
+    // bind its parameters wrongly against this database, which turned the
+    // dashboard into a 500 for anybody who had notifications waiting.
+    prisma.notification.findMany({
+      where: { userId: ctx.userId, readAt: null },
+      select: { kind: true },
+      take: 500,
+    }),
     prisma.notification.findMany({
       where: { userId: ctx.userId },
       orderBy: [{ readAt: 'asc' }, { createdAt: 'desc' }],
@@ -215,7 +224,10 @@ export async function getNotificationSummary(ctx: AuthContext): Promise<Notifica
   ])
 
   const byKind: UnreadByKind = {}
-  for (const row of grouped) byKind[row.kind as NotificationKindValue] = row._count._all
+  for (const row of unread) {
+    const kind = row.kind as NotificationKindValue
+    byKind[kind] = (byKind[kind] ?? 0) + 1
+  }
 
   return { total: totalUnread(byKind), byKind, latest: latest.map(toView) }
 }

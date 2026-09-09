@@ -25,6 +25,20 @@ export interface NotificationSummaryView {
  */
 const POLL_MS = 60_000
 
+/**
+ * Only a well-formed summary is allowed to replace the one on screen.
+ *
+ * The count sits in the shell of every signed-in page, so a reply that is not
+ * the shape we expect — an old service worker answering from its cache, a
+ * proxy returning something else — must be ignored rather than allowed to
+ * take the whole page down with it.
+ */
+function isSummary(value: unknown): value is NotificationSummaryView {
+  if (typeof value !== 'object' || value === null) return false
+  const candidate = value as Partial<NotificationSummaryView>
+  return typeof candidate.total === 'number' && typeof candidate.byKind === 'object' && Array.isArray(candidate.latest)
+}
+
 const Context = React.createContext<{
   summary: NotificationSummaryView
   refresh: () => Promise<void>
@@ -38,7 +52,8 @@ export function NotificationProvider({ initial, children }: { initial: Notificat
 
   const refresh = React.useCallback(async () => {
     try {
-      setSummary(await api.get<NotificationSummaryView>('/api/v1/notifications/summary'))
+      const next = await api.get<NotificationSummaryView>('/api/v1/notifications/summary')
+      if (isSummary(next)) setSummary(next)
     } catch {
       // A failed poll is not worth telling anybody about; the next one will do.
     }
@@ -46,7 +61,8 @@ export function NotificationProvider({ initial, children }: { initial: Notificat
 
   const markRead = React.useCallback(async (id: string) => {
     try {
-      setSummary(await api.post<NotificationSummaryView>(`/api/v1/notifications/${id}/read`))
+      const next = await api.post<NotificationSummaryView>(`/api/v1/notifications/${id}/read`)
+      if (isSummary(next)) setSummary(next)
     } catch {
       /* the list will catch up on the next poll */
     }
@@ -91,7 +107,7 @@ export function NotificationProvider({ initial, children }: { initial: Notificat
     void api
       .post<NotificationSummaryView>('/api/v1/notifications/seen', { path: pathname })
       .then((next) => {
-        if (!cancelled) setSummary(next)
+        if (!cancelled && isSummary(next)) setSummary(next)
       })
       .catch(() => undefined)
     return () => {

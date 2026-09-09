@@ -869,6 +869,38 @@ The confirmation is the record's own code or username, never the word
 "delete", so it cannot be typed without looking at which record is open
 (ADR-175).
 
+
+## 8D. Notifications (Phase 27)
+
+### `notifications` - one row per person per thing they have not looked at
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| user_id | uuid | FK -> users `ON DELETE CASCADE` |
+| kind | enum `notification_kind` | `NOTICE`, `EVENT`, `HOMEWORK`, `EXAM`, `RESULT`, `COMPLAINT`, `FEE` |
+| title | varchar(160) | one line, as it appears in the list |
+| body | varchar(400) | a little more, when there is more worth saying |
+| link | varchar(300) | where it takes the reader |
+| entity_type / entity_id | varchar / uuid | what it is about |
+| read_at | timestamptz | null until it has been looked at |
+| created_at | timestamptz | |
+
+A CHECK constraint, `notifications_link_is_internal`, keeps every link a path
+inside this app: `LIKE '/%'` and `NOT LIKE '//%'`. Nothing that arrives in a
+notification can send anybody to another site. Indexes on
+`(user_id, read_at, created_at DESC)` and `(user_id, kind, read_at)` answer the
+two questions asked on every page load: what is unread, and what is unread in
+this part of the college.
+
+Rows are written by **fan-out** at the moment something happens, so a notice
+published to four hundred students is four hundred rows. That is deliberate:
+read state belongs to each person rather than being shared, and somebody
+admitted next week is not shown last week's news as if it were new. They
+cascade with the account, because a notification is a nudge, not history.
+
+The kind is the *module* rather than the exact event, because it is also what
+decides which button in the menu wears a red dot (ADR-176).
+
 ---
 
 ## 9. System

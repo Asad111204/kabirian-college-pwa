@@ -2973,3 +2973,31 @@ Nothing about income is stored a second time. The summary reads the fee payments
 The migration was applied to Neon on 2026-09-10 (seventeen migrations, zero drift), with the table and both CHECK constraints confirmed on the live database.
 
 **Amendment, same day.** The college asked for the money to be on the **admin dashboard** as well, not only on its own page. It reads the *same* summary the Finance page reads rather than counting anything again, so the two screens cannot disagree about a figure: fees collected, still owed, billed, spent, left over, the year drawn month by month, and where this month's spending went. “Still owed” is emphasised whenever anything is owing and links straight to the overdue vouchers, because that is the number the office acts on. The whole block is absent for an administrator whose fee or finance permission has been revoked, rather than showing them zeroes.
+
+---
+
+## ADR-176 · Notifications by fan-out, dots by module, and two things that poll because pushing them would cost money
+
+**Status:** Accepted · 2026-09-11 · Phase 27
+
+**Context.** The college asked for four things at once: **notifications** in every portal for anything that happens, with a count on the app icon and a red dot on the button each one belongs to, cleared when it is read; **real-time chat** in complaints; a **printable fee voucher**; and the money moved to the top of the dashboard under the name *Payments*.
+
+**Notifications are written by fan-out.** One row per person per thing, at the moment it happens. A notice published to four hundred students is four hundred rows, and that is the point: read state then belongs to each person rather than being shared, and a student admitted next week does not open the app to a wall of last week's news marked unread. The alternative — remembering when each person last looked at each module — is cheaper to write and cannot answer "mark *this one* read", which is exactly what was asked for.
+
+**The kind is the module, not the event.** A new notice and an edited notice are both "Notices" to somebody looking at the sidebar, and the kind is what decides which button wears a dot. Opening that page marks everything of that kind read, which is what takes the dot off. That is one endpoint — "I have just opened this page" — and the server maps the path to the kinds that live under it, so the browser never decides what counts as read.
+
+**Recipients are worked out on the server from the facts the module already had**: the section a piece of homework was set for, the audience a notice was addressed to, the student a voucher belongs to. Nobody is ever told about something they could not open. And a notification is a nudge, never a way round a permission — every link lands on a page that checks for itself, and a CHECK constraint keeps every link a path inside this app so one can never lead off the site.
+
+**Writing a notification can never break the thing it announces.** `notify` swallows its own failures and logs them: a notice that published correctly must not fail because a nudge could not be written.
+
+**Two things poll, and the reason is money.** There is no push service and no socket in this deployment, because neither is free to run. So the count refreshes every sixty seconds and **only while the tab is being looked at**, and an open complaint refreshes every five, again only while visible and only while the application is still open. That is honest about what it is: near-instant in practice, no infrastructure, nothing to pay for. The number on the **home-screen icon** uses the browser's own Badging API, which costs nothing and needs no server.
+
+**The voucher is a document the browser saves as a PDF**, exactly as the result card has been since Phase 9. Three copies on one A4 sheet — bank, college, student — which is how a fee voucher is used here. No PDF library and no headless browser: both were ruled out at the start, and the print pipeline already existed.
+
+**Alternatives.** *Web Push with VAPID* — free, but it needs a subscription store, key management and a service-worker path for every portal; worth doing when the college asks for notifications on a closed phone, not before. *Server-sent events* — one held-open function invocation per reader on a platform that bills by invocation. *A PDF library* — a dependency and a bundle for something the browser already does well.
+
+**Consequences.** Through the production build: homework told the section it was set for and not the teacher who set it, nor a student in another section; an application told the office and the answer told the student, each with a link to their own copy; a notice told the students it was addressed to and not the staff, and told nobody while it was still a draft; marking one read took one off the count and marking it twice changed nothing; opening a page cleared that part of the college and left the rest; a path that would leave the site was refused; one person's count was never another's. The voucher printed three copies with the figures on each, opened for the office and the family, and was refused to another student and to a teacher. Forty checks.
+
+**One real bug found on the way, in this phase's own work.** The unread counts were first read with `prisma.groupBy`, which through the driver adapter bound its parameters wrongly and turned the whole dashboard into a 500 — but *only* for somebody who actually had notifications waiting, which is why it survived the first pass and was caught by the two-portal account in the harness. Counting the rows instead is the same work at this size and has no such failure mode. A second, quieter one: a malformed reply from the summary endpoint would have replaced the count on screen and crashed every signed-in page, so only a well-formed summary is now allowed to.
+
+The migration is written and was **not** applied to Neon in this phase.
