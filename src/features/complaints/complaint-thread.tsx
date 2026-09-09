@@ -37,6 +37,42 @@ export function ComplaintThread({ complaint: initial }: { complaint: ComplaintDe
     setComplaint(initial)
   }
 
+  /**
+   * The exchange keeps itself up to date while it is open.
+   *
+   * Every five seconds, and only while the tab is being looked at and the
+   * application is still open. There is no socket and no push service in this
+   * deployment — neither is free to run — so this is a poll, deliberately a
+   * small one: one row and its messages, and nothing at all in the background.
+   * A reply typed at the other end appears without anybody pressing refresh.
+   */
+  const open = complaint.status === 'SUBMITTED' || complaint.status === 'IN_REVIEW'
+  React.useEffect(() => {
+    if (!open) return
+    let stopped = false
+
+    const poll = async () => {
+      if (document.visibilityState !== 'visible') return
+      try {
+        const next = await api.get<ComplaintDetail>(`/api/v1/complaints/${initial.id}`)
+        // Never overwrite what somebody is in the middle of doing: the reply
+        // box lives in its own state, and only the record itself is replaced.
+        if (!stopped) setComplaint(next)
+      } catch {
+        // Offline, or the application was just closed. The next tick will do.
+      }
+    }
+
+    const onVisible = () => void poll()
+    const timer = setInterval(onVisible, 5000)
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      stopped = true
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [initial.id, open])
+
   async function run(what: () => Promise<ComplaintDetail>, done: string) {
     setBusy(true)
     setError(null)
