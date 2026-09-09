@@ -17,11 +17,21 @@
  *   gender (MALE/FEMALE/OTHER), date_of_birth, phone, email, address, city,
  *   cnic_bform, father_cnic, father_phone, father_occupation, mother_name,
  *   guardian_name, guardian_relation, guardian_phone, previous_institution,
- *   previous_result, previous_obtained, previous_total, matric_roll, matric_board, notes
+ *   previous_result, previous_obtained, previous_total, matric_roll, matric_board, notes,
+ *   username (only with --accounts; otherwise one is made from the name)
  *
- * The password is asked for on the terminal and never written anywhere.
+ * The administrator's password is asked for on the terminal and never written
+ * anywhere.
+ *
+ * With `--accounts` every student also gets a portal login. The application
+ * generates each temporary password — this script never invents one — and the
+ * student must change it at first sign-in. The passwords come back once and
+ * once only, so they are written to a file (`--accounts-out`, by default
+ * `student-logins.csv`) for the office to hand out. They are never printed on
+ * the terminal, and that file is ignored by git: it should be printed, given
+ * out, and then deleted.
  */
-import { readFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { createInterface } from 'node:readline/promises'
 import { stdin, stdout } from 'node:process'
 import { studentCreateSchema } from '../src/validation/students'
@@ -74,12 +84,34 @@ interface OptionGroup {
 
 const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ')
 
+/**
+ * A username from a name, the same way the admission form suggests one:
+ * "Muhammad Ali" becomes "muhammad.ali".
+ *
+ * Two students can perfectly well share a name, so the caller adds the
+ * admission number when this one is already spoken for.
+ */
+function suggestUsername(fullName: string): string {
+  return fullName
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[^a-z0-9\s]/g, '')
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .join('.')
+}
+
+const csvCell = (value: string) => (/[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value)
+
 async function main() {
   const file = argValue('--file')
   const url = (argValue('--url') ?? 'http://localhost:3000').replace(/\/$/, '')
   const apply = process.argv.includes('--apply')
+  const accounts = process.argv.includes('--accounts')
+  const accountsOut = argValue('--accounts-out') ?? 'student-logins.csv'
   if (!file) {
-    console.error('\nGive the CSV: --file students.csv [--url https://…] [--apply]\n')
+    console.error('\nGive the CSV: --file students.csv [--url https://…] [--accounts] [--apply]\n')
     process.exit(1)
   }
 
@@ -130,6 +162,10 @@ async function main() {
   let ok = 0
   let bad = 0
   const problems: string[] = []
+  /** Usernames this run has spent, so two rows never ask for the same one. */
+  const usedUsernames = new Set<string>()
+  /** Header plus one line per login; written to disk, never to the terminal. */
+  const logins: string[] = ['full_name,admission_number,student_code,class,section,username,temporary_password']
   for (let i = 0; i < rows.length; i++) {
     const line = i + 2
     const record: Record<string, string> = {}
@@ -150,35 +186,91 @@ async function main() {
       continue
     }
 
-    const input: Record<string, unknown> = {
+    const base: Record<string, unknown> = {
       admissionDate: record.admission_date || new Date().toISOString().slice(0, 10),
       enrollment: { academicSessionId: current.id, classId: group.classId, divisionId: group.divisionId, programId: group.programId, sectionId: section.id, rollNumber: record.roll_number ?? '' },
       createAccount: false,
     }
     for (const [column, field] of Object.entries(COLUMN_TO_FIELD)) {
-      if (column in record && record[column] !== '' && field !== 'rollNumber' && field !== 'admissionDate') input[field] = record[column]
+      if (column in record && record[column] !== '' && field !== 'rollNumber' && field !== 'admissionDate') base[field] = record[column]
     }
-    if (record.gender) input.gender = record.gender.toUpperCase()
+    if (record.gender) base.gender = record.gender.toUpperCase()
 
-    const parsed = studentCreateSchema.safeParse(input)
-    if (!parsed.success) {
-      bad += 1
-      problems.push(`line ${line} (${record.full_name}): ${parsed.error.issues.map((x) => `${x.path.join('.')}: ${x.message}`).join('; ')}`)
-      continue
+    // Names repeat, so a username taken by an earlier row falls back to one
+    // with the admission number in it — which is unique by definition.
+    const candidates: string[] = []
+    if (accounts) {
+      const given = (record.username ?? '').trim().toLowerCase()
+      const number = (record.admission_number ?? '').replace(/[^A-Za-z0-9]/g, '')
+      const stem = given || suggestUsername(record.full_name ?? '') || `student${number}`
+      for (const candidate of [stem, `${stem}.${number || line}`, `${stem}.${number || line}.2`]) {
+        if (candidate.length >= 3 && !usedUsernames.has(candidate)) candidates.push(candidate)
+      }
+      if (candidates.length === 0) {
+        bad += 1
+        problems.push(`line ${line} (${record.full_name}): could not make a username from this name`)
+        continue
+      }
     }
 
-    if (!apply) {
-      ok += 1
-      continue
+    let created = false
+    let lastProblem = ''
+    for (const username of accounts ? candidates : ['']) {
+      const input = accounts ? { ...base, createAccount: true, username } : base
+
+      const parsed = studentCreateSchema.safeParse(input)
+      if (!parsed.success) {
+        lastProblem = parsed.error.issues.map((x) => `${x.path.join('.')}: ${x.message}`).join('; ')
+        break
+      }
+
+      if (!apply) {
+        created = true
+        if (accounts) usedUsernames.add(username)
+        break
+      }
+
+      const res = await fetch(`${url}/api/v1/students`, { method: 'POST', headers, body: JSON.stringify(parsed.data) })
+      const body = (await res.json()) as {
+        data?: { student?: { studentCode?: string }; account?: { username: string; temporaryPassword: string } }
+        error?: { message?: string; fields?: Record<string, string[]> }
+      }
+
+      if (res.ok) {
+        created = true
+        console.log(`  created ${record.full_name} → ${body.data?.student?.studentCode ?? 'ok'}${body.data?.account ? ` · ${body.data.account.username}` : ''}`)
+        if (body.data?.account) {
+          usedUsernames.add(body.data.account.username)
+          // The one and only time this password exists in readable form.
+          logins.push(
+            [
+              record.full_name ?? '',
+              record.admission_number ?? '',
+              body.data.student?.studentCode ?? '',
+              `${record.class ?? ''} ${record.division ?? ''} ${record.program ?? ''}`.trim(),
+              record.section ?? '',
+              body.data.account.username,
+              body.data.account.temporaryPassword,
+            ]
+              .map(csvCell)
+              .join(','),
+          )
+        }
+        break
+      }
+
+      lastProblem = `${body.error?.message ?? res.status}${body.error?.fields ? ' ' + JSON.stringify(body.error.fields) : ''}`
+      // Only a clash of usernames is worth another go; anything else is the
+      // row itself and would fail again identically.
+      if (!body.error?.fields?.username) break
+      usedUsernames.add(username)
     }
-    const res = await fetch(`${url}/api/v1/students`, { method: 'POST', headers, body: JSON.stringify(parsed.data) })
-    const body = (await res.json()) as { data?: { student?: { studentCode?: string } }; error?: { message?: string; fields?: Record<string, string[]> } }
-    if (res.ok) {
+
+    if (created) {
       ok += 1
-      console.log(`  created ${record.full_name} → ${body.data?.student?.studentCode ?? 'ok'}`)
     } else {
       bad += 1
-      problems.push(`line ${line} (${record.full_name}): ${body.error?.message ?? res.status}${body.error?.fields ? ' ' + JSON.stringify(body.error.fields) : ''}`)
+      problems.push(`line ${line} (${record.full_name}): ${lastProblem}`)
     }
   }
 
@@ -186,6 +278,13 @@ async function main() {
   if (problems.length > 0) {
     console.log('\nProblems:')
     for (const p of problems) console.log(`  - ${p}`)
+  }
+
+  if (logins.length > 1) {
+    writeFileSync(accountsOut, logins.join('\n') + '\n', { encoding: 'utf8', mode: 0o600 })
+    console.log(`\n${logins.length - 1} portal logins written to ${accountsOut}.`)
+    console.log('  Every one must be changed by the student at first sign-in.')
+    console.log('  That file holds passwords in readable form: print it, hand the slips out, then delete it.')
   }
   console.log('')
   // Let the process end on its own: process.exit() here trips a libuv

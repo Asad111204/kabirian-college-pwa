@@ -69,3 +69,7 @@ Thumbs.db
 # students' B-Forms, CNICs and addresses, never committed
 /Old System data
 /old-students.csv
+
+# student portal logins made by the importer — passwords in readable form,
+# printed and handed out, then deleted. Never committed.
+/student-logins.csv
