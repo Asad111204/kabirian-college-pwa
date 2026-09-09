@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | **Phase 27 complete: notifications, a complaint thread that keeps itself current, a printable fee voucher, and Payments at the top of the dashboard.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Everything through Phase 26 is live on Neon (seventeen migrations, zero drift); the original roadmap and all sixteen of the college's own requests (§23A) are built. Every portal now carries a bell with a count, a red dot on the button each unread thing belongs to, and a number on the home-screen icon. **The Phase 27 migration is written and tested but not yet applied to Neon; it awaits the go-ahead.** |
+| **Status** | **Phase 27 complete: notifications, a complaint thread that keeps itself current, a printable fee voucher, and Payments at the top of the dashboard.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Everything is live on Neon (eighteen migrations, zero drift); the original roadmap and all sixteen of the college's own requests (§23A) are built. Every portal now carries a bell with a count, a red dot on the button each unread thing belongs to, and a number on the home-screen icon. |
 | **Last updated** | 2026-09-11 (rev. 45 — Phase 27: notifications, chat, printable voucher) |
 | **Companion docs** | [DECISIONS.md](DECISIONS.md) · [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) · [README.md](README.md) |
 
@@ -738,7 +738,7 @@ Everything else in §20 will proceed on the stated defaults.
 
 ## 22. Progress tracker
 
-**Current phase:** 27 — complete, apart from the Neon migration, which is waiting for the go-ahead. The original roadmap (§20) and all sixteen of the college's own requests (§23A) were finished at Phase 26; this and anything after it are asked for as the college uses the system.
+**Current phase:** 27 — complete and live on Neon. The original roadmap (§20) and all sixteen of the college's own requests (§23A) were finished at Phase 26; this and anything after it are asked for as the college uses the system.
 
 | Phase | Status | Notes |
 |---|---|---|
@@ -769,7 +769,7 @@ Everything else in §20 will proceed on the stated defaults.
 | 24 | ✅ Done (2026-09-09) | A staff member who is also an admin; live on Neon (fifteen migrations, zero drift) |
 | 25 | ✅ Done (2026-09-10) | Fees; live on Neon (sixteen migrations, zero drift) |
 | 26 | ✅ Done (2026-09-10) | Finance and permanent deletion; live on Neon (seventeen migrations, zero drift) |
-| 27 | ✅ Done (2026-09-11) | Notifications, complaint thread that refreshes itself, printable fee voucher, Payments first on the dashboard; migration written, not yet on Neon |
+| 27 | ✅ Done (2026-09-11) | Notifications, complaint thread that refreshes itself, printable fee voucher, Payments first on the dashboard; live on Neon (eighteen migrations, zero drift) |
 
 **Live database:** the college's Neon PostgreSQL instance is connected and holds the real academic structure (2026-27, 20 groups, 20 sections). All **ten** migrations are applied to it, along with the reference data (12 designations, 10 departments, **8 document types**, and the confirmed **grading scale**).
 
@@ -2048,7 +2048,7 @@ The college is told about the things that matter: a **notice** published to the 
 
 **Payments first on the dashboard.** The money section is renamed from "Money" to **Payments** and moved to the top, above today's registers.
 
-**Data:** one enum and one table, `notifications` — migration `20260911090000_notifications`. **Written, tested against a throwaway PostgreSQL, and not yet applied to Neon: it is waiting for the go-ahead.**
+**Data:** one enum and one table, `notifications` — migration `20260911090000_notifications`. Applied to Neon on 2026-09-11 (eighteen migrations, zero drift); the census before and after was identical, and the table, its two indexes, the seven kinds and the constraint that keeps every link inside the app were confirmed on the live database.
 
 **Verified through the production build (40 new checks, all passing, alongside the 690 existing — 730 in total)**: homework told the section and not the teacher who set it nor another section; an application told the office and the answer told the student, each linked to their own copy; a notice told the students it was addressed to, told nobody while it was a draft, and never told the staff; marking one read took one off the count and marking it twice changed nothing; opening a page cleared that part and left the rest; a path that would leave the site was refused; one person's count was never another's; and the voucher printed three copies, opened for the office and the family, and was refused to another student and to a teacher.
 

@@ -3000,4 +3000,4 @@ The migration was applied to Neon on 2026-09-10 (seventeen migrations, zero drif
 
 **One real bug found on the way, in this phase's own work.** The unread counts were first read with `prisma.groupBy`, which through the driver adapter bound its parameters wrongly and turned the whole dashboard into a 500 — but *only* for somebody who actually had notifications waiting, which is why it survived the first pass and was caught by the two-portal account in the harness. Counting the rows instead is the same work at this size and has no such failure mode. A second, quieter one: a malformed reply from the summary endpoint would have replaced the count on screen and crashed every signed-in page, so only a well-formed summary is now allowed to.
 
-The migration is written and was **not** applied to Neon in this phase.
+The migration was applied to Neon on 2026-09-11 (eighteen migrations, zero drift), with the table, its two indexes, the seven kinds and the internal-link constraint confirmed on the live database.
