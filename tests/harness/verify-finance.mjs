@@ -183,6 +183,17 @@ r = await get('admin', '/admin')
 check('the dashboard leads with the college’s money', r.status === 200 && r.text.includes('Fees collected') && r.text.includes('Still owed'), String(r.status))
 check('…with the spending and what is left over', r.text.includes('Spent') && r.text.includes('Left over'))
 check('…and the year drawn on it', r.text.includes('The year, month by month') && r.text.includes('<svg'))
+console.log('\nThe handbook\n' + '-'.repeat(52))
+r = await get('admin', '/admin/handbook')
+check('the handbook renders, cover to close', r.status === 200 && r.text.includes('Handbook') && r.text.includes('Contents'), String(r.status))
+check('…carrying the college’s own logo', /brand%2Flogo|brand\/logo/.test(r.text))
+check('…and explaining the money rules it keeps', r.text.includes('whole number of paisa') && r.text.includes('Rules the system keeps'))
+check('…with the print button kept off the paper', r.text.includes('print-hide') && r.text.includes('print-area'))
+for (const who of ['teacher', 'student', 'nobody']) {
+  r = await get(who, '/admin/handbook')
+  check(`${who} is sent away from the handbook`, r.status === 307, String(r.status))
+}
+
 r = await get('admin', `/admin/students/${ids.student}`)
 check('the student record explains why they cannot be erased', r.status === 200 && r.text.includes('Erase permanently'), String(r.status))
 r = await get('admin', `/admin/users/${ids.userB}`)

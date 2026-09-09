@@ -1,34 +1,50 @@
+import Image from 'next/image'
 import { cn } from '@/lib/cn'
 
 /**
- * College logo.
+ * The college's own logo.
  *
- * PLACEHOLDER: this draws the college initials in a rounded square. When the
- * official Kabirian College logo image is provided, drop it in
- * `public/brand/logo.svg` and replace the <svg> below with <Image ... /> —
- * nothing else in the application needs to change.
+ * Two assets, both trimmed from the file the college supplied and both
+ * transparent, so they sit correctly on the dark sidebar and on white paper:
+ *
+ *   brand/logo-mark.png      the shield alone, for small square placements
+ *   brand/logo-wordmark.png  the shield and the words, for a page header
+ *
+ * If the college ever sends a new logo, drop it in as
+ * `public/brand/college-logo.jpeg` and run `npx tsx scripts/prepare-logo.ts`.
+ * Nothing in the application needs to change.
  */
 export function Logo({ className, size = 36 }: { className?: string; size?: number }) {
   return (
-    <svg
+    <Image
+      src="/brand/logo-mark.png"
+      alt="Kabirian College"
       width={size}
       height={size}
-      viewBox="0 0 48 48"
-      role="img"
-      aria-label="Kabirian College logo"
-      className={cn('shrink-0', className)}
-    >
-      <rect width="48" height="48" rx="12" fill="currentColor" />
-      <path
-        d="M15 13v22M15 24l10-11M15 24l11 11"
-        stroke="white"
-        strokeWidth="3.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-      />
-      <circle cx="34" cy="24" r="3.4" fill="white" />
-    </svg>
+      // The shield is a little narrower than it is tall; letting the height
+      // lead keeps it the same visual weight as the square it replaced.
+      className={cn('h-auto w-auto shrink-0 object-contain', className)}
+      style={{ height: size, width: 'auto' }}
+      priority
+    />
+  )
+}
+
+/**
+ * The full logo: the shield and the college's words, as they were drawn.
+ *
+ * For a page header or a printed document, where there is room for it.
+ */
+export function LogoFull({ className, height = 48 }: { className?: string; height?: number }) {
+  return (
+    <Image
+      src="/brand/logo-wordmark.png"
+      alt="Kabirian College — inspiring minds, shaping future"
+      width={Math.round(height * (572 / 155))}
+      height={height}
+      className={cn('object-contain', className)}
+      priority
+    />
   )
 }
 

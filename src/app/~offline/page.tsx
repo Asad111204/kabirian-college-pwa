@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Logo } from '@/components/layout/logo'
+import { LogoFull } from '@/components/layout/logo'
 import { RetryButton } from '@/components/pwa/retry-button'
 
 export const metadata: Metadata = { title: 'Offline' }
@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic'
 export default function OfflinePage() {
   return (
     <main className="flex min-h-dvh flex-col items-center justify-center bg-background px-4 py-10 text-center">
-      <Logo size={48} className="text-primary" />
+      <LogoFull height={44} />
       <h1 className="mt-6 text-2xl font-semibold text-foreground">You are offline</h1>
       <p className="mt-2 max-w-sm text-sm text-foreground-muted">
         This page needs an internet connection. Attendance, marks, notices and every other record live on the

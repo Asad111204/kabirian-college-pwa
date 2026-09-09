@@ -101,6 +101,7 @@ export const NAVIGATION: Record<UserRole, NavSection[]> = {
       items: [
         { label: 'Reports', href: '/admin/reports', icon: FileText },
         { label: 'Audit Log', href: '/admin/audit', icon: ScrollText },
+        { label: 'Handbook', href: '/admin/handbook', icon: BookOpen },
         { label: 'Settings', href: '/admin/settings', icon: Settings },
       ],
     },

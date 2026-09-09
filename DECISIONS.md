@@ -3027,3 +3027,25 @@ The migration was applied to Neon on 2026-09-11 (eighteen migrations, zero drift
 **Consequences.** The migration **deletes** what the fee tables hold, because a monthly voucher cannot become an annual one. On the live database that was two test packages, one voucher for a student recorded as “testing as student” and one Rs 150 cash payment — listed row by row and shown to the college before anything ran. Through the production build: a fee set from three heads adding to the year with the concession off, and the office's own words kept for an "Others" line; another student charged tuition alone; a head the college does not charge, a line of nothing and an amount with an extra zero each refused, with the fee unchanged after every refusal; a dry run that wrote nothing, then a run issuing one voucher each with no due date, then the same run issuing nothing; the fee changed afterwards without rewriting the voucher already issued; two instalments, the first leaving exactly 24,500 and reporting 29% collected, the second settling it; a void putting it back to part paid; a voucher with no due date carrying no fine and never overdue; a cancelled voucher reissued; a family seeing only their own; and the admission form offering every head and the document checklist, and the staff form asking for a salary. Sixty-five checks.
 
 The migration is written and was **not** applied to Neon in this phase.
+
+---
+
+## ADR-178 · The handbook is a page in the app, and the logo is finally the college's own
+
+**Status:** Accepted · 2026-09-11 · Phase 29
+
+**Context.** The college asked for "a PDF file in which you can explain everything related to this application", with its logo in the header. Two constraints from the start of the project apply: no PDF library, and no headless browser.
+
+**Decision.** The handbook is a **page inside the app** that prints as a document, exactly as the result card has since Phase 9 and the fee voucher since Phase 27. The office opens Admin → Handbook and chooses "Save as PDF" in the browser's own print dialogue. No dependency, no build step, and — the part that matters more — **it is generated from the system, so reprinting it after a change gives an accurate copy** rather than a file that quietly goes stale in somebody's downloads folder.
+
+**Its words live in a separate file from its layout.** `handbook-content.ts` holds the parts — a summary, the paragraphs, where in the app it lives, the steps where there is a procedure, and the rules with the *reason* for each. A test reads that file and asserts the handbook still says what is true of the system: that fees are annual and paid in instalments, that money records are voided rather than edited, that there are no student submissions and no student timetable. If one of those decisions is ever reversed, the handbook fails its test rather than silently lying to whoever printed it.
+
+**Every rule is given with its reason.** "A voucher with money against it cannot be cancelled" on its own reads as an obstruction; with "it would leave the payment pointing at nothing" it reads as care. The office is more likely to follow a rule it understands, and more likely to notice when one is genuinely wrong.
+
+**The logo is now the college's own.** The file the college supplied on 31 August had been sitting in `public/brand/` unused for a fortnight while the app drew a placeholder monogram. It is a wordmark in a wide white field, so used directly it would appear as a postage stamp in a 32-pixel corner. `scripts/prepare-logo.ts` trims the white to transparency and writes two assets — the shield alone for small square placements, the shield and words for a page header — and the sign-in, change-password, switch-portal, not-found and offline pages now show the full logo where they have room for it. Re-run the script if the college sends a new file; nothing else changes.
+
+**Alternatives.** *A PDF committed to the repository* — stale the first time anything changes, and nobody would remember to regenerate it. *A PDF library* — a dependency and a bundle for something the browser already does. *A separate documentation site* — another thing to deploy and another password.
+
+**Consequences.** Through the production build: the handbook renders cover to close, carries the college's own logo, explains the money rules it keeps, and keeps the print button off the paper; a teacher, a student and a signed-out visitor are each sent away from it. Thirteen tests cover the cover, the contents, every part, the step lists, the rules, the page breaks and the print dialogue.
+
+**One gap in the harness closed on the way.** A verifier that crashes while loading prints a stack and no checks, and the run then ended looking calm with only the exit code disagreeing — which is how a whole file went missing from a run unnoticed while this phase was being built. The harness now says "All steps passed" or names how many failed.

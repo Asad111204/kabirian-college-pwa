@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import { getAuthContext, portalPathForRole } from '@/server/auth/context'
 import { env } from '@/server/config/env'
-import { Logo } from '@/components/layout/logo'
+import { LogoFull } from '@/components/layout/logo'
 import { OfflineBanner } from '@/components/pwa/offline-banner'
 import { LoginForm } from './login-form'
 
@@ -17,7 +17,7 @@ export default async function LoginPage() {
     <main className="flex min-h-dvh flex-col items-center justify-center bg-background px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center text-center">
-          <Logo size={56} className="text-primary" />
+          <LogoFull height={56} />
           <h1 className="mt-4 text-xl font-semibold text-foreground">{env.APP_COLLEGE_NAME}</h1>
           <p className="mt-1 text-sm text-foreground-muted">Management System</p>
         </div>

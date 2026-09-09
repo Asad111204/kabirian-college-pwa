@@ -202,5 +202,15 @@ try {
   failures += 1
 }
 
+// Say it out loud. A verifier that crashes on load prints its stack and
+// then nothing else; without this line the run ends looking calm and only
+// the exit code disagrees, which is how a whole file once went missing from
+// a run unnoticed.
+if (failures > 0) {
+  console.log(`\n${failures} step${failures === 1 ? '' : 's'} FAILED. Scroll up: a step that crashed on load prints a stack instead of checks.`)
+} else {
+  console.log('\nAll steps passed.')
+}
+
 process.exitCode = failures > 0 ? 1 : 0
 process.exit()

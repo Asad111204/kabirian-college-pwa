@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | **Phase 28 complete: the fee is annual, made of optional heads, and paid in instalments.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Everything through Phase 27 is live on Neon (eighteen migrations, zero drift). The college charges one fee per student per year, built from tuition, annual funds, events, board registration, board admission, a tour and anything else, all optional and all set at admission; families pay whenever they can, and a printed voucher shows only what has been paid and what is left. Documents are attached at the counter, and a salary is recorded when staff are added. **The Phase 28 migration is written and tested but not yet applied to Neon; it awaits the go-ahead.** |
-| **Last updated** | 2026-09-11 (rev. 46 — Phase 28: annual fees by head) |
+| **Status** | **Phase 28 complete: the fee is annual, made of optional heads, and paid in instalments.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Everything through Phase 27 is live on Neon (eighteen migrations, zero drift). The college charges one fee per student per year, built from tuition, annual funds, events, board registration, board admission, a tour and anything else, all optional and all set at admission; families pay whenever they can, and a printed voucher shows only what has been paid and what is left. Documents are attached at the counter, and a salary is recorded when staff are added. The college now has a printable **handbook** covering every part of the system, and the app finally shows the college's own logo rather than a placeholder. **The Phase 28 migration is written and tested but not yet applied to Neon; it awaits the go-ahead.** |
+| **Last updated** | 2026-09-11 (rev. 47 — Phase 29: the handbook, and the real logo) |
 | **Companion docs** | [DECISIONS.md](DECISIONS.md) · [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) · [README.md](README.md) |
 
 ---
@@ -771,6 +771,7 @@ Everything else in §20 will proceed on the stated defaults.
 | 26 | ✅ Done (2026-09-10) | Finance and permanent deletion; live on Neon (seventeen migrations, zero drift) |
 | 27 | ✅ Done (2026-09-11) | Notifications, complaint thread that refreshes itself, printable fee voucher, Payments first on the dashboard; live on Neon (eighteen migrations, zero drift) |
 | 28 | ✅ Done (2026-09-11) | Annual fee by head, set at admission with documents and a staff salary; migration written, not yet on Neon |
+| 29 | ✅ Done (2026-09-11) | A printable handbook covering the whole system, and the college's real logo throughout |
 
 **Live database:** the college's Neon PostgreSQL instance is connected and holds the real academic structure (2026-27, 20 groups, 20 sections). All **ten** migrations are applied to it, along with the reference data (12 designations, 10 departments, **8 document types**, and the confirmed **grading scale**).
 
@@ -2078,6 +2079,22 @@ The college looked at the finished fee module and corrected the assumption under
 **Verified through the production build (65 fee checks, all passing, alongside the rest — 731 in total)**: a fee set from three heads adding to the year with the concession off, keeping the office's own words for the "Others" line; another student charged tuition alone; a head the college does not charge, a line of nothing and an amount with an extra zero each refused, with the fee unchanged after every refusal; a dry run that wrote nothing, then a run issuing one voucher each with no due date, then the same run issuing nothing; the fee changed afterwards without rewriting the voucher already issued; two instalments, the first leaving exactly 24,500 and reporting 29% collected, the second settling it; a void putting it back to part paid; a voucher with no due date carrying no fine and never overdue; a cancelled voucher reissued; a family seeing only their own; the admission form offering every head and the document checklist; and the staff form asking for a salary.
 
 **Tests: 1,497 across 85 files.** The fee policy, validation and screens were reworked rather than added to, because the model underneath them changed.
+
+### 22.58 Phase 29, the handbook and the real logo (2026-09-11)
+
+**Admin → Handbook** is the whole system explained, as a document. A cover, a contents page, seventeen parts and a closing page, printed one part to a sheet with the college's mark on every one. The office opens it and chooses **Save as PDF** in the browser's own print dialogue — the same way the result card and the fee voucher have always printed, so there is no PDF library and no headless browser, both of which were ruled out at the start.
+
+**It is generated from the system, not written beside it.** Reprinting it after a change gives an accurate copy, rather than a file going quietly stale in somebody's downloads folder. Its words live apart from its layout, and a test reads them: it asserts the handbook still says fees are annual and paid in instalments, that money records are voided rather than edited, and that there are no student submissions and no student timetable. Reverse one of those decisions and the handbook fails its test instead of lying to whoever printed it.
+
+**Every rule comes with its reason.** "A voucher with money against it cannot be cancelled" reads as an obstruction on its own; with "it would leave the payment pointing at nothing" it reads as care. The office is more likely to follow a rule it understands, and more likely to spot one that is genuinely wrong.
+
+**The logo is the college's own at last.** The file supplied on 31 August had been sitting unused in the repository for a fortnight while the app drew a placeholder monogram. It is a wordmark in a wide white field, so `scripts/prepare-logo.ts` trims the white to transparency and writes two assets: the shield alone for small square placements, and the shield with the words for a page header. Sign-in, change password, switch portal, not found and the offline page now carry the full logo; the sidebar and the handbook's page headers carry the shield.
+
+**Verified through the production build (7 new checks, 738 in total)**: the handbook renders cover to close, carries the college's own logo, explains the money rules it keeps, and keeps the print button off the paper; a teacher, a student and a signed-out visitor are each sent away from it.
+
+**Tests: 13 new** — the cover, the contents, every part, where each lives, the rules and their reasons, the step lists, one sheet per part, and the print dialogue. **1,510 in total across 86 files.**
+
+**One gap in the harness closed on the way.** A verifier that crashes while loading prints a stack and then no checks, and the run ended looking calm with only the exit code disagreeing — which is exactly how a whole verifier went missing from a run unnoticed while this was being built. The harness now ends with "All steps passed", or says how many failed and where to look.
 
 ### 22.7 What Phase 4 delivered
 

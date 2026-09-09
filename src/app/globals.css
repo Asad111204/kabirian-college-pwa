@@ -266,6 +266,37 @@
   }
 }
 
+/* --------------------------------------------------------------------------
+   A document made of pages.
+
+   The handbook is read on screen as a stack of cards and printed as one page
+   each. `break-after` is what makes a part start at the top of its own sheet
+   rather than wherever the previous one happened to end.
+   -------------------------------------------------------------------------- */
+
+.handbook-page {
+  margin-bottom: 1.25rem;
+  border-radius: var(--radius-card);
+  background: #fff;
+}
+
+@media print {
+  .handbook-page {
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    break-after: page;
+    page-break-after: always;
+    /* An A4 page inside the printer's own 12mm margin. */
+    min-height: 245mm;
+  }
+
+  .handbook-page:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+}
+
 @layer utilities {
   /* Shown only on paper -- the counterpart of .print-hide. */
   .screen-hide {
