@@ -234,6 +234,10 @@ A student who types `/admin` in the address bar is sent back to their own portal
 
 **Only teaching staff can be assigned subjects** — an administrative or support staff member is refused, with a message saying why.
 
+### Documents
+
+**Students and teachers can hand in their own.** A person's own profile lists what the college is missing and lets them upload it — once. After that it is on file: changing or removing it is the office's, and the app says so before the file is sent, not after. Nobody can upload against anybody else's record.
+
 ### Documents (Admin portal)
 
 Every student and staff profile has a **Documents** panel listing what the college collects, whether each item is on file, and what is still missing.

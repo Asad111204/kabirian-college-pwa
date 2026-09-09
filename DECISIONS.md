@@ -3063,3 +3063,21 @@ The migration is written and was **not** applied to Neon in this phase.
 **Why not the other orders.** *Applying the migration first without asking* breaks the standing rule that nothing destructive touches Neon unattended, and that rule exists because the college's records are not mine to delete. *Feature-flagging the new code* is a second code path to write and test for a database change measured in days. *Pushing and applying immediately after* is what was intended here and is exactly what went wrong: "immediately" turned into two days because the go-ahead is a person's decision, not a step in a script.
 
 **Consequences.** A phase that carries a migration now has one more thing that must be true before it is called done: either the migration is on Neon, or the code is not on `main`. The pre-flight census, the go-ahead and the after-census stay exactly as they were — this only fixes when the code moves.
+
+---
+
+## ADR-180 · A person may hand in their own paper once; changing it is the office's
+
+**Status:** Accepted · 2026-09-10 · Phase 30
+
+**Context.** Documents were entirely the office's: upload, replace and delete all demanded the ADMIN role, so a student whose B-Form the college had never collected could do nothing but be chased for it. The college asked for students and teachers to be able to upload their own, but was equally clear about the other half: *"they dont have access to delete or change the docs after upload, if they wanted to upload they have to contact the Office."*
+
+**Decision.** The rule turns on a distinction the code already made. `uploadDocument` looks in the database for a current document of that type and asks for **`documents.upload`** when there is none and **`documents.replace`** when there is. So: a person may perform `documents.upload` **on their own record**, and nothing else. The first hand-in is theirs; the second is a replace and belongs to the office. Deleting is the office's always.
+
+That the operation is a replace is decided from the database, not from anything the browser sends, so there is nothing to spoof. `isOwnRecord` — the same helper that already decides whether someone may *see* their own documents — decides whose record it is, from the session, never from the URL.
+
+**Why not a new permission.** A `documents.upload_own` would need granting to every student and teacher account and would drift the first time somebody forgot. The rule is not really about permissions at all: it is about *whose record* and *whether anything is there yet*, both of which the service already knows.
+
+**They are told before they submit, not after.** A file chosen in the person's own view opens a dialogue saying plainly that it cannot be changed or removed afterwards and that a correction means asking the office. Only then is anything sent. A wrong file handed in by a sixteen-year-old is a trip to the office for somebody, and the moment to prevent it is before the upload, not in a message afterwards.
+
+**Consequences.** Through the production build: a student uploads their own missing roll-number slip, is refused when they upload over it, is refused when they delete it, and the office is bound by none of that. A teacher may hand in their own CV and not a second one; neither may touch anybody else's record. Eight tests cover the dialogue, including that nothing is sent while it is open and nothing is sent when it is refused.

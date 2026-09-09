@@ -170,21 +170,39 @@ async function assertCanViewAttachment(
 }
 
 /**
- * Uploading, replacing and deleting are office work.
+ * Replacing and deleting are office work; a first upload need not be.
  *
  * They require the ADMIN role as well as the matching permission, for the same
  * reason student management does (ADR-058): the permission says *what* someone
- * may do, and the role decides *whose records*. A student cannot upload over
- * their own CNIC scan, and a teacher cannot change a student's documents.
+ * may do, and the role decides *whose records*.
+ *
+ * The one opening is a person handing in a paper of their own that the college
+ * does not have yet. A student may add their own B-Form, a teacher their own
+ * degree — once. The moment a document of that type exists the operation is a
+ * *replace*, and a replace is the office's, so nobody can quietly swap the
+ * scan the college holds for a different one. Deleting is the office's
+ * always. Whether that is a first upload or a replace is decided from the
+ * database by the caller, not from anything the browser sends.
  */
-function assertCanManageDocuments(ctx: AuthContext, permission: 'documents.upload' | 'documents.replace' | 'documents.delete'): void {
-  if (ctx.role !== 'ADMIN') {
-    throw new ForbiddenError('Document management is only available to administrators.', {
-      userId: ctx.userId,
-      role: ctx.role,
-    })
+function assertCanManageDocuments(
+  ctx: AuthContext,
+  permission: 'documents.upload' | 'documents.replace' | 'documents.delete',
+  owner?: { studentId?: string | null; staffId?: string | null },
+): void {
+  if (ctx.role === 'ADMIN') {
+    authorize(ctx, permission)
+    return
   }
-  authorize(ctx, permission)
+
+  // Their own record, their own missing paper, and nothing there to overwrite.
+  if (permission === 'documents.upload' && owner && isOwnRecord(ctx, owner)) return
+
+  throw new ForbiddenError(
+    permission === 'documents.upload'
+      ? 'Document management is only available to administrators.'
+      : 'A document that has been handed in can only be changed by the college office.',
+    { userId: ctx.userId, role: ctx.role },
+  )
 }
 
 /* -------------------------------------------------------------------------- */
@@ -520,7 +538,12 @@ export async function uploadDocument(
 
   // Homework files are the teacher's to attach: the homework rule applies, not the office rule.
   if (owner.ownerType === 'HOMEWORK' && owner.homeworkId) await assertCanManageHomework(ctx, owner.homeworkId)
-  else assertCanManageDocuments(ctx, existing ? 'documents.replace' : 'documents.upload')
+  else {
+    assertCanManageDocuments(ctx, existing ? 'documents.replace' : 'documents.upload', {
+      studentId: owner.studentId,
+      staffId: owner.staffId,
+    })
+  }
 
   // Verified from the file's own bytes — never from what the browser claimed.
   const validated = validateUpload({

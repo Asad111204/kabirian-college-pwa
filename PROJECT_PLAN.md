@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | **Phase 28 complete: the fee is annual, made of optional heads, and paid in instalments.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Everything through Phase 29 is live on Neon (nineteen migrations, zero drift). The college charges one fee per student per year, built from tuition, annual funds, events, board registration, board admission, a tour and anything else, all optional and all set at admission; families pay whenever they can, and a printed voucher shows only what has been paid and what is left. Documents are attached at the counter, and a salary is recorded when staff are added. The college now has a printable **handbook** covering every part of the system, and the app finally shows the college's own logo rather than a placeholder. **The Phase 28 migration was applied to Neon on 2026-09-09.** The college's previous FoxPro system has been read into this one: **188 of its 192 enrolled students are live, each with a portal login**, every class counted back against the old file. |
-| **Last updated** | 2026-09-09 (rev. 50 — many sections and subjects in one assignment) |
+| **Last updated** | 2026-09-10 (rev. 51 — the last coming-soon pages, and self-service documents) |
 | **Companion docs** | [DECISIONS.md](DECISIONS.md) · [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) · [README.md](README.md) |
 
 ---
@@ -2081,6 +2081,22 @@ The college looked at the finished fee module and corrected the assumption under
 **Verified through the production build (65 fee checks, all passing, alongside the rest — 731 in total)**: a fee set from three heads adding to the year with the concession off, keeping the office's own words for the "Others" line; another student charged tuition alone; a head the college does not charge, a line of nothing and an amount with an extra zero each refused, with the fee unchanged after every refusal; a dry run that wrote nothing, then a run issuing one voucher each with no due date, then the same run issuing nothing; the fee changed afterwards without rewriting the voucher already issued; two instalments, the first leaving exactly 24,500 and reporting 29% collected, the second settling it; a void putting it back to part paid; a voucher with no due date carrying no fine and never overdue; a cancelled voucher reissued; a family seeing only their own; the admission form offering every head and the document checklist; and the staff form asking for a salary.
 
 **Tests: 1,497 across 85 files.** The fee policy, validation and screens were reworked rather than added to, because the model underneath them changed.
+
+### 22.61 The last two "coming soon" pages, and handing in your own papers (2026-09-10)
+
+Two items in the sidebar had been greyed out since the early phases, listed honestly as not built rather than as fake links. Both are now real, and the flag is gone from the navigation entirely — there is nothing left in this system marked coming soon.
+
+**Student, My Profile.** A student's own record: their placement and photograph, their personal and family details, their admission, what they did before joining, the subjects they study, and their documents. It is read with the student id on their session rather than one from the URL, so there is no parameter to tamper with — a student asking for this can only ever be asking for themselves. Nothing on it is withheld, because all of it is a fact about them the college already holds, and nothing on it can be edited: the page says plainly that corrections go through the office.
+
+**Admin, Results.** Each exam's results have always lived behind that exam; what was missing was the view across all of them. Every exam in the session with how many results it holds, how many passed, failed and are incomplete, its pass rate, and whether it is published or held back — with the session switcher for last year. The counting is grouped in the database, so a session with ten thousand results costs the same as one with thirty. A pass rate counts only students with a complete result: anyone still missing a mark is incomplete, never a failure.
+
+**Students and teachers can hand in their own documents.** The college asked for this with a condition attached — they may upload, and after that they must go to the office. The rule turns on a distinction the code already made: uploading needs `documents.upload` when nothing is there and `documents.replace` when something is, so *a person may upload on their own record and nothing else*. The first hand-in is theirs; the second is a replace, and a replace is the office's. Deleting is the office's always. Whether it is a replace is decided from the database, never from what the browser sends. ADR-180 has the reasoning.
+
+**They are warned before it goes, not after.** Choosing a file opens a dialogue that says it cannot be changed or removed afterwards and that a correction means asking the office. Nothing is sent until that is accepted — a wrong file handed in is a trip to the office for somebody, and the moment to prevent it is beforehand.
+
+**Verified through the production build (20 new checks)**: a student opens their own profile and a teacher is sent away from it; the office opens Results and neither a teacher nor a student can; a student uploads their own missing roll-number slip, is refused when they upload over it and refused when they delete it, while the office is bound by none of that; a teacher hands in their own CV but not a second one, and never against another teacher's record.
+
+**Tests: 8 new** — the warning shown, nothing sent while it is open, nothing sent when it is refused, no removal offered anywhere, and the office's own view unchanged by any of it. **1,533 in total across 88 files.**
 
 ### 22.60 Assigning a teacher to many sections at once (2026-09-09)
 

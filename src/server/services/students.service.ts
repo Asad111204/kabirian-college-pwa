@@ -20,7 +20,7 @@ import { currentPhotoIds } from './documents.service'
 import { authorize, type AuthContext } from '../auth/context'
 import { writeAuditLog } from '../audit/audit'
 import { createFeeLinesForAdmission } from './fees.service'
-import { ConflictError, NotFoundError, ValidationError } from '../api/errors'
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../api/errors'
 import { generateTemporaryPassword, hashPassword } from '../auth/password'
 import { nextCode } from './code-sequence'
 import { paginate, paginatedResult, withUniqueConstraintHandling, type PaginatedResult, assertAdminArea as assertAdminAreaFor } from './service-utils'
@@ -362,7 +362,27 @@ export async function listStudents(
 export async function getStudent(ctx: AuthContext, id: string): Promise<StudentDetail> {
   authorize(ctx, 'students.view')
   assertAdminArea(ctx)
+  return loadStudentDetail(id)
+}
 
+/**
+ * A student's own record, read with their own id and nobody else's.
+ *
+ * The id comes from the session cookie rather than the URL, so there is no
+ * parameter to tamper with: a student asking for this can only ever be asking
+ * for themselves. Everything on it is their own, so nothing is withheld —
+ * their notes, their father's CNIC and their previous result are facts about
+ * them that the college already holds.
+ */
+export async function getMyStudentProfile(ctx: AuthContext): Promise<StudentDetail> {
+  if (!ctx.studentId) {
+    throw new ForbiddenError('This login is not linked to a student record.', { userId: ctx.userId })
+  }
+  return loadStudentDetail(ctx.studentId)
+}
+
+/** The record itself. Who may read it is settled before this is called. */
+async function loadStudentDetail(id: string): Promise<StudentDetail> {
   const student = await prisma.student.findFirst({
     where: { id, deletedAt: null },
     include: {

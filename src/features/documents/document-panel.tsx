@@ -64,20 +64,29 @@ export function DocumentPanel({
   ownerEndpoint,
   canManage,
   storageReady,
+  selfService = false,
 }: {
   slots: DocumentSlot[]
   /** e.g. `/api/v1/students/<id>/documents` */
   ownerEndpoint: string
-  /** Whether this viewer may upload, replace or delete. */
+  /** Whether this viewer may upload, replace or delete. The office. */
   canManage: boolean
   /** False when Google Drive has not been connected yet. */
   storageReady: boolean
+  /**
+   * The person's own record, seen by themselves. They may hand in a paper the
+   * college does not have yet, and nothing else: no replacing, no removing.
+   * The server enforces this; the buttons only follow it.
+   */
+  selfService?: boolean
 }) {
   const [slots, setSlots] = React.useState(initialSlots)
   const [busyKey, setBusyKey] = React.useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = React.useState<{ slot: DocumentSlot } | null>(null)
   const [deleting, setDeleting] = React.useState(false)
   const [showHistoryFor, setShowHistoryFor] = React.useState<string | null>(null)
+  // Chosen but not yet sent: the person is being told it cannot be undone.
+  const [confirmUpload, setConfirmUpload] = React.useState<{ slot: DocumentSlot; file: File } | null>(null)
 
   const missingRequired = slots.filter((slot) => slot.type.isRequired && !slot.document)
 
@@ -161,14 +170,25 @@ export function DocumentPanel({
           </Alert>
         ) : null}
 
+        {selfService && !canManage ? (
+          <Alert variant="info" title="You can hand in a document once">
+            You may upload anything the college is still missing. Once it is in, it cannot be
+            changed or removed from here — if something needs correcting, please contact the college
+            office.
+          </Alert>
+        ) : null}
+
         <ul className="space-y-2">
           {slots.map((slot) => (
             <SlotRow
               key={slot.type.key}
               slot={slot}
               canManage={canManage && storageReady}
+              // Their own missing paper, once. A slot that is already filled
+              // offers them nothing.
+              canHandIn={selfService && storageReady && !slot.document}
               busy={busyKey === slot.type.key}
-              onUpload={(file) => handleFile(slot, file)}
+              onUpload={(file) => (selfService && !canManage ? setConfirmUpload({ slot, file }) : handleFile(slot, file))}
               onDelete={() => setConfirmDelete({ slot })}
               onToggleHistory={() =>
                 setShowHistoryFor((current) => (current === slot.type.key ? null : slot.type.key))
@@ -178,6 +198,38 @@ export function DocumentPanel({
           ))}
         </ul>
       </CardContent>
+
+      <Dialog open={confirmUpload !== null} onOpenChange={(open) => !open && setConfirmUpload(null)}>
+        <DialogContent
+          title={`Hand in ${confirmUpload?.slot.type.label ?? 'document'}?`}
+          description={confirmUpload?.file.name}
+        >
+          <Alert variant="warning" title="This cannot be undone">
+            Once you submit this, you cannot change it or remove it yourself. If you upload the
+            wrong file, or it needs replacing later, you will have to ask the college office to do
+            it for you.
+          </Alert>
+          <p className="mt-3 text-sm text-foreground-muted">
+            Please check it is the right file, the right way up, and readable.
+          </p>
+
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setConfirmUpload(null)} disabled={busyKey !== null}>
+              Cancel
+            </Button>
+            <Button
+              loading={busyKey !== null}
+              onClick={() => {
+                const pending = confirmUpload
+                setConfirmUpload(null)
+                if (pending) void handleFile(pending.slot, pending.file)
+              }}
+            >
+              Yes, submit it
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={confirmDelete !== null} onOpenChange={(open) => !open && setConfirmDelete(null)}>
         <DialogContent
@@ -207,6 +259,7 @@ function SlotRow({
   slot,
   canManage,
   busy,
+  canHandIn,
   onUpload,
   onDelete,
   onToggleHistory,
@@ -214,6 +267,8 @@ function SlotRow({
 }: {
   slot: DocumentSlot
   canManage: boolean
+  /** The person's own missing paper: an upload button, and nothing else. */
+  canHandIn: boolean
   busy: boolean
   onUpload: (file: File) => void
   onDelete: () => void
@@ -295,7 +350,7 @@ function SlotRow({
             </Button>
           ) : null}
 
-          {canManage ? (
+          {canManage || canHandIn ? (
             <>
               <input
                 ref={inputRef}
@@ -319,7 +374,7 @@ function SlotRow({
                 <span className="sr-only sm:not-sr-only">{document ? 'Replace' : 'Upload'}</span>
               </Button>
 
-              {document ? (
+              {document && canManage ? (
                 <Button variant="ghost" size="sm" onClick={onDelete}>
                   <Trash2 className="h-4 w-4 text-danger-600" aria-hidden />
                   <span className="sr-only">Remove</span>

@@ -77,7 +77,7 @@ export const NAVIGATION: Record<UserRole, NavSection[]> = {
         { label: 'Exams', href: '/admin/exams', icon: FileText },
         { label: 'Timetable', href: '/admin/timetable', icon: CalendarDays },
         { label: 'Homework', href: '/admin/homework', icon: BookOpen },
-        { label: 'Results', href: '/admin/results', icon: ScrollText, comingSoon: true, phase: 9 },
+        { label: 'Results', href: '/admin/results', icon: ScrollText },
       ],
     },
     {
@@ -130,7 +130,7 @@ export const NAVIGATION: Record<UserRole, NavSection[]> = {
     {
       items: [
         { label: 'Dashboard', href: '/student', icon: LayoutDashboard },
-        { label: 'My Profile', href: '/student/profile', icon: Users, comingSoon: true, phase: 4 },
+        { label: 'My Profile', href: '/student/profile', icon: Users },
         { label: 'Attendance', href: '/student/attendance', icon: ClipboardCheck },
         { label: 'My Results', href: '/student/results', icon: ScrollText },
         { label: 'Homework', href: '/student/homework', icon: BookOpen },

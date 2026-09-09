@@ -1350,3 +1350,125 @@ export async function getTeacherResultOptions(ctx: AuthContext): Promise<Teacher
     subjects: toList(subjects),
   }
 }
+
+/* ========================================================================== */
+/* The college's results, exam by exam                                        */
+/* ========================================================================== */
+
+/** One exam on the results overview. */
+export interface ResultOverviewRow {
+  examId: string
+  examName: string
+  examType: string
+  status: ExamStatusValue
+  startDate: Date | null
+  endDate: Date | null
+  /** Current results held for this exam. Zero means none have been generated. */
+  total: number
+  passed: number
+  failed: number
+  incomplete: number
+  published: number
+  /** Over the students actually judged; null when nobody is. */
+  passPercentage: string | null
+}
+
+export interface ResultOverview {
+  academicSessionId: string
+  academicSessionName: string
+  sessions: { id: string; name: string; isCurrent: boolean }[]
+  rows: ResultOverviewRow[]
+  /** The totals across every exam in the session. */
+  totals: { exams: number; withResults: number; published: number; students: number }
+}
+
+/**
+ * Every exam in a session with what its results look like.
+ *
+ * The office had no way to see the college's results as a whole: each exam's
+ * results lived behind that exam, and nothing said which had been generated,
+ * which had been published and which were still waiting. This is that page.
+ *
+ * The counting is grouped in the database rather than by loading results and
+ * tallying them here, so a session with ten thousand results costs the same as
+ * one with thirty.
+ */
+export async function getResultOverview(
+  ctx: AuthContext,
+  academicSessionId?: string,
+): Promise<ResultOverview> {
+  assertAdminArea(ctx, 'Result review')
+  authorize(ctx, 'results.view')
+
+  const sessions = await prisma.academicSession.findMany({
+    select: { id: true, name: true, isCurrent: true },
+    orderBy: { startDate: 'desc' },
+  })
+  if (sessions.length === 0) {
+    throw new NotFoundError('academic session')
+  }
+
+  const session =
+    sessions.find((s) => s.id === academicSessionId) ?? sessions.find((s) => s.isCurrent) ?? sessions[0]!
+
+  const exams = await prisma.exam.findMany({
+    where: { academicSessionId: session.id },
+    select: {
+      id: true,
+      name: true,
+      status: true,
+      startDate: true,
+      endDate: true,
+      examType: { select: { name: true } },
+    },
+    orderBy: [{ startDate: { sort: 'desc', nulls: 'last' } }, { name: 'asc' }],
+  })
+
+  // One grouped read for the whole session rather than one per exam.
+  const tallies = await prisma.result.groupBy({
+    by: ['examId', 'outcome', 'status'],
+    where: { examId: { in: exams.map((exam) => exam.id) }, isCurrent: true },
+    _count: { _all: true },
+  })
+
+  const rows: ResultOverviewRow[] = exams.map((exam) => {
+    const mine = tallies.filter((row) => row.examId === exam.id)
+    const sum = (predicate: (row: (typeof mine)[number]) => boolean) =>
+      mine.filter(predicate).reduce((running, row) => running + row._count._all, 0)
+
+    const passed = sum((row) => row.outcome === 'PASS')
+    const failed = sum((row) => row.outcome === 'FAIL')
+    const incomplete = sum((row) => row.outcome === 'INCOMPLETE')
+    const judged = passed + failed
+
+    return {
+      examId: exam.id,
+      examName: exam.name,
+      examType: exam.examType.name,
+      status: exam.status as ExamStatusValue,
+      startDate: exam.startDate,
+      endDate: exam.endDate,
+      total: passed + failed + incomplete,
+      passed,
+      failed,
+      incomplete,
+      published: sum((row) => row.status === 'PUBLISHED'),
+      // A pass rate over the students who actually have a complete result.
+      // With nobody to count there is no percentage — not 0%.
+      passPercentage: judged === 0 ? null : ((passed * 10000) / judged / 100).toFixed(2),
+    }
+  })
+
+  return {
+    academicSessionId: session.id,
+    academicSessionName: session.name,
+    sessions,
+    rows,
+    totals: {
+      exams: rows.length,
+      withResults: rows.filter((row) => row.total > 0).length,
+      published: rows.filter((row) => row.published > 0).length,
+      students: rows.reduce((running, row) => running + row.total, 0),
+    },
+  }
+}
