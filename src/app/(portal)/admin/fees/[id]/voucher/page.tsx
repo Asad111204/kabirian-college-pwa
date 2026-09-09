@@ -2,22 +2,18 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { requirePortalAccess } from '@/server/auth/context'
 import { getVoucher } from '@/server/services/fees.service'
-import { todayInCollegeTimezone } from '@/server/time/college-date'
+import { env } from '@/server/config/env'
 import { NotFoundError } from '@/server/api/errors'
 import { uuid } from '@/validation/common'
 import { PageHeader } from '@/components/layout/app-shell'
-import { VoucherDetailScreen } from '@/features/fees/voucher-detail'
+import { VoucherPrint } from '@/features/fees/voucher-print'
 
 export const metadata: Metadata = { title: 'Fee voucher' }
 export const dynamic = 'force-dynamic'
 
-/**
- * A student's own voucher. The same screen the office sees, without the
- * office's buttons — what may be done comes from the server, not from which
- * page it is rendered on.
- */
-export default async function StudentVoucherPage({ params }: { params: Promise<{ id: string }> }) {
-  const ctx = await requirePortalAccess(['STUDENT'])
+/** The printable voucher: three copies on one A4 sheet, saved as PDF by the browser. */
+export default async function VoucherPrintPage({ params }: { params: Promise<{ id: string }> }) {
+  const ctx = await requirePortalAccess(['ADMIN'])
   const { id } = await params
   if (!uuid.safeParse(id).success) notFound()
 
@@ -31,8 +27,10 @@ export default async function StudentVoucherPage({ params }: { params: Promise<{
 
   return (
     <>
-      <PageHeader title="Fee voucher" description="Fees are paid at the college office." />
-      <VoucherDetailScreen voucher={voucher} today={todayInCollegeTimezone()} printBase="/student/fees" />
+      <div className="print-hide">
+        <PageHeader title="Fee voucher" description="Three copies on one page: bank, college and student." />
+      </div>
+      <VoucherPrint voucher={voucher} collegeName={env.APP_COLLEGE_NAME} />
     </>
   )
 }

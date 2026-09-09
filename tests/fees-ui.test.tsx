@@ -153,7 +153,7 @@ describe('the month’s vouchers', () => {
 
 describe('one voucher', () => {
   it('shows the sum in full: fee, concession, fine, payable, outstanding', () => {
-    render(<VoucherDetailScreen voucher={detail} today="2026-09-09" />)
+    render(<VoucherDetailScreen voucher={detail} today="2026-09-09" printBase="/admin/fees" />)
     expect(screen.getByText('Rs 12,500')).toBeTruthy()
     expect(screen.getByText('− Rs 2,500')).toBeTruthy()
     expect(screen.getAllByText('Rs 10,000').length).toBe(2)
@@ -162,7 +162,7 @@ describe('one voucher', () => {
   it('sends a payment in rupees, dated no later than today', async () => {
     post.mockResolvedValue({ ...detail, paidPaisa: 1_000_000, status: 'PAID' })
     const user = userEvent.setup()
-    render(<VoucherDetailScreen voucher={detail} today="2026-09-09" />)
+    render(<VoucherDetailScreen voucher={detail} today="2026-09-09" printBase="/admin/fees" />)
 
     await user.click(screen.getByRole('button', { name: /Record payment/ }))
     const amount = screen.getByLabelText(/Amount/) as HTMLInputElement
@@ -180,7 +180,7 @@ describe('one voucher', () => {
 
   it('will not cancel without a reason', async () => {
     const user = userEvent.setup()
-    render(<VoucherDetailScreen voucher={detail} today="2026-09-09" />)
+    render(<VoucherDetailScreen voucher={detail} today="2026-09-09" printBase="/admin/fees" />)
 
     await user.click(screen.getByRole('button', { name: /Cancel this voucher/ }))
     expect(screen.getByRole('button', { name: 'Cancel voucher' }).hasAttribute('disabled')).toBe(true)
@@ -189,7 +189,7 @@ describe('one voucher', () => {
   })
 
   it('gives a family their own bill and none of the office’s buttons', () => {
-    render(<VoucherDetailScreen voucher={{ ...detail, canRecordPayment: false, canCancel: false }} today="2026-09-09" />)
+    render(<VoucherDetailScreen voucher={{ ...detail, canRecordPayment: false, canCancel: false }} today="2026-09-09" printBase="/admin/fees" />)
     expect(screen.getByText('FV-000001')).toBeTruthy()
     expect(screen.queryByRole('button', { name: /Record payment/ })).toBeNull()
     expect(screen.queryByRole('button', { name: /Cancel this voucher/ })).toBeNull()
@@ -200,6 +200,7 @@ describe('one voucher', () => {
       <VoucherDetailScreen
         voucher={{ ...detail, status: 'PAID', paidPaisa: 1_000_000, outstandingPaisa: 0, canRecordPayment: false, blockedReason: 'This voucher is already settled in full.' }}
         today="2026-09-09"
+        printBase="/admin/fees"
       />,
     )
     expect(screen.getByText(/already settled in full/)).toBeTruthy()

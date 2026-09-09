@@ -3,7 +3,8 @@
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Ban, Undo2, Wallet } from 'lucide-react'
+import Link from 'next/link'
+import { Ban, Printer, Undo2, Wallet } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { OnlineOnlyButton } from '@/components/pwa/online-only-button'
@@ -25,7 +26,7 @@ import type { FeeVoucherDetail } from '@/server/services/fees.service'
  * office's buttons: what may be done comes from the server on the record
  * itself, so the screen never offers what the API would refuse.
  */
-export function VoucherDetailScreen({ voucher: initial, today }: { voucher: FeeVoucherDetail; today: string }) {
+export function VoucherDetailScreen({ voucher: initial, today, printBase }: { voucher: FeeVoucherDetail; today: string; printBase: string }) {
   const router = useRouter()
   const [voucher, setVoucher] = React.useState(initial)
   const [paying, setPaying] = React.useState(false)
@@ -70,6 +71,12 @@ export function VoucherDetailScreen({ voucher: initial, today }: { voucher: FeeV
           <div className="flex flex-wrap items-center gap-2">
             {voucher.overdue ? <Badge variant="danger">Overdue</Badge> : null}
             <Badge variant={FEE_VOUCHER_STATUS_TONE[voucher.status]}>{FEE_VOUCHER_STATUS_LABEL[voucher.status]}</Badge>
+            <Button type="button" variant="secondary" size="sm" asChild>
+              <Link href={`${printBase}/${voucher.id}/voucher`}>
+                <Printer className="h-4 w-4" aria-hidden />
+                Print / PDF
+              </Link>
+            </Button>
           </div>
         </CardHeader>
         <CardContent>
