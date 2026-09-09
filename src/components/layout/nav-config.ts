@@ -92,7 +92,7 @@ export const NAVIGATION: Record<UserRole, NavSection[]> = {
       title: 'Fees & Finance',
       items: [
         { label: 'Fee Vouchers', href: '/admin/fees', icon: Receipt },
-        { label: 'Packages & Rules', href: '/admin/fees/packages', icon: Wallet },
+        { label: 'Fee Rules', href: '/admin/fees/rules', icon: Wallet },
         { label: 'Finance', href: '/admin/finance', icon: TrendingUp },
       ],
     },

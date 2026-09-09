@@ -49,19 +49,25 @@ export function MyFeesScreen({ page }: { page: PaginatedResult<FeeVoucherRow> & 
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <Link href={`/student/fees/${row.id}`} className="font-medium text-foreground hover:underline">
-                      {row.monthLabel}
+                      {row.academicSessionName}
                     </Link>
                     <p className="mt-0.5 text-xs text-foreground-muted">
-                      {row.voucherNumber} · {row.packageName} · due {formatDate(row.dueDate)}
+                      {row.voucherNumber}
+                      {row.dueDate ? ` · due ${formatDate(row.dueDate)}` : ' · pay in instalments'}
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-3">
                     <div className="text-right">
-                      <p className="font-semibold tabular-nums text-foreground">{formatPaisa(row.netPayablePaisa)}</p>
                       {row.outstandingPaisa > 0 ? (
-                        <p className="text-xs text-foreground-muted">{formatPaisa(row.outstandingPaisa)} still to pay</p>
+                        <>
+                          <p className="font-semibold tabular-nums text-foreground">{formatPaisa(row.outstandingPaisa)}</p>
+                          <p className="text-xs text-foreground-muted">still to pay · {formatPaisa(row.paidPaisa)} paid</p>
+                        </>
                       ) : (
-                        <p className="text-xs text-success-700">Settled</p>
+                        <>
+                          <p className="font-semibold tabular-nums text-success-700">Settled</p>
+                          <p className="text-xs text-foreground-muted">{formatPaisa(row.paidPaisa)} paid</p>
+                        </>
                       )}
                     </div>
                     {row.overdue ? <Badge variant="danger">Overdue</Badge> : null}

@@ -1,150 +1,142 @@
 import { describe, expect, it } from 'vitest'
 import {
+  FEE_HEADS,
+  FEE_HEAD_LABEL,
   FEE_VOUCHER_STATUSES,
   FEE_VOUCHER_STATUS_LABEL,
   decideCanCancelVoucher,
   decideCanRecordPayment,
   decideCanVoidPayment,
   discountFor,
-  dueDateFor,
+  feeLineLabel,
   isOverdue,
   lateFineDue,
-  monthLabel,
-  monthStart,
   netPayable,
   outstanding,
   overpaid,
-  shouldBillForMonth,
+  paidShare,
+  shouldBillForSession,
   statusFor,
+  totalOfLines,
 } from '@/server/fees/fees-policy'
 
 /**
- * Phase 25. The arithmetic of one voucher, and the rules about when a fine
- * applies and what may still be done. Everything is whole paisa.
+ * Phase 28. The college charges an annual fee made up of named heads, and a
+ * family pays it in instalments whenever they can. Everything is whole paisa.
  */
 const RS = (rupees: number) => rupees * 100
 
-describe('the month and its due date', () => {
-  it('takes the first day of the month a date falls in', () => {
-    expect(monthStart('2026-09-17')).toBe('2026-09-01')
-    expect(monthStart('2026-09-01')).toBe('2026-09-01')
-    expect(monthLabel('2026-09-01')).toBe('September 2026')
+describe('what a year is charged for', () => {
+  it('names every head in words', () => {
+    for (const head of FEE_HEADS) expect(FEE_HEAD_LABEL[head]).toBeTruthy()
+    expect(FEE_HEAD_LABEL.TUITION).toBe('College tuition fee')
+    expect(FEE_HEAD_LABEL.BOARD_REGISTRATION).toBe('Board registration fee')
   })
 
-  it('puts the due date on the day the office chose', () => {
-    expect(dueDateFor('2026-09-01', 10)).toBe('2026-09-10')
-    expect(dueDateFor('2026-09-01', 1)).toBe('2026-09-01')
+  it('uses the office’s own words for an "Others" line, and the head otherwise', () => {
+    expect(feeLineLabel({ head: 'OTHER', label: 'Hostel' })).toBe('Hostel')
+    expect(feeLineLabel({ head: 'OTHER', label: '  ' })).toBe('Others')
+    expect(feeLineLabel({ head: 'OTHER', label: null })).toBe('Others')
+    // A label on a named head is ignored: the head is what it is.
+    expect(feeLineLabel({ head: 'TOUR', label: 'Anything' })).toBe('Tour fee')
   })
 
-  it('never spills into the next month when the day does not exist', () => {
-    // The 31st of February is the 28th, and the 29th in a leap year.
-    expect(dueDateFor('2026-02-01', 31)).toBe('2026-02-28')
-    expect(dueDateFor('2028-02-01', 31)).toBe('2028-02-29')
-    expect(dueDateFor('2026-04-01', 31)).toBe('2026-04-30')
-  })
-
-  it('clamps a nonsense day rather than producing a nonsense date', () => {
-    expect(dueDateFor('2026-09-01', 0)).toBe('2026-09-01')
-    expect(dueDateFor('2026-09-01', 99)).toBe('2026-09-30')
+  it('adds the heads up, and comes to nothing when there are none', () => {
+    expect(totalOfLines([{ amountPaisa: RS(12500) }, { amountPaisa: RS(5000) }])).toBe(RS(17500))
+    expect(totalOfLines([])).toBe(0)
+    // A negative amount cannot reduce the total; the database refuses one anyway.
+    expect(totalOfLines([{ amountPaisa: RS(1000) }, { amountPaisa: -500 }])).toBe(RS(1000))
   })
 })
 
 describe('what a voucher comes to', () => {
-  it('is the fee, less the concession, plus any fine', () => {
-    expect(netPayable({ grossPaisa: RS(12500), discountPaisa: RS(2500), lateFinePaisa: RS(500) })).toBe(RS(10500))
-    expect(netPayable({ grossPaisa: RS(12500), discountPaisa: 0, lateFinePaisa: 0 })).toBe(RS(12500))
+  it('is the year’s fee, less the concession, plus any fine', () => {
+    expect(netPayable({ grossPaisa: RS(30000), discountPaisa: RS(5000), lateFinePaisa: RS(500) })).toBe(RS(25500))
+    expect(netPayable({ grossPaisa: RS(30000), discountPaisa: 0, lateFinePaisa: 0 })).toBe(RS(30000))
   })
 
   it('caps a concession at the fee, so the college never owes a family money', () => {
-    expect(discountFor(RS(12500), RS(2500))).toBe(RS(2500))
-    expect(discountFor(RS(2000), RS(2500))).toBe(RS(2000))
-    expect(discountFor(RS(12500), 0)).toBe(0)
-    expect(discountFor(RS(12500), -500)).toBe(0)
+    expect(discountFor(RS(30000), RS(5000))).toBe(RS(5000))
+    expect(discountFor(RS(2000), RS(5000))).toBe(RS(2000))
+    expect(discountFor(RS(30000), 0)).toBe(0)
+    expect(discountFor(RS(30000), -500)).toBe(0)
   })
 
   it('counts what is still to come in, and never a negative', () => {
-    const amounts = { grossPaisa: RS(12500), discountPaisa: RS(2500), lateFinePaisa: 0, paidPaisa: RS(4000) }
-    expect(outstanding(amounts)).toBe(RS(6000))
+    const amounts = { grossPaisa: RS(30000), discountPaisa: RS(5000), lateFinePaisa: 0, paidPaisa: RS(10000) }
+    expect(outstanding(amounts)).toBe(RS(15000))
     expect(outstanding({ ...amounts, paidPaisa: RS(99999) })).toBe(0)
-    expect(overpaid({ ...amounts, paidPaisa: RS(11000) })).toBe(RS(1000))
+    expect(overpaid({ ...amounts, paidPaisa: RS(26000) })).toBe(RS(1000))
     expect(overpaid(amounts)).toBe(0)
   })
 
-  it('reads the state off the arithmetic, except when the office has cancelled it', () => {
-    const base = { grossPaisa: RS(10000), discountPaisa: 0, lateFinePaisa: 0 }
-    expect(statusFor({ ...base, paidPaisa: 0 }, false)).toBe('UNPAID')
-    expect(statusFor({ ...base, paidPaisa: RS(4000) }, false)).toBe('PARTIALLY_PAID')
-    expect(statusFor({ ...base, paidPaisa: RS(10000) }, false)).toBe('PAID')
-    expect(statusFor({ ...base, paidPaisa: RS(12000) }, false)).toBe('PAID')
-    expect(statusFor({ ...base, paidPaisa: RS(4000) }, true)).toBe('CANCELLED')
+  it('says how far through the year’s fee a family is', () => {
+    const base = { grossPaisa: RS(20000), discountPaisa: 0, lateFinePaisa: 0 }
+    expect(paidShare({ ...base, paidPaisa: 0 })).toBe(0)
+    expect(paidShare({ ...base, paidPaisa: RS(5000) })).toBe(25)
+    expect(paidShare({ ...base, paidPaisa: RS(20000) })).toBe(100)
+    // Never over a hundred, however much arrives.
+    expect(paidShare({ ...base, paidPaisa: RS(90000) })).toBe(100)
+    // Nothing to pay is nothing owing.
+    expect(paidShare({ grossPaisa: 0, discountPaisa: 0, lateFinePaisa: 0, paidPaisa: 0 })).toBe(100)
   })
 
-  it('counts a fine as part of what settles it', () => {
-    // 10,000 fee with a 500 fine is not settled by 10,000.
-    const withFine = { grossPaisa: RS(10000), discountPaisa: 0, lateFinePaisa: RS(500) }
-    expect(statusFor({ ...withFine, paidPaisa: RS(10000) }, false)).toBe('PARTIALLY_PAID')
-    expect(statusFor({ ...withFine, paidPaisa: RS(10500) }, false)).toBe('PAID')
+  it('reads the state off the arithmetic, except when the office has cancelled it', () => {
+    const base = { grossPaisa: RS(20000), discountPaisa: 0, lateFinePaisa: 0 }
+    expect(statusFor({ ...base, paidPaisa: 0 }, false)).toBe('UNPAID')
+    // An instalment leaves it part paid, which is the ordinary state here.
+    expect(statusFor({ ...base, paidPaisa: RS(4000) }, false)).toBe('PARTIALLY_PAID')
+    expect(statusFor({ ...base, paidPaisa: RS(20000) }, false)).toBe('PAID')
+    expect(statusFor({ ...base, paidPaisa: RS(25000) }, false)).toBe('PAID')
+    expect(statusFor({ ...base, paidPaisa: RS(4000) }, true)).toBe('CANCELLED')
   })
 })
 
 describe('the late fine', () => {
-  const voucher = { dueDate: '2026-09-10', grossPaisa: RS(10000), discountPaisa: 0, paidPaisa: 0, cancelled: false }
+  const withDate = { dueDate: '2026-09-10', grossPaisa: RS(20000), discountPaisa: 0, paidPaisa: 0, cancelled: false }
 
-  it('is nothing on or before the due date', () => {
-    expect(lateFineDue(voucher, '2026-09-01', RS(500))).toBe(0)
-    expect(lateFineDue(voucher, '2026-09-10', RS(500))).toBe(0)
+  it('is nothing at all when the college set no due date', () => {
+    // The ordinary case here: families pay in instalments as they can.
+    expect(lateFineDue({ ...withDate, dueDate: null }, '2027-01-01', RS(500))).toBe(0)
   })
 
-  it('is the flat amount once the day has passed, and does not grow', () => {
-    expect(lateFineDue(voucher, '2026-09-11', RS(500))).toBe(RS(500))
-    expect(lateFineDue(voucher, '2026-12-31', RS(500))).toBe(RS(500))
+  it('is nothing on or before a due date the college did set', () => {
+    expect(lateFineDue(withDate, '2026-09-01', RS(500))).toBe(0)
+    expect(lateFineDue(withDate, '2026-09-10', RS(500))).toBe(0)
   })
 
-  it('is nothing when the college charges none', () => {
-    expect(lateFineDue(voucher, '2026-09-30', 0)).toBe(0)
+  it('is the flat amount once that day has passed, and does not grow', () => {
+    expect(lateFineDue(withDate, '2026-09-11', RS(500))).toBe(RS(500))
+    expect(lateFineDue(withDate, '2026-12-31', RS(500))).toBe(RS(500))
   })
 
-  it('is nothing on a voucher already settled, or cancelled', () => {
-    expect(lateFineDue({ ...voucher, paidPaisa: RS(10000) }, '2026-09-30', RS(500))).toBe(0)
-    expect(lateFineDue({ ...voucher, cancelled: true }, '2026-09-30', RS(500))).toBe(0)
+  it('is nothing when the college charges none, or the fee is settled, or it is cancelled', () => {
+    expect(lateFineDue(withDate, '2026-09-30', 0)).toBe(0)
+    expect(lateFineDue({ ...withDate, paidPaisa: RS(20000) }, '2026-09-30', RS(500))).toBe(0)
+    expect(lateFineDue({ ...withDate, cancelled: true }, '2026-09-30', RS(500))).toBe(0)
   })
 
   it('still applies when only part of it was paid before the day', () => {
-    expect(lateFineDue({ ...voucher, paidPaisa: RS(4000) }, '2026-09-30', RS(500))).toBe(RS(500))
+    expect(lateFineDue({ ...withDate, paidPaisa: RS(4000) }, '2026-09-30', RS(500))).toBe(RS(500))
   })
 
-  it('takes the concession into account before deciding anything is owed', () => {
-    // A full concession leaves nothing owing, so nothing to be fined for.
-    expect(lateFineDue({ ...voucher, discountPaisa: RS(10000) }, '2026-09-30', RS(500))).toBe(0)
-  })
-
-  it('calls a voucher overdue only while something is still owed', () => {
+  it('never calls a voucher with no due date overdue', () => {
+    expect(isOverdue({ dueDate: null, status: 'UNPAID' }, '2027-01-01')).toBe(false)
     expect(isOverdue({ dueDate: '2026-09-10', status: 'UNPAID' }, '2026-09-11')).toBe(true)
     expect(isOverdue({ dueDate: '2026-09-10', status: 'PARTIALLY_PAID' }, '2026-09-11')).toBe(true)
-    expect(isOverdue({ dueDate: '2026-09-10', status: 'UNPAID' }, '2026-09-10')).toBe(false)
     expect(isOverdue({ dueDate: '2026-09-10', status: 'PAID' }, '2026-09-30')).toBe(false)
     expect(isOverdue({ dueDate: '2026-09-10', status: 'CANCELLED' }, '2026-09-30')).toBe(false)
   })
 })
 
-describe('who is billed for a month', () => {
-  const on = { admissionDate: '2026-04-01', hasPackage: true }
-
-  it('bills a student on a package who was here', () => {
-    expect(shouldBillForMonth(on, '2026-09-01')).toBe(true)
-    // Admitted part-way through the month: that month is still billed.
-    expect(shouldBillForMonth({ ...on, admissionDate: '2026-09-20' }, '2026-09-01')).toBe(true)
+describe('who is billed for a year', () => {
+  it('bills a student who has a fee set and no voucher yet', () => {
+    expect(shouldBillForSession({ hasFeeLines: true, alreadyBilled: false })).toBe(true)
   })
 
-  it('does not bill somebody with no package', () => {
-    expect(shouldBillForMonth({ ...on, hasPackage: false }, '2026-09-01')).toBe(false)
-  })
-
-  it('does not bill a month before they arrived, or after they left', () => {
-    expect(shouldBillForMonth({ ...on, admissionDate: '2026-10-01' }, '2026-09-01')).toBe(false)
-    expect(shouldBillForMonth({ ...on, leavingDate: '2026-08-31' }, '2026-09-01')).toBe(false)
-    // Left during the month: that month is still theirs.
-    expect(shouldBillForMonth({ ...on, leavingDate: '2026-09-15' }, '2026-09-01')).toBe(true)
+  it('bills nobody twice, and nobody whose fee has not been set', () => {
+    expect(shouldBillForSession({ hasFeeLines: true, alreadyBilled: true })).toBe(false)
+    expect(shouldBillForSession({ hasFeeLines: false, alreadyBilled: false })).toBe(false)
   })
 })
 
@@ -160,7 +152,7 @@ describe('what may still be done', () => {
     expect(decideCanCancelVoucher({ status: 'CANCELLED', paidPaisa: 0 }).allowed).toBe(false)
   })
 
-  it('takes money against an open voucher and nothing else', () => {
+  it('takes an instalment against an open voucher and nothing else', () => {
     expect(decideCanRecordPayment({ status: 'UNPAID' }).allowed).toBe(true)
     expect(decideCanRecordPayment({ status: 'PARTIALLY_PAID' }).allowed).toBe(true)
     const paid = decideCanRecordPayment({ status: 'PAID' })

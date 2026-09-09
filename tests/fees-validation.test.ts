@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  feePackageCreateSchema,
+  admissionFeeSchema,
+  feeLineSchema,
   feePaymentSchema,
   feePaymentVoidSchema,
   feeRulesSchema,
@@ -14,61 +15,86 @@ import {
  * Phase 25. What the fee endpoints will and will not accept. Amounts arrive
  * as rupees from a form and leave this file as whole paisa.
  */
-const PACKAGE = '77777777-7777-4777-8777-777777777771'
 
-describe('a fee package', () => {
+describe('a fee line', () => {
   it('turns typed rupees into paisa', () => {
-    expect(feePackageCreateSchema.parse({ name: 'Regular', monthlyAmountPaisa: '12500' }).monthlyAmountPaisa).toBe(1_250_000)
-    expect(feePackageCreateSchema.parse({ name: 'Regular', monthlyAmountPaisa: '12,500.50' }).monthlyAmountPaisa).toBe(1_250_050)
-    expect(feePackageCreateSchema.parse({ name: 'Regular', monthlyAmountPaisa: 1_250_000 }).monthlyAmountPaisa).toBe(1_250_000)
+    expect(feeLineSchema.parse({ head: 'TUITION', amountPaisa: '12500' }).amountPaisa).toBe(1_250_000)
+    expect(feeLineSchema.parse({ head: 'TOUR', amountPaisa: '12,500.50' }).amountPaisa).toBe(1_250_050)
+    expect(feeLineSchema.parse({ head: 'ANNUAL_FUNDS', amountPaisa: 1_250_000 }).amountPaisa).toBe(1_250_000)
   })
 
-  it('is in use unless the office says otherwise', () => {
-    expect(feePackageCreateSchema.parse({ name: 'Regular', monthlyAmountPaisa: '1' }).isActive).toBe(true)
-    expect(feePackageCreateSchema.parse({ name: 'Regular', monthlyAmountPaisa: '1', isActive: false }).isActive).toBe(false)
+  it('keeps the office’s own words for an "Others" line', () => {
+    expect(feeLineSchema.parse({ head: 'OTHER', label: ' Hostel ', amountPaisa: '500' }).label).toBe('Hostel')
   })
 
-  it('refuses a name that is only spaces, a negative amount, and words', () => {
-    expect(feePackageCreateSchema.safeParse({ name: '  ', monthlyAmountPaisa: '1' }).success).toBe(false)
-    expect(feePackageCreateSchema.safeParse({ name: 'Regular', monthlyAmountPaisa: '-500' }).success).toBe(false)
-    expect(feePackageCreateSchema.safeParse({ name: 'Regular', monthlyAmountPaisa: 'twelve thousand' }).success).toBe(false)
+  it('refuses a head the college does not charge, and a line of nothing', () => {
+    expect(feeLineSchema.safeParse({ head: 'CANTEEN', amountPaisa: '100' }).success).toBe(false)
+    const zero = feeLineSchema.safeParse({ head: 'TUITION', amountPaisa: '0' })
+    expect(zero.success).toBe(false)
+    if (!zero.success) expect(zero.error.issues[0]!.message).toMatch(/greater than nought/)
   })
 
   it('refuses an amount with an extra zero, and says why', () => {
-    const bad = feePackageCreateSchema.safeParse({ name: 'Regular', monthlyAmountPaisa: '99999999' })
+    const bad = feeLineSchema.safeParse({ head: 'TUITION', amountPaisa: '99999999' })
     expect(bad.success).toBe(false)
     if (!bad.success) expect(bad.error.issues[0]!.message).toMatch(/extra zero/)
   })
 })
 
-describe('a student’s plan', () => {
-  it('takes a package and a concession, and no package at all', () => {
-    expect(studentFeePlanSchema.parse({ feePackageId: PACKAGE, feeDiscountPaisa: '500' })).toEqual({ feePackageId: PACKAGE, feeDiscountPaisa: 50_000 })
-    expect(studentFeePlanSchema.parse({ feePackageId: '' }).feePackageId).toBeUndefined()
-    expect(studentFeePlanSchema.parse({}).feeDiscountPaisa).toBe(0)
+describe('a student’s fee for the year', () => {
+  const SESSION = '11111111-1111-4111-8111-111111111111'
+
+  it('takes a set of heads and a concession', () => {
+    const parsed = studentFeePlanSchema.parse({
+      academicSessionId: SESSION,
+      lines: [
+        { head: 'TUITION', amountPaisa: '30000' },
+        { head: 'ANNUAL_FUNDS', amountPaisa: '5000' },
+      ],
+      feeDiscountPaisa: '2500',
+    })
+    expect(parsed.lines).toHaveLength(2)
+    expect(parsed.lines[0]!.amountPaisa).toBe(3_000_000)
+    expect(parsed.feeDiscountPaisa).toBe(250_000)
   })
 
-  it('refuses a package that is not an identifier', () => {
-    expect(studentFeePlanSchema.safeParse({ feePackageId: 'regular' }).success).toBe(false)
+  it('accepts no heads at all: every one of them is optional', () => {
+    const parsed = studentFeePlanSchema.parse({ academicSessionId: SESSION })
+    expect(parsed.lines).toEqual([])
+    expect(parsed.feeDiscountPaisa).toBe(0)
+  })
+
+  it('needs to know which year it is for', () => {
+    expect(studentFeePlanSchema.safeParse({ lines: [] }).success).toBe(false)
+    expect(studentFeePlanSchema.safeParse({ academicSessionId: 'this-year' }).success).toBe(false)
+  })
+
+  it('is the same shape on the admission form, without the year', () => {
+    const parsed = admissionFeeSchema.parse({ lines: [{ head: 'TOUR', amountPaisa: '1500' }] })
+    expect(parsed.lines[0]!.head).toBe('TOUR')
+    expect(admissionFeeSchema.parse({}).lines).toEqual([])
   })
 })
 
-describe('issuing a month', () => {
-  it('takes a month, and checks first when asked', () => {
-    const parsed = voucherRunSchema.parse({ month: '2026-09-01', dryRun: 'true' })
-    expect(parsed.month).toBe('2026-09-01')
+describe('issuing a year', () => {
+  const SESSION = '11111111-1111-4111-8111-111111111111'
+
+  it('takes a session, and checks first when asked', () => {
+    const parsed = voucherRunSchema.parse({ academicSessionId: SESSION, dryRun: 'true' })
+    expect(parsed.academicSessionId).toBe(SESSION)
     expect(parsed.dryRun).toBe(true)
-    expect(voucherRunSchema.parse({ month: '2026-09-01' }).dryRun).toBe(false)
+    expect(voucherRunSchema.parse({ academicSessionId: SESSION }).dryRun).toBe(false)
   })
 
-  it('takes a due day only within a month', () => {
-    expect(voucherRunSchema.parse({ month: '2026-09-01', dueDay: '15' }).dueDay).toBe(15)
-    expect(voucherRunSchema.safeParse({ month: '2026-09-01', dueDay: '0' }).success).toBe(false)
-    expect(voucherRunSchema.safeParse({ month: '2026-09-01', dueDay: '32' }).success).toBe(false)
+  it('leaves the due date out unless the college sets one', () => {
+    expect(voucherRunSchema.parse({ academicSessionId: SESSION }).dueDate).toBeUndefined()
+    expect(voucherRunSchema.parse({ academicSessionId: SESSION, dueDate: '' }).dueDate).toBeUndefined()
+    expect(voucherRunSchema.parse({ academicSessionId: SESSION, dueDate: '2026-10-15' }).dueDate).toBe('2026-10-15')
+    expect(voucherRunSchema.safeParse({ academicSessionId: SESSION, dueDate: 'October' }).success).toBe(false)
   })
 
-  it('refuses a month that is not a date', () => {
-    expect(voucherRunSchema.safeParse({ month: 'September' }).success).toBe(false)
+  it('refuses a session that is not an identifier', () => {
+    expect(voucherRunSchema.safeParse({ academicSessionId: '2026-27' }).success).toBe(false)
   })
 })
 
@@ -104,17 +130,17 @@ describe('a payment', () => {
 })
 
 describe('the rules and the list', () => {
-  it('takes a due day and a fine in rupees', () => {
-    expect(feeRulesSchema.parse({ dueDayOfMonth: '10', lateFinePaisa: '500' })).toEqual({ dueDayOfMonth: 10, lateFinePaisa: 50_000 })
-    expect(feeRulesSchema.parse({ dueDayOfMonth: 1, lateFinePaisa: 0 }).lateFinePaisa).toBe(0)
-    expect(feeRulesSchema.safeParse({ dueDayOfMonth: 32, lateFinePaisa: 0 }).success).toBe(false)
+  it('takes a late fine in rupees', () => {
+    expect(feeRulesSchema.parse({ lateFinePaisa: '500' })).toEqual({ lateFinePaisa: 50_000 })
+    expect(feeRulesSchema.parse({ lateFinePaisa: 0 }).lateFinePaisa).toBe(0)
+    expect(feeRulesSchema.safeParse({ lateFinePaisa: 'none' }).success).toBe(false)
   })
 
   it('defaults the list to the first page with no filters', () => {
     const query = voucherListQuerySchema.parse({})
     expect(query.page).toBe(1)
     expect(query.status).toBeUndefined()
-    expect(query.overdueOnly).toBe(false)
+    expect(query.owingOnly).toBe(false)
   })
 
   it('treats an empty box and "ALL" as no filter, and refuses a state it does not know', () => {

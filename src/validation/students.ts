@@ -7,6 +7,7 @@
  * such as "I.Com" works without touching this file.
  */
 import { z } from 'zod'
+import { admissionFeeSchema } from './fees'
 import { cnic, isoDate, optionalText, phone, requiredText, uuid } from './common'
 
 export const STUDENT_STATUSES = [
@@ -138,6 +139,13 @@ export const studentCreateSchema = z
     admissionDate: isoDate,
 
     enrollment: enrollmentSelectionSchema,
+
+    /**
+     * The year's fee, head by head (Phase 28). Optional in full: a student
+     * can be admitted before the office has decided what they will be
+     * charged.
+     */
+    fee: admissionFeeSchema.optional(),
 
     /** Optionally create a student portal login at the same time. */
     createAccount: z.boolean().default(false),

@@ -20,6 +20,23 @@ export const EXPENSE_CATEGORY_LABEL: Record<ExpenseCategoryValue, string> = {
   OTHER: 'Something else',
 }
 
+/** The first day of the month a college date falls in: "2026-09-17" → "2026-09-01". */
+export function monthStart(date: string): string {
+  return `${date.slice(0, 7)}-01`
+}
+
+/** How many days a month has, from its first day. */
+export function daysInMonth(month: string): number {
+  const [y, m] = month.split('-').map(Number)
+  return new Date(Date.UTC(y!, m!, 0)).getUTCDate()
+}
+
+/** "September 2026", for a heading. */
+export function monthLabel(month: string): string {
+  const [y, m] = month.split('-').map(Number)
+  return new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(Date.UTC(y!, m! - 1, 1)))
+}
+
 /** The months to graph, oldest first, ending with the one given. */
 export function monthsEndingAt(month: string, count: number): string[] {
   const [y, m] = month.slice(0, 7).split('-').map(Number)

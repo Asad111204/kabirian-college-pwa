@@ -22,11 +22,12 @@ import { ConflictError, NotFoundError } from '../api/errors'
 import { writeAuditLog } from '../audit/audit'
 import { assertAdminArea, paginate, paginatedResult, type PaginatedResult } from './service-utils'
 import { collegeDateToStorage, storageToCollegeDate, todayInCollegeTimezone } from '../time/college-date'
-import { monthLabel, monthStart } from '../fees/fees-policy'
-import { getFeeMonthSummary } from './fees.service'
+import { getFeeSessionSummary } from './fees.service'
 import {
   EXPENSE_CATEGORY_LABEL,
   decideCanVoidExpense,
+  monthLabel,
+  monthStart,
   monthsEndingAt,
   netFor,
   shortMonthLabel,
@@ -232,7 +233,7 @@ export async function getFinanceSummary(ctx: AuthContext, query: FinanceSummaryQ
       where: { voidedAt: null, spentOn: { gte: span.from, lte: span.to } },
       select: { amountPaisa: true, spentOn: true, category: true },
     }),
-    getFeeMonthSummary(ctx, month),
+    getFeeSessionSummary(ctx),
   ])
 
   const collected = new Map<string, number>()

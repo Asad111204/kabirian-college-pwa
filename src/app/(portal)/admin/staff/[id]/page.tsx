@@ -7,6 +7,7 @@ import { getStaff } from '@/server/services/staff.service'
 import { listAcademicSessions } from '@/server/services/academic-structure.service'
 import { NotFoundError } from '@/server/api/errors'
 import { formatDate } from '@/lib/format'
+import { formatPaisa } from '@/lib/money'
 import { PageHeader } from '@/components/layout/app-shell'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -118,6 +119,10 @@ export default async function StaffProfilePage({ params }: { params: Promise<{ i
                   <Detail label="Last working day" value={formatDate(staff.leavingDate)} />
                 ) : null}
                 <Detail label="Qualification" value={staff.qualification ?? '—'} />
+                {/* Only shown to somebody who may see the college's money. */}
+                {can(ctx, 'finance.view') ? (
+                  <Detail label="Salary per month" value={staff.salaryPaisa === null ? 'Not recorded' : formatPaisa(staff.salaryPaisa)} />
+                ) : null}
               </dl>
             </CardContent>
           </Card>

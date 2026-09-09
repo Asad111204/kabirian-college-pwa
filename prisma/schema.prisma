@@ -321,6 +321,21 @@ enum EventStatus {
 /// post. Broad on purpose: a long list nobody reads is worse than seven
 /// headings everybody understands. Adding one is a migration (ADR-172).
 /// What has happened to one month's voucher (Phase 25).
+/// What a fee is for (Phase 28). The college charges an **annual** fee made
+/// up of these, and a family pays it in instalments whenever they can.
+enum FeeHead {
+  TUITION
+  ANNUAL_FUNDS
+  EVENTS_FUNDS
+  BOARD_REGISTRATION
+  BOARD_ADMISSION
+  TOUR
+  /// Anything else, with the office's own words in `label`.
+  OTHER
+
+  @@map("fee_head")
+}
+
 enum FeeVoucherStatus {
   /// Issued, nothing received against it yet.
   UNPAID
@@ -642,6 +657,7 @@ model AcademicSession {
   homework           Homework[]
   complaints         Complaint[]
   feeVouchers        FeeVoucher[]
+  studentFeeLines    StudentFeeLine[]
 
   @@index([status])
   @@map("academic_sessions")
@@ -793,9 +809,8 @@ model Student {
   matricBoard            String?       @map("matric_board") @db.VarChar(100)
   admissionDate          DateTime      @map("admission_date") @db.Date
   admissionSessionId     String        @map("admission_session_id") @db.Uuid
-  /// The fee package this student is on, and their own concession on top of
-  /// it, in paisa (Phase 25). No package means nothing is billed to them yet.
-  feePackageId           String?       @map("fee_package_id") @db.Uuid
+  /// A concession on this student's own fee, in paisa off the year's total
+  /// (Phase 25). What they are charged is in `feeLines`.
   feeDiscountPaisa       Int           @default(0) @map("fee_discount_paisa")
   status                 StudentStatus @default(ACTIVE)
   photoThumbnail         Bytes?        @map("photo_thumbnail")
@@ -807,7 +822,6 @@ model Student {
 
   user              User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
   admissionSession  AcademicSession     @relation(fields: [admissionSessionId], references: [id])
-  feePackage        FeePackage?         @relation(fields: [feePackageId], references: [id], onDelete: SetNull)
   enrollments       StudentEnrollment[]
   documents         Document[]
   attendanceEntries AttendanceEntry[]
@@ -815,6 +829,7 @@ model Student {
   results           Result[]
   complaints        Complaint[]
   feeVouchers       FeeVoucher[]
+  feeLines          StudentFeeLine[]
 
   @@index([status])
   @@index([fullName])
@@ -871,6 +886,9 @@ model Staff {
   departmentId        String?          @map("department_id") @db.Uuid
   staffType           StaffType        @default(TEACHING) @map("staff_type")
   qualification       String?          @db.VarChar(200)
+  /// What the college pays them each month, in paisa (Phase 28). Optional:
+  /// not every staff record carries a salary.
+  salaryPaisa         Int?             @map("salary_paisa")
   joiningDate         DateTime         @map("joining_date") @db.Date
   leavingDate         DateTime?        @map("leaving_date") @db.Date
   employmentStatus    EmploymentStatus @default(ACTIVE) @map("employment_status")
@@ -1144,48 +1162,26 @@ model ComplaintReply {
 // ledger that rounds differently on two screens is a ledger nobody trusts.
 // ---------------------------------------------------------------------------
 
-/// A named fee the college charges, with its monthly amount.
+/// One student's fee for one academic session (Phase 28).
 ///
-/// "1st Year Pre-Medical - Regular", "Scholarship 50%". One is assigned to
-/// each student; an individual concession is a discount on the student rather
-/// than a package of their own.
-model FeePackage {
-  id                 String  @id @default(uuid(7)) @db.Uuid
-  name               String  @unique @db.VarChar(120)
-  description        String? @db.VarChar(255)
-  /// What this package costs for one month, in paisa.
-  monthlyAmountPaisa Int     @map("monthly_amount_paisa")
-  isActive           Boolean @default(true) @map("is_active")
-
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
-
-  students Student[]
-  vouchers FeeVoucher[]
-
-  @@index([isActive, name])
-  @@map("fee_packages")
-}
-
-/// One student's bill for one month.
-///
-/// The amounts are frozen at the moment it is issued: changing a package's
-/// price next year must not rewrite what a family was asked for last March.
+/// The college charges by the year, not by the month, and a family pays it in
+/// instalments whenever they can. The amounts are frozen at the moment it is
+/// issued, and what was charged is kept line by line, so changing a student's
+/// fee for next year never rewrites what this year's family was asked for.
 model FeeVoucher {
-  id                String  @id @default(uuid(7)) @db.Uuid
-  studentId         String  @map("student_id") @db.Uuid
-  academicSessionId String? @map("academic_session_id") @db.Uuid
-  feePackageId      String? @map("fee_package_id") @db.Uuid
-  /// The package's name as it was when the voucher was issued.
-  packageName       String  @map("package_name") @db.VarChar(120)
+  id                String @id @default(uuid(7)) @db.Uuid
+  studentId         String @map("student_id") @db.Uuid
+  /// The year being charged. A student has one live voucher per session.
+  academicSessionId String @map("academic_session_id") @db.Uuid
   /// What the family quotes over the counter.
-  voucherNumber     String  @unique @map("voucher_number") @db.VarChar(24)
+  voucherNumber     String @unique @map("voucher_number") @db.VarChar(24)
 
-  /// The first day of the month being billed, on the college calendar.
-  month   DateTime @db.Date
-  dueDate DateTime @map("due_date") @db.Date
+  /// When the college would like it settled by. Null when it has set no
+  /// date, which is the ordinary case here: families pay as they can.
+  dueDate DateTime? @map("due_date") @db.Date
 
-  /// The package amount, before anything is taken off or added on.
+  /// The year's fee, before anything is taken off or added on: the sum of
+  /// the lines below, frozen when the voucher was issued.
   grossPaisa    Int @map("gross_paisa")
   /// The student's own concession, frozen at issue.
   discountPaisa Int @default(0) @map("discount_paisa")
@@ -1206,16 +1202,59 @@ model FeeVoucher {
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   student         Student          @relation(fields: [studentId], references: [id], onDelete: Restrict)
-  academicSession AcademicSession? @relation(fields: [academicSessionId], references: [id], onDelete: SetNull)
-  feePackage      FeePackage?      @relation(fields: [feePackageId], references: [id], onDelete: SetNull)
+  academicSession AcademicSession  @relation(fields: [academicSessionId], references: [id], onDelete: Restrict)
   issuedBy        User?            @relation("FeeVoucherIssuedBy", fields: [issuedByUserId], references: [id], onDelete: SetNull)
   cancelledBy     User?            @relation("FeeVoucherCancelledBy", fields: [cancelledByUserId], references: [id], onDelete: SetNull)
   payments        FeePayment[]
+  lines           FeeVoucherLine[]
 
-  @@index([studentId, month(sort: Desc)])
-  @@index([month, status])
+  @@index([studentId, createdAt(sort: Desc)])
+  @@index([academicSessionId, status])
   @@index([status, dueDate])
   @@map("fee_vouchers")
+}
+
+/// What one student is charged for one academic session, head by head
+/// (Phase 28).
+///
+/// Every line is optional: a student may be charged tuition and nothing else,
+/// or tuition and a tour, or only a board registration fee. The office types
+/// the amounts when the student is admitted and can change them afterwards.
+model StudentFeeLine {
+  id                String  @id @default(uuid(7)) @db.Uuid
+  studentId         String  @map("student_id") @db.Uuid
+  academicSessionId String  @map("academic_session_id") @db.Uuid
+  head              FeeHead
+  /// The office's own words, for a line whose head is OTHER.
+  label             String? @db.VarChar(80)
+  /// The whole year's amount for this head, in paisa.
+  amountPaisa       Int     @map("amount_paisa")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  student         Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  academicSession AcademicSession @relation(fields: [academicSessionId], references: [id], onDelete: Restrict)
+
+  @@index([studentId, academicSessionId])
+  @@map("student_fee_lines")
+}
+
+/// What a voucher actually charged, head by head, frozen when it was issued.
+///
+/// Kept so that changing a student's fee for next year can never rewrite what
+/// this year's family was asked for.
+model FeeVoucherLine {
+  id          String  @id @default(uuid(7)) @db.Uuid
+  voucherId   String  @map("voucher_id") @db.Uuid
+  head        FeeHead
+  label       String? @db.VarChar(80)
+  amountPaisa Int     @map("amount_paisa")
+
+  voucher FeeVoucher @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+
+  @@index([voucherId])
+  @@map("fee_voucher_lines")
 }
 
 /// Money received against a voucher.

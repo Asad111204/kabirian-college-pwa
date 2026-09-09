@@ -32,6 +32,7 @@ const EMPTY = {
   staffType: 'TEACHING',
   joiningDate: new Date().toISOString().slice(0, 10),
   qualification: '',
+  salaryPaisa: '',
   notes: '',
 }
 
@@ -240,6 +241,22 @@ export function AddStaffForm({
               value={form.qualification}
               onChange={(e) => set('qualification', e.target.value)}
               placeholder="e.g. MSc Botany"
+              disabled={submitting}
+            />
+          </Field>
+
+          <Field
+            label="Salary per month (Rs)"
+            htmlFor="salaryPaisa"
+            hint="Optional. Leave it empty if the college has not settled one."
+            error={fieldErrors.salaryPaisa}
+          >
+            <Input
+              id="salaryPaisa"
+              inputMode="decimal"
+              value={form.salaryPaisa}
+              onChange={(e) => set('salaryPaisa', e.target.value)}
+              placeholder="e.g. 45000"
               disabled={submitting}
             />
           </Field>

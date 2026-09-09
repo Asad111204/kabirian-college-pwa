@@ -757,70 +757,74 @@ WHERE dt.owner_type = 'STUDENT' AND dt.is_required AND dt.is_active
 ```
 
 
-## 8A. Fees (Phase 25)
+## 8A. Fees (Phase 25, reworked in Phase 28)
 
-Every amount is a whole number of **paisa**: 12,500 rupees is 1,250,000. Nothing
-in the fee system holds a floating-point number of rupees, and CHECK constraints
-refuse a negative amount, a concession larger than the fee it comes off, and a
-payment of nothing.
+Every amount is a whole number of **paisa**: 12,500 rupees is 1,250,000. CHECK
+constraints refuse a negative amount, a concession larger than the fee it comes
+off, and a payment or fee line of nothing.
 
-### `fee_packages` - a named fee with its monthly amount
+The college charges an **annual** fee made up of named heads, and a family pays
+it in **instalments whenever they can**. So a voucher is one student's bill for
+one academic session, not for one month, and a due date is something the office
+may set rather than something every bill carries. Fee *packages* were removed in
+Phase 28: every student's amounts are typed in at admission (ADR-177).
+
+### `student_fee_lines` - what one student is charged for one year
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
-| name | varchar(120) | unique |
-| description | varchar(255) | |
-| monthly_amount_paisa | integer | what one month costs |
-| is_active | boolean | a retired package keeps its old vouchers; nobody new goes on it |
+| student_id | uuid | FK -> students `ON DELETE CASCADE` |
+| academic_session_id | uuid | FK -> academic_sessions `ON DELETE RESTRICT` |
+| head | enum `fee_head` | `TUITION`, `ANNUAL_FUNDS`, `EVENTS_FUNDS`, `BOARD_REGISTRATION`, `BOARD_ADMISSION`, `TOUR`, `OTHER` |
+| label | varchar(80) | the office's own words, for an `OTHER` line |
+| amount_paisa | integer | the whole year's amount; must be greater than nought |
 | created_at / updated_at | timestamptz | |
 
-### `fee_vouchers` - one student's bill for one month
+Every head is optional. Index `(student_id, academic_session_id)`.
+
+### `fee_vouchers` - one student's fee for one session
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
 | student_id | uuid | FK -> students `ON DELETE RESTRICT` |
-| academic_session_id | uuid | FK, `SET NULL` |
-| fee_package_id | uuid | FK, `SET NULL` |
-| package_name | varchar(120) | the package's name **as it was when issued** |
+| academic_session_id | uuid | FK -> academic_sessions `ON DELETE RESTRICT`, required |
 | voucher_number | varchar(24) | unique, `FV-000001`, from `code_sequences` |
-| month / due_date | date | first day of the month billed; the day it falls due |
-| gross_paisa / discount_paisa | integer | the fee, and the student's concession, frozen at issue |
+| due_date | date | **nullable**: only when the college sets one |
+| gross_paisa / discount_paisa | integer | the year's fee and the concession, frozen at issue |
 | late_fine_paisa | integer | the fine actually charged; nought until money is taken late |
-| paid_paisa | integer | the sum of payments that have not been voided |
+| paid_paisa | integer | the sum of instalments that have not been voided |
 | status | enum `fee_voucher_status` | `UNPAID`, `PARTIALLY_PAID`, `PAID`, `CANCELLED` |
 | issued_by_user_id | uuid | FK, `SET NULL` |
 | cancelled_at / cancelled_by_user_id / cancel_reason | | a half-recorded cancellation cannot exist |
 
-A **partial unique index** on `(student_id, month) WHERE status <> 'CANCELLED'`
-means running a month's billing twice cannot bill a family twice, while a
-voucher issued in error can be withdrawn and reissued. Indexes on
-`(student_id, month DESC)`, `(month, status)` and `(status, due_date)`.
+A **partial unique index** on `(student_id, academic_session_id) WHERE status <> 'CANCELLED'`
+means issuing a year's fees twice cannot bill a family twice, while a voucher
+issued in error can be withdrawn and reissued.
 
-### `fee_payments` - money received
+### `fee_voucher_lines` - what a voucher charged, frozen at issue
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
-| voucher_id | uuid | FK -> fee_vouchers `ON DELETE RESTRICT` |
-| amount_paisa | integer | must be greater than nought |
-| paid_on | date | college calendar |
-| method | enum `fee_payment_method` | `CASH`, `BANK_TRANSFER`, `CHEQUE`, `ONLINE`, `OTHER` |
-| reference / remarks | varchar | slip or cheque number, and a note |
-| received_by_user_id | uuid | FK, `SET NULL` |
-| voided_at / voided_by_user_id / void_reason | | never edited, never deleted: a mistake is voided |
+| voucher_id | uuid | FK -> fee_vouchers `ON DELETE CASCADE` |
+| head / label / amount_paisa | | a copy of the student's fee lines as they stood |
 
-### On `students`
-`fee_package_id` (FK, `SET NULL`) and `fee_discount_paisa` - the package they
-are on and their own concession on top, both defaulted so every existing
-student was untouched.
+Kept so that changing a student's fee for next year can never rewrite what this
+year's family was asked for.
+
+### `fee_payments` - instalments received
+Unchanged from Phase 25: amount, date, method, reference, who received it, and
+a void with a name and a reason. Never edited, never deleted.
+
+### On `students` and `staff`
+`students.fee_discount_paisa` is a concession off the year's total.
+`staff.salary_paisa` (nullable, Phase 28) is what the college pays a member of
+staff each month; it is set when they are added and shown only to somebody who
+may see the college's money.
 
 ### What is not stored
 The late fine **still owed today** is worked out on every read from the due
-date and the rule, so the figures are right without a nightly job and nothing
-drifts when nobody opens the app for a week. The moment money is taken against
-a late voucher the fine is frozen onto it, because from then on it is part of
-what was actually charged. Voiding every payment puts it back. The arithmetic
-lives in `fees-policy.ts` (ADR-174).
-
+date and the rule. It only ever applies where the office gave a voucher a due
+date, which is the exception here. The arithmetic lives in `fees-policy.ts`.
 
 ## 8B. Finance (Phase 26)
 

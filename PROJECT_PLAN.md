@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | **Phase 27 complete: notifications, a complaint thread that keeps itself current, a printable fee voucher, and Payments at the top of the dashboard.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Everything is live on Neon (eighteen migrations, zero drift); the original roadmap and all sixteen of the college's own requests (§23A) are built. Every portal now carries a bell with a count, a red dot on the button each unread thing belongs to, and a number on the home-screen icon. |
-| **Last updated** | 2026-09-11 (rev. 45 — Phase 27: notifications, chat, printable voucher) |
+| **Status** | **Phase 28 complete: the fee is annual, made of optional heads, and paid in instalments.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Everything through Phase 27 is live on Neon (eighteen migrations, zero drift). The college charges one fee per student per year, built from tuition, annual funds, events, board registration, board admission, a tour and anything else, all optional and all set at admission; families pay whenever they can, and a printed voucher shows only what has been paid and what is left. Documents are attached at the counter, and a salary is recorded when staff are added. **The Phase 28 migration is written and tested but not yet applied to Neon; it awaits the go-ahead.** |
+| **Last updated** | 2026-09-11 (rev. 46 — Phase 28: annual fees by head) |
 | **Companion docs** | [DECISIONS.md](DECISIONS.md) · [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) · [README.md](README.md) |
 
 ---
@@ -738,7 +738,7 @@ Everything else in §20 will proceed on the stated defaults.
 
 ## 22. Progress tracker
 
-**Current phase:** 27 — complete and live on Neon. The original roadmap (§20) and all sixteen of the college's own requests (§23A) were finished at Phase 26; this and anything after it are asked for as the college uses the system.
+**Current phase:** 28 — complete, apart from the Neon migration, which is waiting for the go-ahead. The original roadmap (§20) and all sixteen of the college's own requests (§23A) were finished at Phase 26; this and anything after it are asked for as the college uses the system.
 
 | Phase | Status | Notes |
 |---|---|---|
@@ -770,6 +770,7 @@ Everything else in §20 will proceed on the stated defaults.
 | 25 | ✅ Done (2026-09-10) | Fees; live on Neon (sixteen migrations, zero drift) |
 | 26 | ✅ Done (2026-09-10) | Finance and permanent deletion; live on Neon (seventeen migrations, zero drift) |
 | 27 | ✅ Done (2026-09-11) | Notifications, complaint thread that refreshes itself, printable fee voucher, Payments first on the dashboard; live on Neon (eighteen migrations, zero drift) |
+| 28 | ✅ Done (2026-09-11) | Annual fee by head, set at admission with documents and a staff salary; migration written, not yet on Neon |
 
 **Live database:** the college's Neon PostgreSQL instance is connected and holds the real academic structure (2026-27, 20 groups, 20 sections). All **ten** migrations are applied to it, along with the reference data (12 designations, 10 departments, **8 document types**, and the confirmed **grading scale**).
 
@@ -2055,6 +2056,28 @@ The college is told about the things that matter: a **notice** published to the 
 **Tests: 27 new** — which button wears a dot, what the app icon says, where a notification may lead, the bell and its list, the dots in the menu, and the printed voucher. **1,494 in total across 85 files.**
 
 **Two real bugs found on the way, both in this phase's own work.** The unread counts were first read with a grouped query, which through the driver adapter bound its parameters wrongly and turned the whole dashboard into a **500 — but only for somebody who actually had notifications waiting**, which is why it survived the first pass and was caught by the two-portal account in the harness. Counting the rows instead is the same work at this size and cannot fail that way. And a malformed reply from the summary endpoint would have replaced the count on screen and crashed every signed-in page; only a well-formed summary is now allowed to. The harness itself learned to print unhandled server errors, which is how the first one was found at all.
+
+### 22.57 Phase 28, the fee is annual (2026-09-11)
+
+The college looked at the finished fee module and corrected the assumption underneath it. Phase 25 billed **monthly**, on the answer given on 7 September. The college charges **annually**, and families pay in instalments whenever they can. Four changes followed from that, all asked for together.
+
+**The fee is a year's fee, made of optional heads.** Tuition, annual funds, events funds, board registration, board admission, a tour, and an "Others" the office names itself. A student may be charged one of them or all seven; every box on the form can be left empty. One voucher per student per academic session holds the year, and each payment against it is an instalment.
+
+**A due date is optional, and so the late fine almost never applies.** "They pay when they are easy" means most vouchers should carry no date, so the run leaves it empty unless the office types one. A voucher with no due date is never overdue and never fined — the arithmetic says so, not a screen.
+
+**Fee packages are gone.** The college asked for them to go: with amounts typed per student, a package was a template nobody would keep current.
+
+**The fee and the documents are captured at admission.** The heads are on the admission form and written in the same transaction that creates the student. Documents are attached at the counter and uploaded the moment the record exists, because a file cannot belong to a student who does not exist yet; an upload that fails does not undo the admission, and the office is told which file to try again. **Staff get a salary field** on their form for the same reason: it is known when somebody is hired, and it shows on their record to anybody who may see the college's money.
+
+**A printed voucher shows what has been paid and what is left**, and not the year's total. A family paying in instalments needs one number at the counter; printing the total beside it invites paying the wrong figure. The office's own screen still shows the whole sum, itemised head by head, because the office is reconciling rather than paying.
+
+**What a voucher charged is frozen on it, line by line.** Changing next year's tuition, or fixing this year's, never rewrites what a family was already asked for — and with instalments running for months, that window is long.
+
+**Data:** one enum and two tables (`student_fee_lines`, `fee_voucher_lines`), the monthly columns dropped from `fee_vouchers`, `fee_packages` dropped entirely, and `staff.salary_paisa` added — migration `20260911140000_annual_fees`. The migration **deletes** the fee rows on the live database: two test packages, one voucher for a student recorded as “testing as student”, and one Rs 150 cash payment. Every row was listed and checked before the migration was written; all of it is the office trying the module out. **Written, tested against a throwaway PostgreSQL, and not yet applied to Neon: it is waiting for the go-ahead.**
+
+**Verified through the production build (65 fee checks, all passing, alongside the rest — 731 in total)**: a fee set from three heads adding to the year with the concession off, keeping the office's own words for the "Others" line; another student charged tuition alone; a head the college does not charge, a line of nothing and an amount with an extra zero each refused, with the fee unchanged after every refusal; a dry run that wrote nothing, then a run issuing one voucher each with no due date, then the same run issuing nothing; the fee changed afterwards without rewriting the voucher already issued; two instalments, the first leaving exactly 24,500 and reporting 29% collected, the second settling it; a void putting it back to part paid; a voucher with no due date carrying no fine and never overdue; a cancelled voucher reissued; a family seeing only their own; the admission form offering every head and the document checklist; and the staff form asking for a salary.
+
+**Tests: 1,497 across 85 files.** The fee policy, validation and screens were reworked rather than added to, because the model underneath them changed.
 
 ### 22.7 What Phase 4 delivered
 

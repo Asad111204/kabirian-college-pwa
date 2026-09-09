@@ -17,7 +17,7 @@ import { ENROLLMENT_STATUS_LABEL, STUDENT_STATUS_LABEL } from '@/validation/stud
 import { StudentActions } from '@/features/students/student-actions'
 import { DocumentPanel } from '@/features/documents/document-panel'
 import { getStudentDocuments, isDocumentStorageReady } from '@/server/services/documents.service'
-import { getStudentFeePlan, listFeePackages } from '@/server/services/fees.service'
+import { getStudentFeePlan } from '@/server/services/fees.service'
 import { getStudentDeletionReport } from '@/server/services/deletion.service'
 import { DangerZone } from '@/features/admin/danger-zone'
 import { StudentFeePlanCard } from '@/features/fees/student-fee-plan-card'
@@ -64,9 +64,7 @@ export default async function StudentProfilePage({
 
   // The fee plan sits on the student's own record; a reader without
   // `fees.view` simply does not get the card.
-  const [feePlan, feePackages] = can(ctx, 'fees.view')
-    ? await Promise.all([getStudentFeePlan(ctx, student.id), listFeePackages(ctx)])
-    : [null, []]
+  const feePlan = can(ctx, 'fees.view') ? await getStudentFeePlan(ctx, student.id) : null
 
   const currentLabel = current
     ? `${current.sessionName} · ${current.className} · ${current.divisionName} · ${current.programName} · Section ${current.sectionName}${current.rollNumber ? ` · Roll ${current.rollNumber}` : ''}`
@@ -322,7 +320,7 @@ export default async function StudentProfilePage({
             storageReady={storageReady}
           />
 
-          {feePlan ? <StudentFeePlanCard plan={feePlan} packages={feePackages} canManage={can(ctx, 'fees.manage')} /> : null}
+          {feePlan ? <StudentFeePlanCard plan={feePlan} canManage={can(ctx, 'fees.manage')} /> : null}
 
           {deletion ? <DangerZone report={deletion} endpoint={`/api/v1/students/${student.id}/deletion`} afterDelete="/admin/students" /> : null}
         </div>

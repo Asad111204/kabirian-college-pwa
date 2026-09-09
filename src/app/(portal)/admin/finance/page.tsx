@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { can, requirePortalAccess } from '@/server/auth/context'
 import { getFinanceSummary, listExpenses } from '@/server/services/finance.service'
-import { monthStart } from '@/server/fees/fees-policy'
+import { monthStart } from '@/server/finance/finance-policy'
 import { todayInCollegeTimezone } from '@/server/time/college-date'
 import { expenseListQuerySchema, financeSummaryQuerySchema } from '@/validation/finance'
 import { PageHeader } from '@/components/layout/app-shell'

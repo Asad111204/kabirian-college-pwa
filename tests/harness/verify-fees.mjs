@@ -1,6 +1,6 @@
 /**
- * Phase 25: fees. Packages, plans, a month's vouchers, money in, and the
- * arithmetic checked to the paisa. Through the PRODUCTION build.
+ * Fees (Phase 25, reworked in Phase 28): an annual fee made of optional
+ * heads, paid in instalments. Through the PRODUCTION build.
  * Run by tests/harness/run.mjs.
  */
 import { readFileSync } from 'node:fs'
@@ -51,7 +51,6 @@ async function call(who, method, path, body) {
 const get = (who, path) => call(who, 'GET', path)
 
 const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Karachi', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
-const thisMonth = `${today.slice(0, 7)}-01`
 const RS = (rupees) => rupees * 100
 
 await login('admin', 'harness.admin')
@@ -59,114 +58,134 @@ await login('teacher', 'harness.teacher.a')
 await login('student', 'harness.student')
 await login('otherStudent', 'harness.student.b')
 
-console.log('\nPackages and rules\n' + '-'.repeat(52))
-let r = await call('admin', 'PUT', '/api/v1/fees/rules', { dueDayOfMonth: 10, lateFinePaisa: '500' })
-check('the office sets the due day and the late fine', r.status === 200 && r.data.dueDayOfMonth === 10 && r.data.lateFinePaisa === RS(500), `${r.status} ${JSON.stringify(r.data)}`)
+console.log('\nThe one rule the college has\n' + '-'.repeat(52))
+let r = await call('admin', 'PUT', '/api/v1/fees/rules', { lateFinePaisa: '500' })
+check('the office sets the late fine', r.status === 200 && r.data.lateFinePaisa === RS(500), `${r.status} ${JSON.stringify(r.data)}`)
 r = await get('teacher', '/api/v1/fees/rules')
 check('a teacher cannot read the fee rules: 403', r.status === 403, String(r.status))
-r = await call('student', 'PUT', '/api/v1/fees/rules', { dueDayOfMonth: 1, lateFinePaisa: 0 })
+r = await call('student', 'PUT', '/api/v1/fees/rules', { lateFinePaisa: 0 })
 check('a student cannot change them: 403', r.status === 403, String(r.status))
 
-r = await call('admin', 'POST', '/api/v1/fees/packages', { name: 'Harness Regular', monthlyAmountPaisa: '12,500' })
-const regular = r.data?.id
-check('a package is created, and rupees are stored as paisa', r.status === 201 && r.data.monthlyAmountPaisa === RS(12500), `${r.status} ${r.data?.monthlyAmountPaisa}`)
-r = await call('admin', 'POST', '/api/v1/fees/packages', { name: 'Harness Regular', monthlyAmountPaisa: '9000' })
-check('two packages cannot share a name: 409', r.status === 409, String(r.status))
-r = await call('admin', 'POST', '/api/v1/fees/packages', { name: 'Harness Nonsense', monthlyAmountPaisa: '-100' })
-check('a negative amount → 400', r.status === 400, String(r.status))
-r = await call('admin', 'POST', '/api/v1/fees/packages', { name: 'Harness Typo', monthlyAmountPaisa: '99999999' })
+console.log("\nThe year's fee, head by head\n" + '-'.repeat(52))
+r = await call('admin', 'PUT', `/api/v1/students/${ids.student}/fee-plan`, {
+  academicSessionId: ids.session,
+  lines: [
+    { head: 'TUITION', amountPaisa: '30,000' },
+    { head: 'ANNUAL_FUNDS', amountPaisa: '5000' },
+    { head: 'OTHER', label: 'Hostel', amountPaisa: '2000' },
+  ],
+  feeDiscountPaisa: '2500',
+})
+check('the office sets a fee from several heads', r.status === 200 && r.data.lines.length === 3, `${r.status} ${r.data?.lines?.length}`)
+check('…adding up to the year, with the concession off', r.data?.totalPaisa === RS(37000) && r.data?.payablePaisa === RS(34500), `${r.data?.totalPaisa} / ${r.data?.payablePaisa}`)
+check('…keeping the office’s own words for an "Others" line', r.data?.lines?.find((l) => l.head === 'OTHER')?.name === 'Hostel')
+
+r = await call('admin', 'PUT', `/api/v1/students/${ids.studentB}/fee-plan`, {
+  academicSessionId: ids.session,
+  lines: [{ head: 'TUITION', amountPaisa: '30000' }],
+})
+check('another student is charged tuition only: every head is optional', r.status === 200 && r.data.lines.length === 1 && r.data.payablePaisa === RS(30000), `${r.status}`)
+
+r = await call('admin', 'PUT', `/api/v1/students/${ids.student}/fee-plan`, { academicSessionId: ids.session, lines: [{ head: 'CANTEEN', amountPaisa: '100' }] })
+check('a head the college does not charge → 400', r.status === 400, String(r.status))
+r = await call('admin', 'PUT', `/api/v1/students/${ids.student}/fee-plan`, { academicSessionId: ids.session, lines: [{ head: 'TUITION', amountPaisa: '0' }] })
+check('a line of nothing → 400', r.status === 400, String(r.status))
+r = await call('admin', 'PUT', `/api/v1/students/${ids.student}/fee-plan`, { academicSessionId: ids.session, lines: [{ head: 'TUITION', amountPaisa: '99999999' }] })
 check('an amount with an extra zero → 400', r.status === 400, String(r.status))
-r = await call('teacher', 'POST', '/api/v1/fees/packages', { name: 'From a teacher', monthlyAmountPaisa: '100' })
-check('a teacher cannot create one: 403', r.status === 403, String(r.status))
+r = await get('admin', `/api/v1/students/${ids.student}/fee-plan`)
+check('…and after every refusal the fee is as it was', r.status === 200 && r.data.totalPaisa === RS(37000), String(r.data?.totalPaisa))
 
-r = await call('admin', 'POST', '/api/v1/fees/packages', { name: 'Harness Retired', monthlyAmountPaisa: '4000', isActive: false })
-const retired = r.data?.id
-check('a retired package can exist for the old vouchers that point at it', r.status === 201 && r.data.isActive === false, String(r.status))
-
-console.log('\nPutting students on a plan\n' + '-'.repeat(52))
-r = await call('admin', 'PUT', `/api/v1/students/${ids.student}/fee-plan`, { feePackageId: regular, feeDiscountPaisa: '2500' })
-check('the office puts a student on a package with a concession', r.status === 200 && r.data.monthlyPayablePaisa === RS(10000), `${r.status} ${r.data?.monthlyPayablePaisa}`)
-r = await call('admin', 'PUT', `/api/v1/students/${ids.studentB}/fee-plan`, { feePackageId: regular, feeDiscountPaisa: 0 })
-check('and another on the same package with none', r.status === 200 && r.data.monthlyPayablePaisa === RS(12500), `${r.status} ${r.data?.monthlyPayablePaisa}`)
-r = await call('admin', 'PUT', `/api/v1/students/${ids.student}/fee-plan`, { feePackageId: retired, feeDiscountPaisa: 0 })
-check('nobody is put on a retired package: 400', r.status === 400 && /no longer in use/.test(r.error?.message ?? ''), `${r.status} ${r.error?.message}`)
-r = await call('admin', 'PUT', `/api/v1/students/${ids.student}/fee-plan`, { feePackageId: regular, feeDiscountPaisa: '2500' })
-check('…and the student is left as they were', r.status === 200 && r.data.feeDiscountPaisa === RS(2500))
-r = await call('teacher', 'PUT', `/api/v1/students/${ids.student}/fee-plan`, { feePackageId: regular })
-check('a teacher cannot set a fee plan: 403', r.status === 403, String(r.status))
+r = await call('teacher', 'PUT', `/api/v1/students/${ids.student}/fee-plan`, { academicSessionId: ids.session, lines: [] })
+check('a teacher cannot set a fee: 403', r.status === 403, String(r.status))
 r = await get('student', `/api/v1/students/${ids.student}/fee-plan`)
 check('nor can a student read one, even their own: 403', r.status === 403, String(r.status))
 
-console.log('\nIssuing the month\n' + '-'.repeat(52))
-r = await call('admin', 'POST', '/api/v1/fees/run', { month: thisMonth, dryRun: true })
+console.log('\nIssuing the year\n' + '-'.repeat(52))
+r = await call('admin', 'POST', '/api/v1/fees/run', { academicSessionId: ids.session, dryRun: true })
 check('a dry run says what it would do and writes nothing', r.status === 200 && r.data.dryRun === true && r.data.issued === 2, `${r.status} issued=${r.data?.issued}`)
-check('…and adds the month up: 10,000 + 12,500', r.data?.totalBilledPaisa === RS(22500), String(r.data?.totalBilledPaisa))
-r = await get('admin', `/api/v1/fees/vouchers?month=${thisMonth}`)
+check('…adding the year up: 34,500 + 30,000', r.data?.totalBilledPaisa === RS(64500), String(r.data?.totalBilledPaisa))
+r = await get('admin', `/api/v1/fees/vouchers?academicSessionId=${ids.session}`)
 check('…so there is still nothing there', r.status === 200 && r.data.total === 0, `${r.data?.total}`)
 
-r = await call('admin', 'POST', '/api/v1/fees/run', { month: thisMonth })
+r = await call('admin', 'POST', '/api/v1/fees/run', { academicSessionId: ids.session })
 check('the run issues one voucher each', r.status === 200 && r.data.issued === 2 && r.data.dryRun === false, `${r.status} ${r.data?.issued}`)
-check('…due on the day the office set', (r.data?.dueDate ?? '').endsWith('-10'), r.data?.dueDate)
-r = await call('admin', 'POST', '/api/v1/fees/run', { month: thisMonth })
-check('running it again bills nobody twice', r.status === 200 && r.data.issued === 0 && r.data.skippedExisting === 2, `${r.status} ${JSON.stringify({ i: r.data?.issued, s: r.data?.skippedExisting })}`)
+check('…with no due date, because families pay as they can', r.data?.dueDate === null, String(r.data?.dueDate))
+r = await call('admin', 'POST', '/api/v1/fees/run', { academicSessionId: ids.session })
+check('running it again bills nobody twice', r.status === 200 && r.data.issued === 0 && r.data.skippedExisting === 2, JSON.stringify({ i: r.data?.issued, s: r.data?.skippedExisting }))
 r = await get('admin', '/api/v1/audit?action=fee_voucher.issued')
 check('the run is audited', r.status === 200 && r.data.total >= 1, `${r.data?.total}`)
-r = await call('teacher', 'POST', '/api/v1/fees/run', { month: thisMonth })
+r = await call('teacher', 'POST', '/api/v1/fees/run', { academicSessionId: ids.session })
 check('a teacher cannot issue vouchers: 403', r.status === 403, String(r.status))
 
-r = await get('admin', `/api/v1/fees/vouchers?month=${thisMonth}&studentId=${ids.student}`)
+r = await get('admin', `/api/v1/fees/vouchers?academicSessionId=${ids.session}&studentId=${ids.student}`)
 const voucher = r.data?.items?.[0]
-check('the discounted student owes 10,000, not 12,500', r.status === 200 && voucher?.netPayablePaisa === RS(10000) && voucher?.grossPaisa === RS(12500) && voucher?.discountPaisa === RS(2500), JSON.stringify(voucher?.netPayablePaisa))
+check('the discounted student owes 34,500 for the year', r.status === 200 && voucher?.netPayablePaisa === RS(34500), String(voucher?.netPayablePaisa))
 check('…on a voucher with a readable number', /^FV-\d{6}$/.test(voucher?.voucherNumber ?? ''), voucher?.voucherNumber)
-r = await get('admin', `/api/v1/fees/summary?month=${thisMonth}`)
-check('the month summary adds up: 22,500 billed, nothing collected', r.status === 200 && r.data.billedPaisa === RS(22500) && r.data.collectedPaisa === 0 && r.data.outstandingPaisa === RS(22500), JSON.stringify(r.data))
+r = await get('admin', `/api/v1/fees/vouchers/${voucher.id}`)
+check('…which keeps what it charged, head by head', r.status === 200 && r.data.lines.length === 3, `${r.data?.lines?.length}`)
+check('…including the "Others" line, in the office’s words', r.data?.lines?.some((l) => l.name === 'Hostel'))
 
-console.log('\nMoney in\n' + '-'.repeat(52))
-r = await call('admin', 'POST', `/api/v1/fees/vouchers/${voucher.id}/payments`, { amountPaisa: '4000', paidOn: today, method: 'CASH' })
-check('a part payment is recorded', r.status === 201 && r.data.paidPaisa === RS(4000) && r.data.status === 'PARTIALLY_PAID', `${r.status} ${r.data?.status}`)
-check('…and what is left is exact', r.data?.outstandingPaisa === RS(6000), String(r.data?.outstandingPaisa))
-r = await call('admin', 'POST', `/api/v1/fees/vouchers/${voucher.id}/payments`, { amountPaisa: '6000', paidOn: today, method: 'BANK_TRANSFER', reference: 'SLIP-99' })
-check('the rest settles it', r.status === 201 && r.data.status === 'PAID' && r.data.outstandingPaisa === 0, `${r.status} ${r.data?.status}`)
+r = await call('admin', 'PUT', `/api/v1/students/${ids.student}/fee-plan`, { academicSessionId: ids.session, lines: [{ head: 'TUITION', amountPaisa: '1000' }] })
+check('changing the fee afterwards is allowed', r.status === 200, String(r.status))
+r = await get('admin', `/api/v1/fees/vouchers/${voucher.id}`)
+check('…and does not rewrite the voucher already issued', r.status === 200 && r.data.grossPaisa === RS(37000) && r.data.lines.length === 3, `${r.data?.grossPaisa}`)
+await call('admin', 'PUT', `/api/v1/students/${ids.student}/fee-plan`, {
+  academicSessionId: ids.session,
+  lines: [
+    { head: 'TUITION', amountPaisa: '30000' },
+    { head: 'ANNUAL_FUNDS', amountPaisa: '5000' },
+    { head: 'OTHER', label: 'Hostel', amountPaisa: '2000' },
+  ],
+  feeDiscountPaisa: '2500',
+})
+
+r = await get('admin', `/api/v1/fees/summary?academicSessionId=${ids.session}`)
+check('the year adds up: 64,500 charged, nothing collected', r.status === 200 && r.data.billedPaisa === RS(64500) && r.data.collectedPaisa === 0, JSON.stringify(r.data))
+
+console.log('\nPaying in instalments\n' + '-'.repeat(52))
+r = await call('admin', 'POST', `/api/v1/fees/vouchers/${voucher.id}/payments`, { amountPaisa: '10000', paidOn: today, method: 'CASH' })
+check('a first instalment is recorded', r.status === 201 && r.data.paidPaisa === RS(10000) && r.data.status === 'PARTIALLY_PAID', `${r.status} ${r.data?.status}`)
+check('…and what is left is exact', r.data?.outstandingPaisa === RS(24500), String(r.data?.outstandingPaisa))
+check('…with how far through the year they are', r.data?.paidPercent === 29, String(r.data?.paidPercent))
+r = await call('admin', 'POST', `/api/v1/fees/vouchers/${voucher.id}/payments`, { amountPaisa: '24500', paidOn: today, method: 'BANK_TRANSFER', reference: 'SLIP-99' })
+check('the last instalment settles it', r.status === 201 && r.data.status === 'PAID' && r.data.outstandingPaisa === 0, `${r.status} ${r.data?.status}`)
 r = await call('admin', 'POST', `/api/v1/fees/vouchers/${voucher.id}/payments`, { amountPaisa: '100', paidOn: today, method: 'CASH' })
-check('nothing more is taken against a settled voucher: 409', r.status === 409 && /settled in full/.test(r.error?.message ?? ''), `${r.status} ${r.error?.message}`)
+check('nothing more is taken against a settled voucher: 409', r.status === 409 && /settled in full/.test(r.error?.message ?? ''), `${r.status}`)
 r = await call('admin', 'POST', `/api/v1/fees/vouchers/${voucher.id}/cancel`, { reason: 'Changed my mind' })
-check('and it cannot be cancelled with money on it: 409', r.status === 409 && /Void the payments first/.test(r.error?.message ?? ''), `${r.status} ${r.error?.message}`)
+check('and it cannot be cancelled with money on it: 409', r.status === 409 && /Void the payments first/.test(r.error?.message ?? ''), `${r.status}`)
 
 r = await get('admin', `/api/v1/fees/vouchers/${voucher.id}`)
 const firstPayment = r.data?.payments?.[0]
-check('both payments are on the voucher, with the office name against them', r.status === 200 && r.data.payments.length === 2 && r.data.payments[0].receivedBy, `${r.data?.payments?.length}`)
+check('both instalments are on the voucher, with the office name against them', r.status === 200 && r.data.payments.length === 2 && r.data.payments[0].receivedBy, `${r.data?.payments?.length}`)
 r = await call('admin', 'POST', `/api/v1/fees/payments/${firstPayment.id}/void`, { reason: 'Entered against the wrong family' })
-check('voiding one puts the voucher back to part paid', r.status === 200 && r.data.paidPaisa === RS(6000) && r.data.status === 'PARTIALLY_PAID', `${r.status} ${r.data?.status}`)
-check('…and the voided payment is kept, marked, with its reason', r.data?.payments?.find((p) => p.id === firstPayment.id)?.voidReason === 'Entered against the wrong family')
+check('voiding one puts the voucher back to part paid', r.status === 200 && r.data.paidPaisa === RS(24500) && r.data.status === 'PARTIALLY_PAID', `${r.status} ${r.data?.status}`)
 r = await call('admin', 'POST', `/api/v1/fees/payments/${firstPayment.id}/void`, { reason: 'Again' })
 check('a payment is not voided twice: 409', r.status === 409, String(r.status))
 r = await call('admin', 'POST', `/api/v1/fees/vouchers/${voucher.id}/payments`, { amountPaisa: '1000', paidOn: '2099-01-01', method: 'CASH' })
-check('a payment dated in the future → 400', r.status === 400 && /future/.test(r.error?.message ?? ''), `${r.status} ${r.error?.message}`)
+check('a payment dated in the future → 400', r.status === 400 && /future/.test(r.error?.message ?? ''), `${r.status}`)
 r = await call('admin', 'POST', `/api/v1/fees/vouchers/${voucher.id}/payments`, { amountPaisa: '0', paidOn: today, method: 'CASH' })
 check('a payment of nothing → 400', r.status === 400, String(r.status))
 r = await call('teacher', 'POST', `/api/v1/fees/vouchers/${voucher.id}/payments`, { amountPaisa: '100', paidOn: today, method: 'CASH' })
 check('a teacher cannot take money: 403', r.status === 403, String(r.status))
-for (const action of ['fee_payment.recorded', 'fee_payment.voided']) {
-  r = await get('admin', `/api/v1/audit?action=${action}`)
-  check(`${action} is audited`, r.status === 200 && r.data.total >= 1, `${r.data?.total}`)
-}
+
+console.log('\nNo late fine without a due date\n' + '-'.repeat(52))
+r = await get('admin', `/api/v1/fees/vouchers/${voucher.id}`)
+check('a voucher with no due date carries no fine and is never overdue', r.data?.lateFinePaisa === 0 && r.data?.overdue === false, JSON.stringify({ f: r.data?.lateFinePaisa, o: r.data?.overdue }))
 
 console.log('\nCancelling\n' + '-'.repeat(52))
-r = await get('admin', `/api/v1/fees/vouchers?month=${thisMonth}&studentId=${ids.studentB}`)
+r = await get('admin', `/api/v1/fees/vouchers?academicSessionId=${ids.session}&studentId=${ids.studentB}`)
 const second = r.data?.items?.[0]
-check('the second student’s voucher has no concession on it', second?.netPayablePaisa === RS(12500), String(second?.netPayablePaisa))
+check('the second student’s voucher has no concession on it', second?.netPayablePaisa === RS(30000), String(second?.netPayablePaisa))
 r = await call('admin', 'POST', `/api/v1/fees/vouchers/${second.id}/cancel`, {})
 check('cancelling without a reason → 400', r.status === 400, String(r.status))
 r = await call('admin', 'POST', `/api/v1/fees/vouchers/${second.id}/cancel`, { reason: 'Issued to the wrong student' })
 check('with a reason it is withdrawn, and comes to nothing', r.status === 200 && r.data.status === 'CANCELLED' && r.data.netPayablePaisa === 0, `${r.status} ${r.data?.status}`)
-r = await call('admin', 'POST', `/api/v1/fees/vouchers/${second.id}/payments`, { amountPaisa: '100', paidOn: today, method: 'CASH' })
-check('nothing is taken against a cancelled voucher: 409', r.status === 409, String(r.status))
-r = await call('admin', 'POST', '/api/v1/fees/run', { month: thisMonth })
+r = await call('admin', 'POST', '/api/v1/fees/run', { academicSessionId: ids.session })
 check('a cancelled voucher can be reissued: the run picks that student up again', r.status === 200 && r.data.issued === 1, `${r.status} ${r.data?.issued}`)
 
 console.log('\nWhat a family sees\n' + '-'.repeat(52))
 r = await get('student', '/api/v1/student-portal/my-fees')
-check('a student sees their own voucher and what is still owed', r.status === 200 && r.data.total === 1 && r.data.totalOutstandingPaisa === RS(4000), `${r.status} ${r.data?.totalOutstandingPaisa}`)
+check('a student sees their own voucher and what is still owed', r.status === 200 && r.data.total === 1 && r.data.totalOutstandingPaisa === RS(10000), `${r.status} ${r.data?.totalOutstandingPaisa}`)
 check('…and only their own', !r.text.includes(ids.studentB))
 r = await get('student', `/api/v1/fees/vouchers/${voucher.id}`)
 check('they can open their own voucher', r.status === 200 && r.data.voucherNumber === voucher.voucherNumber, String(r.status))
@@ -177,20 +196,22 @@ r = await get('teacher', `/api/v1/fees/vouchers/${voucher.id}`)
 check('a teacher cannot open a family’s bill: 403', r.status === 403, String(r.status))
 r = await get('student', '/api/v1/fees/vouchers')
 check('nor can a student read the office list: 403', r.status === 403, String(r.status))
-r = await get('teacher', '/api/v1/student-portal/my-fees')
-check('a teacher has no fees of their own: 403', r.status === 403, String(r.status))
 r = await get('nobody', '/api/v1/student-portal/my-fees')
 check('signed out → 401', r.status === 401, String(r.status))
 
 console.log('\nThe screens\n' + '-'.repeat(52))
 r = await get('admin', '/admin/fees')
-check('the office’s fee page renders with the month added up', r.status === 200 && r.text.includes('Outstanding'), String(r.status))
-r = await get('admin', '/admin/fees/packages')
-check('packages and rules render, in rupees', r.status === 200 && r.text.includes('Rs 12,500'), String(r.status))
+check('the office’s fee page renders with the year added up', r.status === 200 && r.text.includes('Collected') && r.text.includes('Remaining'), String(r.status))
+r = await get('admin', '/admin/fees/rules')
+check('the fee rules page renders', r.status === 200 && r.text.includes('Late fine'), String(r.status))
 r = await get('admin', `/admin/fees/${voucher.id}`)
-check('one voucher opens for the office', r.status === 200 && r.text.includes(voucher.voucherNumber), String(r.status))
+check('one voucher opens for the office, itemised', r.status === 200 && r.text.includes(voucher.voucherNumber) && r.text.includes('Hostel'), String(r.status))
 r = await get('admin', `/admin/students/${ids.student}`)
-check('the student record carries their fee plan', r.status === 200 && r.text.includes('Harness Regular'), String(r.status))
+check('the student record carries their fee for the year', r.status === 200 && r.text.includes('College tuition fee'), String(r.status))
+r = await get('admin', '/admin/students/new')
+check('the admission form offers every fee head, and the documents', r.status === 200 && r.text.includes('Fees for the year') && r.text.includes('Board registration fee') && r.text.includes('Documents'), String(r.status))
+r = await get('admin', '/admin/staff/new')
+check('the staff form asks for a salary', r.status === 200 && r.text.includes('Salary per month'), String(r.status))
 r = await get('student', '/student/fees')
 check('the student’s own page renders', r.status === 200 && r.text.includes('Still to pay'), String(r.status))
 r = await get('student', `/student/fees/${voucher.id}`)

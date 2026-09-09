@@ -1,22 +1,23 @@
 /**
- * Fees (Phase 25).
+ * Fees (Phase 25, reworked in Phase 28).
  *
- * Named packages carry a monthly amount; each student is on one, with their
- * own concession on top; billing is monthly, one voucher per student per
- * month with a due date; a flat late fine applies once that day has passed.
+ * The college charges an **annual** fee made up of named heads — tuition,
+ * annual funds, a tour, a board registration — and every head is optional.
+ * A family pays that fee in **instalments, whenever they can**, so a voucher
+ * is one student's bill for one academic session and a due date is something
+ * the college may set rather than something every bill carries.
  *
  * Two rules run through all of it. **Every amount is whole paisa** — nothing
  * here holds a floating-point number of rupees, and the database refuses a
- * negative one. And **a voucher's amounts are frozen when it is issued**:
- * changing a package's price next year must not rewrite what a family was
- * asked for last March, so the package's name and amount are copied onto the
- * voucher rather than read through a join.
+ * negative one. And **a voucher's amounts are frozen when it is issued**,
+ * line by line: changing a student's fee for next year must not rewrite what
+ * this year's family was asked for.
  *
  * The one figure that is *not* stored is the late fine still owed today. It
  * is worked out from the due date on every read, so the numbers are right
- * without a nightly job, and nothing drifts when nobody opens the app for a
- * week. The moment money is taken against a late voucher the fine is frozen
- * onto it, because from then on it is part of what was actually charged.
+ * without a nightly job. The moment money is taken against a late voucher the
+ * fine is frozen onto it, because from then on it is part of what was
+ * actually charged.
  */
 import 'server-only'
 import type { Prisma } from '@/generated/prisma/client'
@@ -24,35 +25,32 @@ import { prisma } from '../db/prisma'
 import { authorize, type AuthContext } from '../auth/context'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../api/errors'
 import { writeAuditLog } from '../audit/audit'
-import { notify, studentUserId } from './notifications.service'
-import { formatPaisa } from '@/lib/money'
-import { assertAdminArea, paginate, paginatedResult, withUniqueConstraintHandling, type PaginatedResult } from './service-utils'
+import { assertAdminArea, paginate, paginatedResult, type PaginatedResult } from './service-utils'
 import { nextCode } from './code-sequence'
 import { collegeDateToStorage, storageToCollegeDate, todayInCollegeTimezone } from '../time/college-date'
 import { readSetting, writeSetting } from '../settings/settings-store'
+import { notify } from './notifications.service'
 import {
-  DEFAULT_DUE_DAY,
   DEFAULT_LATE_FINE_PAISA,
   decideCanCancelVoucher,
   decideCanRecordPayment,
   decideCanVoidPayment,
   discountFor,
-  dueDateFor,
+  feeLineLabel,
   isOverdue,
   lateFineDue,
-  monthLabel,
-  monthStart,
   netPayable,
   outstanding,
-  shouldBillForMonth,
+  paidShare,
   statusFor,
+  totalOfLines,
+  type FeeHeadValue,
   type FeePaymentMethodValue,
   type FeeVoucherStatusValue,
 } from '../fees/fees-policy'
 import {
-  SETTING_FEE_DUE_DAY,
   SETTING_FEE_LATE_FINE,
-  type FeePackageInput,
+  type FeeLineInput,
   type FeePaymentInput,
   type FeePaymentVoidInput,
   type FeeRulesInput,
@@ -68,30 +66,32 @@ import {
 /* -------------------------------------------------------------------------- */
 
 export interface FeeRules {
-  dueDayOfMonth: number
   lateFinePaisa: number
 }
 
-export interface FeePackageView {
+export interface FeeLineView {
   id: string
+  head: FeeHeadValue
+  label: string | null
+  /** What it is called on a screen, the office's own words for an "Others". */
   name: string
-  description: string | null
-  monthlyAmountPaisa: number
-  isActive: boolean
-  /** How many students are on it now. */
-  studentCount: number
+  amountPaisa: number
 }
 
 export interface StudentFeePlanView {
   studentId: string
   studentName: string
   studentCode: string
-  feePackageId: string | null
-  packageName: string | null
-  packageMonthlyPaisa: number | null
+  academicSessionId: string
+  academicSessionName: string
+  lines: FeeLineView[]
+  /** Every head added up, before the concession. */
+  totalPaisa: number
   feeDiscountPaisa: number
-  /** What a month would come to today, before any fine. */
-  monthlyPayablePaisa: number | null
+  /** What the year comes to for this student. */
+  payablePaisa: number
+  /** True once a voucher has been issued for this session. */
+  billed: boolean
 }
 
 export interface FeeVoucherRow {
@@ -101,10 +101,9 @@ export interface FeeVoucherRow {
   studentName: string
   studentCode: string
   sectionLabel: string | null
-  month: string
-  monthLabel: string
-  dueDate: string
-  packageName: string
+  academicSessionId: string
+  academicSessionName: string
+  dueDate: string | null
   grossPaisa: number
   discountPaisa: number
   /** The fine owed today: what was frozen on it, or what the rule says now. */
@@ -112,6 +111,8 @@ export interface FeeVoucherRow {
   paidPaisa: number
   netPayablePaisa: number
   outstandingPaisa: number
+  /** How much of the year's fee has come in, as a whole percentage. */
+  paidPercent: number
   status: FeeVoucherStatusValue
   overdue: boolean
   createdAt: string
@@ -131,6 +132,8 @@ export interface FeePaymentView {
 }
 
 export interface FeeVoucherDetail extends FeeVoucherRow {
+  /** What was charged, head by head, as it stood when the voucher was issued. */
+  lines: FeeLineView[]
   payments: FeePaymentView[]
   cancelReason: string | null
   /** Decided here, so the screen never offers what the API would refuse. */
@@ -141,30 +144,29 @@ export interface FeeVoucherDetail extends FeeVoucherRow {
 }
 
 export interface VoucherRunResult {
-  month: string
-  monthLabel: string
-  dueDate: string
+  academicSessionId: string
+  academicSessionName: string
+  dueDate: string | null
   /** True when nothing was written; the office asked what would happen. */
   dryRun: boolean
   issued: number
-  /** Already had a live voucher for that month. */
+  /** Already had a live voucher for that session. */
   skippedExisting: number
-  /** No fee package, so nothing to bill. */
-  skippedNoPackage: number
-  /** Admitted after the month ended. */
-  skippedNotYetAdmitted: number
+  /** No fee set for the year, so there is nothing to bill. */
+  skippedNoFee: number
   totalBilledPaisa: number
   /** A few examples, so the office can see it did the right thing. */
   sample: { studentName: string; studentCode: string; netPayablePaisa: number }[]
 }
 
-export interface FeeMonthSummary {
-  month: string
-  monthLabel: string
+export interface FeeSessionSummary {
+  academicSessionId: string
+  academicSessionName: string
   vouchers: number
   billedPaisa: number
   collectedPaisa: number
   outstandingPaisa: number
+  /** Vouchers past a due date the college set, with something still owed. */
   overdueVouchers: number
 }
 
@@ -182,11 +184,8 @@ function requireOffice(ctx: AuthContext, permission: 'fees.view' | 'fees.manage'
 /* -------------------------------------------------------------------------- */
 
 export async function getFeeRules(): Promise<FeeRules> {
-  const [day, fine] = await Promise.all([readSetting<number>(SETTING_FEE_DUE_DAY), readSetting<number>(SETTING_FEE_LATE_FINE)])
-  return {
-    dueDayOfMonth: typeof day === 'number' && Number.isInteger(day) && day >= 1 && day <= 31 ? day : DEFAULT_DUE_DAY,
-    lateFinePaisa: typeof fine === 'number' && Number.isInteger(fine) && fine >= 0 ? fine : DEFAULT_LATE_FINE_PAISA,
-  }
+  const fine = await readSetting<number>(SETTING_FEE_LATE_FINE)
+  return { lateFinePaisa: typeof fine === 'number' && Number.isInteger(fine) && fine >= 0 ? fine : DEFAULT_LATE_FINE_PAISA }
 }
 
 export async function getFeeRulesForAdmin(ctx: AuthContext): Promise<FeeRules> {
@@ -199,153 +198,157 @@ export async function updateFeeRules(ctx: AuthContext, input: FeeRulesInput): Pr
   const before = await getFeeRules()
 
   await prisma.$transaction(async (tx) => {
-    await writeSetting(SETTING_FEE_DUE_DAY, input.dueDayOfMonth, ctx, { description: 'Day of the month a fee voucher falls due', executor: tx })
-    await writeSetting(SETTING_FEE_LATE_FINE, input.lateFinePaisa, ctx, { description: 'Flat late fine in paisa, applied after the due date', executor: tx })
-    await writeAuditLog(
-      ctx,
-      { action: 'fees.rules_updated', entityType: 'setting', entityLabel: 'Fee rules', before, after: input },
-      tx,
-    )
+    await writeSetting(SETTING_FEE_LATE_FINE, input.lateFinePaisa, ctx, {
+      description: 'Flat late fine in paisa, applied after a due date the college has set',
+      executor: tx,
+    })
+    await writeAuditLog(ctx, { action: 'fees.rules_updated', entityType: 'setting', entityLabel: 'Fee rules', before, after: input }, tx)
   })
   return getFeeRules()
 }
 
 /* -------------------------------------------------------------------------- */
-/* Packages                                                                   */
+/* What a student is charged for a year                                       */
 /* -------------------------------------------------------------------------- */
 
-export async function listFeePackages(ctx: AuthContext, includeInactive = true): Promise<FeePackageView[]> {
+function toLineView(line: { id: string; head: string; label: string | null; amountPaisa: number }): FeeLineView {
+  const head = line.head as FeeHeadValue
+  return { id: line.id, head, label: line.label, name: feeLineLabel({ head, label: line.label }), amountPaisa: line.amountPaisa }
+}
+
+/** The session a fee plan is read for: the one asked about, else the current one. */
+async function resolveSession(academicSessionId?: string): Promise<{ id: string; name: string }> {
+  if (academicSessionId) {
+    const session = await prisma.academicSession.findUnique({ where: { id: academicSessionId }, select: { id: true, name: true } })
+    if (!session) throw new NotFoundError('academic session')
+    return session
+  }
+  const current = await prisma.academicSession.findFirst({ where: { isCurrent: true }, select: { id: true, name: true } })
+  if (!current) throw new ValidationError('There is no current academic session, so there is no year to charge a fee for.')
+  return current
+}
+
+export async function getStudentFeePlan(ctx: AuthContext, studentId: string, academicSessionId?: string): Promise<StudentFeePlanView> {
   requireOffice(ctx, 'fees.view')
-  const rows = await prisma.feePackage.findMany({
-    where: includeInactive ? {} : { isActive: true },
-    orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
-    include: { _count: { select: { students: { where: { deletedAt: null } } } } },
-  })
-  return rows.map((row) => ({
-    id: row.id,
-    name: row.name,
-    description: row.description,
-    monthlyAmountPaisa: row.monthlyAmountPaisa,
-    isActive: row.isActive,
-    studentCount: row._count.students,
-  }))
-}
 
-export async function createFeePackage(ctx: AuthContext, input: FeePackageInput): Promise<FeePackageView> {
-  requireOffice(ctx, 'fees.manage')
-
-  const row = await withUniqueConstraintHandling(
-    () =>
-      prisma.feePackage.create({
-        data: {
-          name: input.name,
-          description: input.description ?? null,
-          monthlyAmountPaisa: input.monthlyAmountPaisa,
-          isActive: input.isActive,
-        },
-      }),
-    { name: 'A fee package with that name already exists.' },
-  )
-
-  await writeAuditLog(ctx, {
-    action: 'fee_package.created',
-    entityType: 'fee_package',
-    entityId: row.id,
-    entityLabel: row.name,
-    after: { name: row.name, monthlyAmountPaisa: row.monthlyAmountPaisa, isActive: row.isActive },
-  })
-
-  return { ...row, studentCount: 0 }
-}
-
-export async function updateFeePackage(ctx: AuthContext, id: string, input: FeePackageInput): Promise<FeePackageView> {
-  requireOffice(ctx, 'fees.manage')
-
-  const before = await prisma.feePackage.findUnique({ where: { id } })
-  if (!before) throw new NotFoundError('fee package')
-
-  await withUniqueConstraintHandling(
-    () =>
-      prisma.feePackage.update({
-        where: { id },
-        data: {
-          name: input.name,
-          description: input.description ?? null,
-          monthlyAmountPaisa: input.monthlyAmountPaisa,
-          isActive: input.isActive,
-        },
-      }),
-    { name: 'A fee package with that name already exists.' },
-  )
-
-  await writeAuditLog(ctx, {
-    action: 'fee_package.updated',
-    entityType: 'fee_package',
-    entityId: id,
-    entityLabel: input.name,
-    before: { name: before.name, monthlyAmountPaisa: before.monthlyAmountPaisa, isActive: before.isActive },
-    after: { name: input.name, monthlyAmountPaisa: input.monthlyAmountPaisa, isActive: input.isActive },
-  })
-
-  const packages = await listFeePackages(ctx)
-  return packages.find((p) => p.id === id)!
-}
-
-/* -------------------------------------------------------------------------- */
-/* A student's plan                                                           */
-/* -------------------------------------------------------------------------- */
-
-export async function getStudentFeePlan(ctx: AuthContext, studentId: string): Promise<StudentFeePlanView> {
-  requireOffice(ctx, 'fees.view')
   const student = await prisma.student.findFirst({
     where: { id: studentId, deletedAt: null },
-    select: { id: true, fullName: true, studentCode: true, feePackageId: true, feeDiscountPaisa: true, feePackage: { select: { name: true, monthlyAmountPaisa: true } } },
+    select: { id: true, fullName: true, studentCode: true, feeDiscountPaisa: true },
   })
   if (!student) throw new NotFoundError('student')
 
-  const gross = student.feePackage?.monthlyAmountPaisa ?? null
+  const session = await resolveSession(academicSessionId)
+  const [lines, voucher] = await Promise.all([
+    prisma.studentFeeLine.findMany({
+      where: { studentId, academicSessionId: session.id },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, head: true, label: true, amountPaisa: true },
+    }),
+    prisma.feeVoucher.findFirst({ where: { studentId, academicSessionId: session.id, status: { not: 'CANCELLED' } }, select: { id: true } }),
+  ])
+
+  const views = lines.map(toLineView)
+  const totalPaisa = totalOfLines(views)
   return {
     studentId: student.id,
     studentName: student.fullName,
     studentCode: student.studentCode,
-    feePackageId: student.feePackageId,
-    packageName: student.feePackage?.name ?? null,
-    packageMonthlyPaisa: gross,
+    academicSessionId: session.id,
+    academicSessionName: session.name,
+    lines: views,
+    totalPaisa,
     feeDiscountPaisa: student.feeDiscountPaisa,
-    monthlyPayablePaisa: gross === null ? null : Math.max(0, gross - discountFor(gross, student.feeDiscountPaisa)),
+    payablePaisa: Math.max(0, totalPaisa - discountFor(totalPaisa, student.feeDiscountPaisa)),
+    billed: voucher !== null,
   }
 }
 
+/**
+ * Writes a student's fee for a year: the whole set of heads, replacing
+ * whatever was there.
+ *
+ * The lines are replaced rather than merged, because the form shows every
+ * head at once and an amount cleared on the screen must be a head removed in
+ * the database. A voucher already issued is untouched: what it charged is
+ * frozen on it.
+ */
 export async function setStudentFeePlan(ctx: AuthContext, studentId: string, input: StudentFeePlanInput): Promise<StudentFeePlanView> {
   requireOffice(ctx, 'fees.manage')
 
-  const before = await prisma.student.findFirst({
+  const student = await prisma.student.findFirst({
     where: { id: studentId, deletedAt: null },
-    select: { id: true, fullName: true, studentCode: true, feePackageId: true, feeDiscountPaisa: true },
+    select: { id: true, fullName: true, studentCode: true, feeDiscountPaisa: true },
   })
-  if (!before) throw new NotFoundError('student')
+  if (!student) throw new NotFoundError('student')
+  const session = await resolveSession(input.academicSessionId)
 
-  if (input.feePackageId) {
-    const pkg = await prisma.feePackage.findUnique({ where: { id: input.feePackageId }, select: { id: true, isActive: true, name: true } })
-    if (!pkg) throw new NotFoundError('fee package')
-    if (!pkg.isActive) throw new ValidationError(`"${pkg.name}" is no longer in use, so nobody can be put on it.`, { feePackageId: ['That package is not in use.'] })
+  const before = await prisma.studentFeeLine.findMany({
+    where: { studentId, academicSessionId: session.id },
+    select: { head: true, label: true, amountPaisa: true },
+  })
+
+  await prisma.$transaction(async (tx) => {
+    await tx.studentFeeLine.deleteMany({ where: { studentId, academicSessionId: session.id } })
+    if (input.lines.length > 0) {
+      await tx.studentFeeLine.createMany({
+        data: input.lines.map((line) => ({
+          studentId,
+          academicSessionId: session.id,
+          head: line.head,
+          label: line.head === 'OTHER' ? (line.label ?? null) : null,
+          amountPaisa: line.amountPaisa,
+        })),
+      })
+    }
+    await tx.student.update({ where: { id: studentId }, data: { feeDiscountPaisa: input.feeDiscountPaisa } })
+
+    await writeAuditLog(
+      ctx,
+      {
+        action: 'student.fee_plan_set',
+        entityType: 'student',
+        entityId: studentId,
+        entityLabel: `${student.fullName} (${student.studentCode})`,
+        before: { lines: before, feeDiscountPaisa: student.feeDiscountPaisa },
+        after: { lines: input.lines, feeDiscountPaisa: input.feeDiscountPaisa },
+        metadata: { academicSession: session.name },
+      },
+      tx,
+    )
+  })
+
+  return getStudentFeePlan(ctx, studentId, session.id)
+}
+
+/**
+ * Writes a student's fee at the moment they are admitted, inside the
+ * admission transaction.
+ *
+ * Separate from `setStudentFeePlan` because the student is being created in
+ * the same breath: there is nothing to read first, nothing to replace, and
+ * the admission's own audit entry already records what happened.
+ */
+export async function createFeeLinesForAdmission(
+  tx: Prisma.TransactionClient,
+  studentId: string,
+  academicSessionId: string,
+  lines: readonly FeeLineInput[],
+  feeDiscountPaisa: number,
+): Promise<void> {
+  if (lines.length > 0) {
+    await tx.studentFeeLine.createMany({
+      data: lines.map((line) => ({
+        studentId,
+        academicSessionId,
+        head: line.head,
+        label: line.head === 'OTHER' ? (line.label ?? null) : null,
+        amountPaisa: line.amountPaisa,
+      })),
+    })
   }
-
-  await prisma.student.update({
-    where: { id: studentId },
-    data: { feePackageId: input.feePackageId ?? null, feeDiscountPaisa: input.feeDiscountPaisa },
-  })
-
-  await writeAuditLog(ctx, {
-    action: 'student.fee_plan_set',
-    entityType: 'student',
-    entityId: studentId,
-    entityLabel: `${before.fullName} (${before.studentCode})`,
-    before: { feePackageId: before.feePackageId, feeDiscountPaisa: before.feeDiscountPaisa },
-    after: { feePackageId: input.feePackageId ?? null, feeDiscountPaisa: input.feeDiscountPaisa },
-  })
-
-  return getStudentFeePlan(ctx, studentId)
+  if (feeDiscountPaisa > 0) {
+    await tx.student.update({ where: { id: studentId }, data: { feeDiscountPaisa } })
+  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -353,6 +356,8 @@ export async function setStudentFeePlan(ctx: AuthContext, studentId: string, inp
 /* -------------------------------------------------------------------------- */
 
 const VOUCHER_INCLUDE = {
+  academicSession: { select: { id: true, name: true } },
+  lines: { select: { id: true, head: true, label: true, amountPaisa: true } },
   student: {
     select: {
       id: true,
@@ -372,18 +377,17 @@ const VOUCHER_INCLUDE = {
   },
 } satisfies Prisma.FeeVoucherInclude
 
-type VoucherWithStudent = Prisma.FeeVoucherGetPayload<{ include: typeof VOUCHER_INCLUDE }>
+type VoucherWithAll = Prisma.FeeVoucherGetPayload<{ include: typeof VOUCHER_INCLUDE }>
 
-function sectionLabelOf(row: VoucherWithStudent): string | null {
+function sectionLabelOf(row: VoucherWithAll): string | null {
   const section = row.student.enrollments[0]?.section
   if (!section) return null
   const g = section.academicGroup
   return `${g.class.displayName ?? g.class.name} · ${g.division.name} · ${g.program.name} · ${section.name}`
 }
 
-function toRow(row: VoucherWithStudent, today: string, rules: FeeRules): FeeVoucherRow {
-  const month = storageToCollegeDate(row.month)
-  const dueDate = storageToCollegeDate(row.dueDate)
+function toRow(row: VoucherWithAll, today: string, rules: FeeRules): FeeVoucherRow {
+  const dueDate = row.dueDate ? storageToCollegeDate(row.dueDate) : null
   const cancelled = row.status === 'CANCELLED'
 
   // What was frozen when money was taken, or what the rule says today.
@@ -402,16 +406,16 @@ function toRow(row: VoucherWithStudent, today: string, rules: FeeRules): FeeVouc
     studentName: row.student.fullName,
     studentCode: row.student.studentCode,
     sectionLabel: sectionLabelOf(row),
-    month,
-    monthLabel: monthLabel(month),
+    academicSessionId: row.academicSessionId,
+    academicSessionName: row.academicSession.name,
     dueDate,
-    packageName: row.packageName,
     grossPaisa: row.grossPaisa,
     discountPaisa: row.discountPaisa,
     lateFinePaisa: cancelled ? 0 : fine,
     paidPaisa: row.paidPaisa,
     netPayablePaisa: cancelled ? 0 : netPayable(amounts),
     outstandingPaisa: cancelled ? 0 : outstanding(amounts),
+    paidPercent: cancelled ? 0 : paidShare(amounts),
     status,
     overdue: isOverdue({ dueDate, status }, today),
     createdAt: row.createdAt.toISOString(),
@@ -424,11 +428,11 @@ export async function listVouchers(ctx: AuthContext, query: VoucherListQuery): P
   const rules = await getFeeRules()
 
   const where: Prisma.FeeVoucherWhereInput = {
-    ...(query.month ? { month: collegeDateToStorage(monthStart(query.month)) } : {}),
+    ...(query.academicSessionId ? { academicSessionId: query.academicSessionId } : {}),
     ...(query.status ? { status: query.status } : {}),
     ...(query.studentId ? { studentId: query.studentId } : {}),
     ...(query.sectionId ? { student: { enrollments: { some: { sectionId: query.sectionId, status: 'ACTIVE' } } } } : {}),
-    ...(query.overdueOnly ? { status: { in: ['UNPAID', 'PARTIALLY_PAID'] }, dueDate: { lt: collegeDateToStorage(today) } } : {}),
+    ...(query.owingOnly ? { status: { in: ['UNPAID', 'PARTIALLY_PAID'] } } : {}),
     ...(query.search
       ? {
           OR: [
@@ -441,14 +445,14 @@ export async function listVouchers(ctx: AuthContext, query: VoucherListQuery): P
   }
 
   const [rows, total] = await Promise.all([
-    prisma.feeVoucher.findMany({ where, orderBy: [{ month: 'desc' }, { voucherNumber: 'asc' }], include: VOUCHER_INCLUDE, ...paginate(query.page, query.pageSize) }),
+    prisma.feeVoucher.findMany({ where, orderBy: [{ createdAt: 'desc' }], include: VOUCHER_INCLUDE, ...paginate(query.page, query.pageSize) }),
     prisma.feeVoucher.count({ where }),
   ])
 
   return paginatedResult(rows.map((row) => toRow(row, today, rules)), total, query.page, query.pageSize)
 }
 
-/** One voucher with its payments, for the office or the student it belongs to. */
+/** One voucher with its lines and payments, for the office or the student it belongs to. */
 export async function getVoucher(ctx: AuthContext, id: string): Promise<FeeVoucherDetail> {
   authorize(ctx, 'dashboard.view')
 
@@ -478,6 +482,7 @@ export async function getVoucher(ctx: AuthContext, id: string): Promise<FeeVouch
 
   return {
     ...base,
+    lines: row.lines.map(toLineView),
     cancelReason: row.cancelReason,
     payments: row.payments.map((p) => ({
       id: p.id,
@@ -510,7 +515,7 @@ export async function getMyFees(ctx: AuthContext, query: MyFeesQuery): Promise<P
   const where: Prisma.FeeVoucherWhereInput = { studentId: ctx.studentId, status: { not: 'CANCELLED' } }
 
   const [rows, total, all] = await Promise.all([
-    prisma.feeVoucher.findMany({ where, orderBy: { month: 'desc' }, include: VOUCHER_INCLUDE, ...paginate(query.page, query.pageSize) }),
+    prisma.feeVoucher.findMany({ where, orderBy: { createdAt: 'desc' }, include: VOUCHER_INCLUDE, ...paginate(query.page, query.pageSize) }),
     prisma.feeVoucher.count({ where }),
     prisma.feeVoucher.findMany({ where, include: VOUCHER_INCLUDE }),
   ])
@@ -520,22 +525,22 @@ export async function getMyFees(ctx: AuthContext, query: MyFeesQuery): Promise<P
   return { ...paginatedResult(items, total, query.page, query.pageSize), totalOutstandingPaisa }
 }
 
-/** What a month came to, for the office's summary line. */
-export async function getFeeMonthSummary(ctx: AuthContext, month: string): Promise<FeeMonthSummary> {
+/** What a year came to, for the office's summary line. */
+export async function getFeeSessionSummary(ctx: AuthContext, academicSessionId?: string): Promise<FeeSessionSummary> {
   requireOffice(ctx, 'fees.view')
   const today = todayInCollegeTimezone()
   const rules = await getFeeRules()
-  const first = monthStart(month)
+  const session = await resolveSession(academicSessionId)
 
   const rows = await prisma.feeVoucher.findMany({
-    where: { month: collegeDateToStorage(first), status: { not: 'CANCELLED' } },
+    where: { academicSessionId: session.id, status: { not: 'CANCELLED' } },
     include: VOUCHER_INCLUDE,
   })
   const mapped = rows.map((row) => toRow(row, today, rules))
 
   return {
-    month: first,
-    monthLabel: monthLabel(first),
+    academicSessionId: session.id,
+    academicSessionName: session.name,
     vouchers: mapped.length,
     billedPaisa: mapped.reduce((n, r) => n + r.netPayablePaisa, 0),
     collectedPaisa: mapped.reduce((n, r) => n + r.paidPaisa, 0),
@@ -545,17 +550,17 @@ export async function getFeeMonthSummary(ctx: AuthContext, month: string): Promi
 }
 
 /* -------------------------------------------------------------------------- */
-/* Issuing a month                                                            */
+/* Issuing a year                                                             */
 /* -------------------------------------------------------------------------- */
 
 /**
- * Issues one month's vouchers.
+ * Issues a session's vouchers.
  *
- * Everybody active, on a package, admitted by the end of that month, who does
- * not already have a live voucher for it. Running it twice is safe: the second
- * run finds every voucher already there and issues nothing, and the database
- * has a unique index saying so as well, because "safe because the code checks"
- * is not the same as safe.
+ * Everybody active who has a fee set for that year and does not already have
+ * a live voucher for it. Running it twice is safe: the second run finds every
+ * voucher already there and issues nothing, and the database has a unique
+ * index saying so as well, because "safe because the code checks" is not the
+ * same as safe.
  *
  * `dryRun` answers "what would this do?" without writing anything, which is
  * how the office should look at a bill run for four hundred families.
@@ -563,9 +568,8 @@ export async function getFeeMonthSummary(ctx: AuthContext, month: string): Promi
 export async function runVouchers(ctx: AuthContext, input: VoucherRunInput): Promise<VoucherRunResult> {
   requireOffice(ctx, 'fees.manage')
 
-  const month = monthStart(input.month)
-  const rules = await getFeeRules()
-  const dueDate = dueDateFor(month, input.dueDay ?? rules.dueDayOfMonth)
+  const session = await resolveSession(input.academicSessionId)
+  const dueDate = input.dueDate ?? null
 
   const students = await prisma.student.findMany({
     where: {
@@ -578,62 +582,61 @@ export async function runVouchers(ctx: AuthContext, input: VoucherRunInput): Pro
       id: true,
       fullName: true,
       studentCode: true,
-      admissionDate: true,
       feeDiscountPaisa: true,
-      feePackage: { select: { id: true, name: true, monthlyAmountPaisa: true, isActive: true } },
-      enrollments: { where: { status: 'ACTIVE' }, orderBy: { startDate: 'desc' }, take: 1, select: { academicSessionId: true } },
+      userId: true,
+      feeLines: { where: { academicSessionId: session.id }, select: { head: true, label: true, amountPaisa: true } },
     },
     orderBy: { studentCode: 'asc' },
   })
 
   const existing = await prisma.feeVoucher.findMany({
-    where: { month: collegeDateToStorage(month), status: { not: 'CANCELLED' }, studentId: { in: students.map((s) => s.id) } },
+    where: { academicSessionId: session.id, status: { not: 'CANCELLED' }, studentId: { in: students.map((s) => s.id) } },
     select: { studentId: true },
   })
   const alreadyBilled = new Set(existing.map((e) => e.studentId))
 
   const result: VoucherRunResult = {
-    month,
-    monthLabel: monthLabel(month),
+    academicSessionId: session.id,
+    academicSessionName: session.name,
     dueDate,
     dryRun: input.dryRun,
     issued: 0,
     skippedExisting: 0,
-    skippedNoPackage: 0,
-    skippedNotYetAdmitted: 0,
+    skippedNoFee: 0,
     totalBilledPaisa: 0,
     sample: [],
   }
 
-  const toIssue: { studentId: string; studentName: string; studentCode: string; packageId: string; packageName: string; gross: number; discount: number; sessionId: string | null }[] = []
+  const toIssue: {
+    studentId: string
+    studentName: string
+    studentCode: string
+    userId: string | null
+    gross: number
+    discount: number
+    lines: { head: string; label: string | null; amountPaisa: number }[]
+  }[] = []
 
   for (const student of students) {
     if (alreadyBilled.has(student.id)) {
       result.skippedExisting += 1
       continue
     }
-    const pkg = student.feePackage
-    if (!pkg) {
-      result.skippedNoPackage += 1
-      continue
-    }
-    const admissionDate = storageToCollegeDate(student.admissionDate)
-    if (!shouldBillForMonth({ admissionDate, hasPackage: true }, month)) {
-      result.skippedNotYetAdmitted += 1
+    if (student.feeLines.length === 0) {
+      result.skippedNoFee += 1
       continue
     }
 
-    const gross = pkg.monthlyAmountPaisa
+    const gross = totalOfLines(student.feeLines)
     const discount = discountFor(gross, student.feeDiscountPaisa)
     toIssue.push({
       studentId: student.id,
       studentName: student.fullName,
       studentCode: student.studentCode,
-      packageId: pkg.id,
-      packageName: pkg.name,
+      userId: student.userId,
       gross,
       discount,
-      sessionId: student.enrollments[0]?.academicSessionId ?? null,
+      lines: student.feeLines.map((l) => ({ head: l.head, label: l.label, amountPaisa: l.amountPaisa })),
     })
     result.totalBilledPaisa += Math.max(0, gross - discount)
   }
@@ -643,23 +646,25 @@ export async function runVouchers(ctx: AuthContext, input: VoucherRunInput): Pro
 
   if (input.dryRun || toIssue.length === 0) return result
 
+  const created: { userId: string | null; voucherId: string; voucherNumber: string }[] = []
+
   await prisma.$transaction(async (tx) => {
     for (const voucher of toIssue) {
       const voucherNumber = await nextCode('FEE_VOUCHER', tx)
-      await tx.feeVoucher.create({
+      const row = await tx.feeVoucher.create({
         data: {
           studentId: voucher.studentId,
-          academicSessionId: voucher.sessionId,
-          feePackageId: voucher.packageId,
-          packageName: voucher.packageName,
+          academicSessionId: session.id,
           voucherNumber,
-          month: collegeDateToStorage(month),
-          dueDate: collegeDateToStorage(dueDate),
+          dueDate: dueDate ? collegeDateToStorage(dueDate) : null,
           grossPaisa: voucher.gross,
           discountPaisa: voucher.discount,
           issuedByUserId: ctx.userId,
+          lines: { create: voucher.lines.map((l) => ({ head: l.head as FeeHeadValue, label: l.label, amountPaisa: l.amountPaisa })) },
         },
+        select: { id: true },
       })
+      created.push({ userId: voucher.userId, voucherId: row.id, voucherNumber })
     }
 
     await writeAuditLog(
@@ -667,27 +672,26 @@ export async function runVouchers(ctx: AuthContext, input: VoucherRunInput): Pro
       {
         action: 'fee_voucher.issued',
         entityType: 'fee_voucher',
-        entityLabel: `Fee run · ${result.monthLabel}`,
-        metadata: { month, dueDate, issued: result.issued, totalBilledPaisa: result.totalBilledPaisa },
+        entityLabel: `Fee run · ${session.name}`,
+        metadata: { academicSession: session.name, dueDate, issued: result.issued, totalBilledPaisa: result.totalBilledPaisa },
       },
       tx,
     )
   })
 
-  // Each family is told about their own voucher, and only their own.
-  for (const voucher of toIssue) {
-    await notify(
-      await studentUserId(voucher.studentId),
-      {
-        kind: 'FEE',
-        title: `Fee voucher for ${result.monthLabel}`,
-        body: `${formatPaisa(Math.max(0, voucher.gross - voucher.discount))} is due by ${dueDate}.`,
-        link: '/student/fees',
-        entityType: 'fee_voucher',
-      },
-      { exceptUserId: ctx.userId },
-    )
-  }
+  // Each family is told, and lands on their own fees — one notification for
+  // the whole run rather than one query each, because the page they open is
+  // their own either way.
+  await notify(
+    created.map((c) => c.userId),
+    {
+      kind: 'FEE',
+      title: `Fee voucher for ${session.name}`,
+      body: 'Your fee voucher is ready. It can be paid in instalments at the college office.',
+      link: '/student/fees',
+      entityType: 'fee_voucher',
+    },
+  )
 
   return result
 }
@@ -707,7 +711,7 @@ async function recomputeVoucher(tx: Prisma.TransactionClient, voucherId: string,
   const live = await tx.feePayment.aggregate({ where: { voucherId, voidedAt: null }, _sum: { amountPaisa: true } })
   const paid = live._sum.amountPaisa ?? 0
   const cancelled = voucher.cancelledAt !== null
-  const dueDate = storageToCollegeDate(voucher.dueDate)
+  const dueDate = voucher.dueDate ? storageToCollegeDate(voucher.dueDate) : null
 
   // Once money has been taken against a late voucher the fine is part of what
   // was charged, so it stays. With every payment voided the voucher is as it
@@ -734,7 +738,7 @@ export async function recordPayment(
 
   const voucher = await prisma.feeVoucher.findUnique({
     where: { id: voucherId },
-    select: { id: true, status: true, voucherNumber: true, dueDate: true, grossPaisa: true, discountPaisa: true, paidPaisa: true, cancelledAt: true, student: { select: { fullName: true, studentCode: true } } },
+    select: { id: true, status: true, voucherNumber: true, student: { select: { fullName: true, userId: true } } },
   })
   if (!voucher) throw new NotFoundError('voucher')
 
@@ -774,6 +778,19 @@ export async function recordPayment(
     )
   })
 
+  const settled = await prisma.feeVoucher.findUnique({ where: { id: voucherId }, select: { paidPaisa: true, grossPaisa: true, discountPaisa: true, lateFinePaisa: true } })
+  if (voucher.student.userId && settled) {
+    const left = outstanding({ ...settled })
+    await notify([voucher.student.userId], {
+      kind: 'FEE',
+      title: 'A fee payment was recorded',
+      body: left > 0 ? 'The college has recorded your payment. Your voucher shows what is left to pay.' : 'The college has recorded your payment. Your fee is settled in full.',
+      link: `/student/fees/${voucherId}`,
+      entityType: 'fee_voucher',
+      entityId: voucherId,
+    })
+  }
+
   return getVoucher(ctx, voucherId)
 }
 
@@ -798,10 +815,7 @@ export async function voidPayment(
   const rules = await getFeeRules()
 
   await prisma.$transaction(async (tx) => {
-    await tx.feePayment.update({
-      where: { id: paymentId },
-      data: { voidedAt: new Date(), voidedByUserId: ctx.userId, voidReason: input.reason },
-    })
+    await tx.feePayment.update({ where: { id: paymentId }, data: { voidedAt: new Date(), voidedByUserId: ctx.userId, voidReason: input.reason } })
     await recomputeVoucher(tx, payment.voucherId, today, rules.lateFinePaisa)
 
     await writeAuditLog(

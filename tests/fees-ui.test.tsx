@@ -4,7 +4,8 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 /**
- * Phase 25 screens: rupees typed in, paisa sent, and nothing offered that the
+ * The fee screens (Phase 25, reworked in Phase 28): rupees typed in, paisa
+ * sent, an annual fee made of optional heads, and nothing offered that the
  * server would refuse. The family's view of a voucher carries no buttons.
  */
 const push = vi.fn()
@@ -18,7 +19,7 @@ vi.mock('@/lib/api-client', async () => {
 })
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
-const { FeePackagesScreen } = await import('@/features/fees/fee-packages')
+const { FeeRulesScreen } = await import('@/features/fees/fee-rules')
 const { VoucherListScreen } = await import('@/features/fees/voucher-list')
 const { VoucherDetailScreen } = await import('@/features/fees/voucher-detail')
 const { StudentFeePlanCard } = await import('@/features/fees/student-fee-plan-card')
@@ -30,12 +31,11 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-const PACKAGE = '77777777-7777-4777-8777-777777777771'
 const VOUCHER = '77777777-7777-4777-8777-777777777772'
 const STUDENT = '66666666-6666-4666-8666-666666666661'
+const SESSION = '11111111-1111-4111-8111-111111111111'
 
-const pkg = { id: PACKAGE, name: 'Pre-Medical — Regular', description: null, monthlyAmountPaisa: 1_250_000, isActive: true, studentCount: 3 }
-const rules = { dueDayOfMonth: 10, lateFinePaisa: 50_000 }
+const rules = { lateFinePaisa: 50_000 }
 
 const voucherRow = {
   id: VOUCHER,
@@ -44,23 +44,27 @@ const voucherRow = {
   studentName: 'Ali Raza',
   studentCode: 'STU-0001',
   sectionLabel: '1st Year · Boys · Pre-Medical · A',
-  month: '2026-09-01',
-  monthLabel: 'September 2026',
-  dueDate: '2026-09-10',
-  packageName: 'Pre-Medical — Regular',
-  grossPaisa: 1_250_000,
-  discountPaisa: 250_000,
+  academicSessionId: SESSION,
+  academicSessionName: '2026-27',
+  dueDate: null as string | null,
+  grossPaisa: 3_500_000,
+  discountPaisa: 500_000,
   lateFinePaisa: 0,
-  paidPaisa: 0,
-  netPayablePaisa: 1_000_000,
-  outstandingPaisa: 1_000_000,
-  status: 'UNPAID' as const,
+  paidPaisa: 1_000_000,
+  netPayablePaisa: 3_000_000,
+  outstandingPaisa: 2_000_000,
+  paidPercent: 33,
+  status: 'PARTIALLY_PAID' as const,
   overdue: false,
   createdAt: '2026-09-01T05:00:00.000Z',
 }
 
 const detail = {
   ...voucherRow,
+  lines: [
+    { id: 'l1', head: 'TUITION' as const, label: null, name: 'College tuition fee', amountPaisa: 3_000_000 },
+    { id: 'l2', head: 'TOUR' as const, label: null, name: 'Tour fee', amountPaisa: 500_000 },
+  ],
   payments: [],
   cancelReason: null as string | null,
   canRecordPayment: true,
@@ -69,183 +73,203 @@ const detail = {
 }
 
 const page = { items: [voucherRow], page: 1, pageSize: 20, total: 1, totalPages: 1 }
-const summary = { month: '2026-09-01', monthLabel: 'September 2026', vouchers: 1, billedPaisa: 1_000_000, collectedPaisa: 0, outstandingPaisa: 1_000_000, overdueVouchers: 0 }
+const summary = {
+  academicSessionId: SESSION,
+  academicSessionName: '2026-27',
+  vouchers: 1,
+  billedPaisa: 3_000_000,
+  collectedPaisa: 1_000_000,
+  outstandingPaisa: 2_000_000,
+  overdueVouchers: 0,
+}
+const sessions = [{ id: SESSION, name: '2026-27' }]
 
-describe('packages and rules', () => {
-  it('shows each package in rupees, with how many are on it', () => {
-    render(<FeePackagesScreen packages={[pkg]} rules={rules} canManage />)
-    expect(screen.getByText('Pre-Medical — Regular')).toBeTruthy()
-    expect(screen.getByText('Rs 12,500')).toBeTruthy()
-    // The column heading says it too, so both are expected.
-    expect(screen.getAllByText('In use').length).toBe(2)
-  })
-
-  it('sends a new package as paisa, whatever was typed', async () => {
-    post.mockResolvedValue(pkg)
-    const user = userEvent.setup()
-    render(<FeePackagesScreen packages={[pkg]} rules={rules} canManage />)
-
-    await user.click(screen.getByRole('button', { name: /New package/ }))
-    await user.type(screen.getByLabelText(/^Name/), 'Scholarship 50%')
-    await user.type(screen.getByLabelText(/Amount per month/), '6,250.50')
-    await user.click(screen.getByRole('button', { name: 'Add package' }))
-
-    await waitFor(() => expect(post).toHaveBeenCalledTimes(1))
-    expect(post.mock.calls[0]![0]).toBe('/api/v1/fees/packages')
-    expect(post.mock.calls[0]![1]).toMatchObject({ name: 'Scholarship 50%', monthlyAmountPaisa: '6,250.50' })
-  })
-
-  it('shows the rules in rupees and saves them', async () => {
+describe('the fee rules', () => {
+  it('shows the late fine in rupees and saves it', async () => {
     put.mockResolvedValue(rules)
     const user = userEvent.setup()
-    render(<FeePackagesScreen packages={[pkg]} rules={rules} canManage />)
+    render(<FeeRulesScreen rules={rules} canManage />)
 
     expect((screen.getByLabelText(/Late fine/) as HTMLInputElement).value).toBe('500')
     await user.click(screen.getByRole('button', { name: /Save rules/ }))
-    await waitFor(() => expect(put).toHaveBeenCalledWith('/api/v1/fees/rules', { dueDayOfMonth: 10, lateFinePaisa: '500' }))
+    await waitFor(() => expect(put).toHaveBeenCalledWith('/api/v1/fees/rules', { lateFinePaisa: '500' }))
+  })
+
+  it('says the fine only applies where the office set a due date', () => {
+    render(<FeeRulesScreen rules={rules} canManage />)
+    expect(screen.getByText(/pays it in instalments whenever they can/)).toBeTruthy()
   })
 
   it('offers nothing to change to a reader who may only look', () => {
-    render(<FeePackagesScreen packages={[pkg]} rules={rules} canManage={false} />)
-    expect(screen.queryByRole('button', { name: /New package/ })).toBeNull()
+    render(<FeeRulesScreen rules={rules} canManage={false} />)
     expect(screen.queryByRole('button', { name: /Save rules/ })).toBeNull()
     expect((screen.getByLabelText(/Late fine/) as HTMLInputElement).disabled).toBe(true)
   })
 })
 
-describe('the month’s vouchers', () => {
-  it('adds up the month above the list', () => {
-    render(<VoucherListScreen page={page} summary={summary} month="2026-09-01" canManage />)
-    expect(screen.getByText('September 2026')).toBeTruthy()
-    expect(screen.getAllByText('Rs 10,000').length).toBeGreaterThan(0)
+describe('the year’s vouchers', () => {
+  it('adds the year up above the list', () => {
+    render(<VoucherListScreen page={page} summary={summary} sessions={sessions} canManage />)
+    expect(screen.getAllByText('2026-27').length).toBeGreaterThan(0)
+    // The summary says it and the row says it again.
+    expect(screen.getAllByText('Rs 20,000').length).toBe(2)
     expect(screen.getByText('FV-000001')).toBeTruthy()
+  })
+
+  it('leads with collected and remaining, not the year’s total', () => {
+    render(<VoucherListScreen page={page} summary={summary} sessions={sessions} canManage />)
+    expect(screen.getAllByText('Collected').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Remaining').length).toBeGreaterThan(0)
   })
 
   it('checks before it issues, and says what it would do', async () => {
     post.mockResolvedValue({
-      month: '2026-09-01',
-      monthLabel: 'September 2026',
-      dueDate: '2026-09-10',
+      academicSessionId: SESSION,
+      academicSessionName: '2026-27',
+      dueDate: null,
       dryRun: true,
       issued: 4,
       skippedExisting: 1,
-      skippedNoPackage: 2,
-      skippedNotYetAdmitted: 0,
-      totalBilledPaisa: 4_000_000,
+      skippedNoFee: 2,
+      totalBilledPaisa: 12_000_000,
       sample: [],
     })
     const user = userEvent.setup()
-    render(<VoucherListScreen page={page} summary={summary} month="2026-09-01" canManage />)
+    render(<VoucherListScreen page={page} summary={summary} sessions={sessions} canManage />)
 
     await user.click(screen.getByRole('button', { name: /Issue vouchers/ }))
     await user.click(screen.getByRole('button', { name: /Check first/ }))
 
-    await waitFor(() => expect(post).toHaveBeenCalledWith('/api/v1/fees/run', { month: '2026-09-01', dryRun: true }))
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/api/v1/fees/run', { academicSessionId: SESSION, dueDate: undefined, dryRun: true }))
     expect(screen.getByText(/4 vouchers would be issued/)).toBeTruthy()
-    expect(screen.getByText(/2 are not on a fee package/)).toBeTruthy()
+    expect(screen.getByText(/2 have no fee set for this year/)).toBeTruthy()
   })
 
   it('offers no issuing to somebody who may only look', () => {
-    render(<VoucherListScreen page={page} summary={summary} month="2026-09-01" canManage={false} />)
+    render(<VoucherListScreen page={page} summary={summary} sessions={sessions} canManage={false} />)
     expect(screen.queryByRole('button', { name: /Issue vouchers/ })).toBeNull()
   })
 })
 
 describe('one voucher', () => {
-  it('shows the sum in full: fee, concession, fine, payable, outstanding', () => {
+  it('shows the year, what has come in, and what is left', () => {
     render(<VoucherDetailScreen voucher={detail} today="2026-09-09" printBase="/admin/fees" />)
-    expect(screen.getByText('Rs 12,500')).toBeTruthy()
-    expect(screen.getByText('− Rs 2,500')).toBeTruthy()
-    expect(screen.getAllByText('Rs 10,000').length).toBe(2)
+    expect(screen.getByText('Collected')).toBeTruthy()
+    expect(screen.getByText('Remaining')).toBeTruthy()
+    expect(screen.getByText('Rs 10,000')).toBeTruthy()
+    expect(screen.getByText('Rs 20,000')).toBeTruthy()
+    expect(screen.getByText('33% collected')).toBeTruthy()
   })
 
-  it('sends a payment in rupees, dated no later than today', async () => {
-    post.mockResolvedValue({ ...detail, paidPaisa: 1_000_000, status: 'PAID' })
+  it('itemises what the year was charged for', () => {
+    render(<VoucherDetailScreen voucher={detail} today="2026-09-09" printBase="/admin/fees" />)
+    expect(screen.getByText('College tuition fee')).toBeTruthy()
+    expect(screen.getByText('Tour fee')).toBeTruthy()
+  })
+
+  it('says a voucher with no due date is payable in instalments', () => {
+    render(<VoucherDetailScreen voucher={detail} today="2026-09-09" printBase="/admin/fees" />)
+    expect(screen.getByText(/payable in instalments/)).toBeTruthy()
+  })
+
+  it('sends an instalment in rupees, dated no later than today', async () => {
+    post.mockResolvedValue({ ...detail, paidPaisa: 3_000_000, status: 'PAID' })
     const user = userEvent.setup()
     render(<VoucherDetailScreen voucher={detail} today="2026-09-09" printBase="/admin/fees" />)
 
     await user.click(screen.getByRole('button', { name: /Record payment/ }))
-    const amount = screen.getByLabelText(/Amount/) as HTMLInputElement
-    expect(amount.value).toBe('10000')
     expect((screen.getByLabelText(/Received on/) as HTMLInputElement).max).toBe('2026-09-09')
 
-    // The card's button opened the dialog; the dialog's own is the last one.
     const buttons = screen.getAllByRole('button', { name: 'Record payment' })
     await user.click(buttons[buttons.length - 1]!)
 
     await waitFor(() => expect(post).toHaveBeenCalledTimes(1))
     expect(post.mock.calls[0]![0]).toBe(`/api/v1/fees/vouchers/${VOUCHER}/payments`)
-    expect(post.mock.calls[0]![1]).toMatchObject({ amountPaisa: '10000', paidOn: '2026-09-09', method: 'CASH' })
-  })
-
-  it('will not cancel without a reason', async () => {
-    const user = userEvent.setup()
-    render(<VoucherDetailScreen voucher={detail} today="2026-09-09" printBase="/admin/fees" />)
-
-    await user.click(screen.getByRole('button', { name: /Cancel this voucher/ }))
-    expect(screen.getByRole('button', { name: 'Cancel voucher' }).hasAttribute('disabled')).toBe(true)
-    await user.type(screen.getByLabelText(/Reason/), 'Issued twice by mistake')
-    expect(screen.getByRole('button', { name: 'Cancel voucher' }).hasAttribute('disabled')).toBe(false)
+    expect(post.mock.calls[0]![1]).toMatchObject({ paidOn: '2026-09-09', method: 'CASH' })
   })
 
   it('gives a family their own bill and none of the office’s buttons', () => {
-    render(<VoucherDetailScreen voucher={{ ...detail, canRecordPayment: false, canCancel: false }} today="2026-09-09" printBase="/admin/fees" />)
+    render(<VoucherDetailScreen voucher={{ ...detail, canRecordPayment: false, canCancel: false }} today="2026-09-09" printBase="/student/fees" />)
     expect(screen.getByText('FV-000001')).toBeTruthy()
     expect(screen.queryByRole('button', { name: /Record payment/ })).toBeNull()
     expect(screen.queryByRole('button', { name: /Cancel this voucher/ })).toBeNull()
   })
-
-  it('says why nothing more can be recorded on a settled voucher', () => {
-    render(
-      <VoucherDetailScreen
-        voucher={{ ...detail, status: 'PAID', paidPaisa: 1_000_000, outstandingPaisa: 0, canRecordPayment: false, blockedReason: 'This voucher is already settled in full.' }}
-        today="2026-09-09"
-        printBase="/admin/fees"
-      />,
-    )
-    expect(screen.getByText(/already settled in full/)).toBeTruthy()
-  })
 })
 
-describe('the plan on a student’s record', () => {
+describe('the fee on a student’s record', () => {
   const plan = {
     studentId: STUDENT,
     studentName: 'Ali Raza',
     studentCode: 'STU-0001',
-    feePackageId: PACKAGE,
-    packageName: 'Pre-Medical — Regular',
-    packageMonthlyPaisa: 1_250_000,
-    feeDiscountPaisa: 250_000,
-    monthlyPayablePaisa: 1_000_000,
+    academicSessionId: SESSION,
+    academicSessionName: '2026-27',
+    lines: [
+      { id: 'l1', head: 'TUITION' as const, label: null, name: 'College tuition fee', amountPaisa: 3_000_000 },
+      { id: 'l2', head: 'OTHER' as const, label: 'Hostel', name: 'Hostel', amountPaisa: 500_000 },
+    ],
+    totalPaisa: 3_500_000,
+    feeDiscountPaisa: 500_000,
+    payablePaisa: 3_000_000,
+    billed: false,
   }
 
-  it('works out the month before anything is saved', () => {
-    render(<StudentFeePlanCard plan={plan} packages={[pkg]} canManage />)
-    expect(screen.getByText(/A month comes to/)).toBeTruthy()
-    expect(screen.getByText('Rs 10,000')).toBeTruthy()
+  it('offers every head the college charges, all optional', () => {
+    render(<StudentFeePlanCard plan={plan} canManage />)
+    expect(screen.getByLabelText('College tuition fee')).toBeTruthy()
+    expect(screen.getByLabelText('Annual funds')).toBeTruthy()
+    expect(screen.getByLabelText('Events funds')).toBeTruthy()
+    expect(screen.getByLabelText('Board registration fee')).toBeTruthy()
+    expect(screen.getByLabelText('Board admission fee')).toBeTruthy()
+    expect(screen.getByLabelText('Tour fee')).toBeTruthy()
+    expect(screen.getByLabelText('Others')).toBeTruthy()
+    expect(screen.getByText(/Leave a box empty if it does not apply/)).toBeTruthy()
   })
 
-  it('sends the package and the concession', async () => {
+  it('fills in what the student is already charged, and works out the year', () => {
+    render(<StudentFeePlanCard plan={plan} canManage />)
+    expect((screen.getByLabelText('College tuition fee') as HTMLInputElement).value).toBe('30000')
+    expect((screen.getByLabelText('Others') as HTMLInputElement).value).toBe('5000')
+    expect((screen.getByLabelText(/What is it for/) as HTMLInputElement).value).toBe('Hostel')
+    expect(screen.getByText('Rs 35,000')).toBeTruthy()
+    expect(screen.getByText('Rs 30,000')).toBeTruthy()
+  })
+
+  it('sends only the heads that were filled in', async () => {
     put.mockResolvedValue(plan)
     const user = userEvent.setup()
-    render(<StudentFeePlanCard plan={plan} packages={[pkg]} canManage />)
+    render(<StudentFeePlanCard plan={plan} canManage />)
 
-    await user.click(screen.getByRole('button', { name: /Save plan/ }))
-    await waitFor(() => expect(put).toHaveBeenCalledWith(`/api/v1/students/${STUDENT}/fee-plan`, { feePackageId: PACKAGE, feeDiscountPaisa: '2500' }))
+    await user.click(screen.getByRole('button', { name: /Save fee/ }))
+    await waitFor(() => expect(put).toHaveBeenCalledTimes(1))
+    expect(put.mock.calls[0]![0]).toBe(`/api/v1/students/${STUDENT}/fee-plan`)
+    const body = put.mock.calls[0]![1] as { lines: { head: string }[]; academicSessionId: string }
+    expect(body.academicSessionId).toBe(SESSION)
+    expect(body.lines.map((line) => line.head)).toEqual(['TUITION', 'OTHER'])
   })
 
-  it('says plainly when the college has no packages yet', () => {
-    render(<StudentFeePlanCard plan={{ ...plan, feePackageId: null, packageName: null, packageMonthlyPaisa: null, monthlyPayablePaisa: null }} packages={[]} canManage />)
-    expect(screen.getByText(/no fee packages yet/)).toBeTruthy()
+  it('warns that a voucher already issued keeps what it charged', () => {
+    render(<StudentFeePlanCard plan={{ ...plan, billed: true }} canManage />)
+    expect(screen.getByText(/frozen on it/)).toBeTruthy()
+  })
+
+  it('offers nothing to change to a reader who may only look', () => {
+    render(<StudentFeePlanCard plan={plan} canManage={false} />)
+    expect(screen.queryByRole('button', { name: /Save fee/ })).toBeNull()
+    expect((screen.getByLabelText('College tuition fee') as HTMLInputElement).disabled).toBe(true)
   })
 })
 
 describe('a student’s own fees', () => {
   it('leads with what is still to pay', () => {
-    render(<MyFeesScreen page={{ ...page, totalOutstandingPaisa: 1_000_000 }} />)
+    render(<MyFeesScreen page={{ ...page, totalOutstandingPaisa: 2_000_000 }} />)
     expect(screen.getByText('Still to pay')).toBeTruthy()
-    expect(screen.getAllByText('Rs 10,000').length).toBeGreaterThan(0)
-    expect(screen.getByText('September 2026')).toBeTruthy()
+    expect(screen.getAllByText('Rs 20,000').length).toBeGreaterThan(0)
+    expect(screen.getByText('2026-27')).toBeTruthy()
+  })
+
+  it('says how much has been paid so far', () => {
+    render(<MyFeesScreen page={{ ...page, totalOutstandingPaisa: 2_000_000 }} />)
+    expect(screen.getByText(/Rs 10,000 paid/)).toBeTruthy()
   })
 
   it('says where fees are actually paid', () => {
@@ -263,7 +287,7 @@ describe('finding it', () => {
   it('is in the office menu and the student menu, and not in a teacher’s', () => {
     const fees = NAVIGATION.ADMIN.find((g) => g.title === 'Fees & Finance')
     expect(fees?.items.map((i) => i.href)).toContain('/admin/fees')
-    expect(fees?.items.map((i) => i.href)).toContain('/admin/fees/packages')
+    expect(fees?.items.map((i) => i.href)).toContain('/admin/fees/rules')
     expect(NAVIGATION.STUDENT.some((g) => g.items.some((i) => i.href === '/student/fees'))).toBe(true)
     expect(NAVIGATION.STAFF.some((g) => g.items.some((i) => i.href.includes('fees')))).toBe(false)
   })

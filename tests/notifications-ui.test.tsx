@@ -215,19 +215,20 @@ describe('the printable fee voucher', () => {
     studentName: 'Ali Raza',
     studentCode: 'STU-0001',
     sectionLabel: '1st Year · Boys · Pre-Medical · A',
-    month: '2026-09-01',
-    monthLabel: 'September 2026',
+    academicSessionId: '11111111-1111-4111-8111-111111111111',
+    academicSessionName: '2026-27',
     dueDate: '2026-09-10',
-    packageName: 'Pre-Medical — Regular',
     grossPaisa: 1_250_000,
     discountPaisa: 250_000,
     lateFinePaisa: 0,
-    paidPaisa: 0,
+    paidPaisa: 400_000,
     netPayablePaisa: 1_000_000,
-    outstandingPaisa: 1_000_000,
-    status: 'UNPAID' as const,
+    outstandingPaisa: 600_000,
+    paidPercent: 40,
+    status: 'PARTIALLY_PAID' as const,
     overdue: false,
     createdAt: '2026-09-01T05:00:00.000Z',
+    lines: [{ id: 'l1', head: 'TUITION' as const, label: null, name: 'College tuition fee', amountPaisa: 1_250_000 }],
     payments: [],
     cancelReason: null,
     canRecordPayment: false,
@@ -243,12 +244,22 @@ describe('the printable fee voucher', () => {
     expect(screen.getAllByText('Kabirian College').length).toBe(3)
   })
 
-  it('carries the figures on every copy, and the amount to pay', () => {
+  it('shows what has been paid and what is left, on every copy', () => {
     render(<VoucherPrint voucher={voucher} collegeName="Kabirian College" />)
     expect(screen.getAllByText('FV-000001').length).toBe(3)
-    expect(screen.getAllByText('Rs 10,000').length).toBe(3)
-    expect(screen.getAllByText('− Rs 2,500').length).toBe(3)
-    expect(screen.getAllByText('Payable').length).toBe(3)
+    expect(screen.getAllByText('Paid so far').length).toBe(3)
+    expect(screen.getAllByText('Rs 4,000').length).toBe(3)
+    expect(screen.getAllByText('Remaining').length).toBe(3)
+    expect(screen.getAllByText('Rs 6,000').length).toBe(3)
+  })
+
+  it('never prints the year’s total, which the college asked to keep off it', () => {
+    render(<VoucherPrint voucher={voucher} collegeName="Kabirian College" />)
+    // The fee itself is Rs 12,500 and the payable Rs 10,000; neither belongs
+    // on a voucher a family pays in instalments.
+    expect(screen.queryByText('Rs 12,500')).toBeNull()
+    expect(screen.queryByText('Rs 10,000')).toBeNull()
+    expect(screen.queryByText('Payable')).toBeNull()
   })
 
   it('shows a late fine only when there is one', () => {
@@ -256,7 +267,7 @@ describe('the printable fee voucher', () => {
     expect(screen.queryByText('Late fine')).toBeNull()
     unmount()
 
-    render(<VoucherPrint voucher={{ ...voucher, lateFinePaisa: 50_000, netPayablePaisa: 1_050_000, outstandingPaisa: 1_050_000 }} collegeName="Kabirian College" />)
+    render(<VoucherPrint voucher={{ ...voucher, lateFinePaisa: 50_000, netPayablePaisa: 1_050_000, outstandingPaisa: 650_000 }} collegeName="Kabirian College" />)
     expect(screen.getAllByText('Late fine').length).toBe(3)
   })
 

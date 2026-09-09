@@ -6,6 +6,7 @@
  * without touching this file.
  */
 import { z } from 'zod'
+import { amountPaisa } from './fees'
 import { cnic, entityCode, isoDate, optionalText, phone, requiredText, uuid } from './common'
 
 export const EMPLOYMENT_STATUSES = [
@@ -91,6 +92,12 @@ const staffDetailsShape = {
 
   // Professional
   qualification: optionalText(200),
+  /**
+   * What the college pays them each month, in paisa (Phase 28). Optional:
+   * not every staff record carries a salary, and an empty box means the
+   * college has not recorded one rather than a salary of nothing.
+   */
+  salaryPaisa: z.preprocess((v) => (v === '' || v === null ? undefined : v), amountPaisa.optional()),
   notes: optionalText(2000),
 }
 

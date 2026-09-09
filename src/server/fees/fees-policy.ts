@@ -1,26 +1,60 @@
 /**
- * Fees: what a voucher comes to, when a fine applies, and what may still be
- * done to it.
+ * Fees: what a year's bill comes to, and what may still be done to it.
  *
  * Pure functions with no database, in the shape of the other policy modules.
  * Everything here is in whole paisa; nothing in the fee system ever holds a
  * floating-point number of rupees.
  *
- * The college's rules, confirmed for this phase:
- *   - a named package carries a monthly amount,
- *   - each student is on one package, with their own concession on top,
- *   - billing is monthly: one voucher per student per month, with a due date,
- *   - a flat late fine, set by the office, applies once the due date has
- *     passed and the voucher is not settled.
+ * The college's rules, as it has now stated them (Phase 28):
+ *   - the fee is **annual**, not monthly,
+ *   - it is made up of named heads — tuition, annual funds, a tour and so on
+ *     — and every one of them is optional,
+ *   - a family pays it in **instalments, whenever they can**, so a due date
+ *     is something the college may set rather than something every bill has,
+ *   - a student's own concession comes off the year's total,
+ *   - a flat late fine applies only if the college has set both a due date
+ *     and a fine, and something is still owed after that day.
  */
+
+/* -------------------------------------------------------------------------- */
+/* What a fee is for                                                          */
+/* -------------------------------------------------------------------------- */
+
+export const FEE_HEADS = ['TUITION', 'ANNUAL_FUNDS', 'EVENTS_FUNDS', 'BOARD_REGISTRATION', 'BOARD_ADMISSION', 'TOUR', 'OTHER'] as const
+export type FeeHeadValue = (typeof FEE_HEADS)[number]
+
+export const FEE_HEAD_LABEL: Record<FeeHeadValue, string> = {
+  TUITION: 'College tuition fee',
+  ANNUAL_FUNDS: 'Annual funds',
+  EVENTS_FUNDS: 'Events funds',
+  BOARD_REGISTRATION: 'Board registration fee',
+  BOARD_ADMISSION: 'Board admission fee',
+  TOUR: 'Tour fee',
+  OTHER: 'Others',
+}
+
+/** What a line is called on a screen: the office's own words for an "Others". */
+export function feeLineLabel(line: { head: FeeHeadValue; label?: string | null }): string {
+  if (line.head === 'OTHER' && line.label && line.label.trim() !== '') return line.label.trim()
+  return FEE_HEAD_LABEL[line.head]
+}
+
+/** The year's fee before any concession: every head added up. */
+export function totalOfLines(lines: readonly { amountPaisa: number }[]): number {
+  return lines.reduce((sum, line) => sum + Math.max(0, Math.trunc(line.amountPaisa)), 0)
+}
+
+/* -------------------------------------------------------------------------- */
+/* States                                                                     */
+/* -------------------------------------------------------------------------- */
 
 export const FEE_VOUCHER_STATUSES = ['UNPAID', 'PARTIALLY_PAID', 'PAID', 'CANCELLED'] as const
 export type FeeVoucherStatusValue = (typeof FEE_VOUCHER_STATUSES)[number]
 
 export const FEE_VOUCHER_STATUS_LABEL: Record<FeeVoucherStatusValue, string> = {
-  UNPAID: 'Unpaid',
+  UNPAID: 'Nothing paid',
   PARTIALLY_PAID: 'Part paid',
-  PAID: 'Paid',
+  PAID: 'Paid in full',
   CANCELLED: 'Cancelled',
 }
 
@@ -42,44 +76,8 @@ export const FEE_PAYMENT_METHOD_LABEL: Record<FeePaymentMethodValue, string> = {
   OTHER: 'Other',
 }
 
-/** The day of the month a voucher falls due, when the office has not said. */
-export const DEFAULT_DUE_DAY = 10
-/** No late fine until the college sets one. */
+/** No late fine, and no due date, until the college sets them. */
 export const DEFAULT_LATE_FINE_PAISA = 0
-
-/* -------------------------------------------------------------------------- */
-/* The month, and the day it falls due                                        */
-/* -------------------------------------------------------------------------- */
-
-/** The first day of the month a college date falls in: "2026-09-17" → "2026-09-01". */
-export function monthStart(date: string): string {
-  return `${date.slice(0, 7)}-01`
-}
-
-/** How many days a month has, from its first day. */
-export function daysInMonth(month: string): number {
-  const [y, m] = month.split('-').map(Number)
-  return new Date(Date.UTC(y!, m!, 0)).getUTCDate()
-}
-
-/** "September 2026", for a heading. */
-export function monthLabel(month: string): string {
-  const [y, m] = month.split('-').map(Number)
-  return new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(Date.UTC(y!, m! - 1, 1)))
-}
-
-/**
- * When a month's voucher falls due.
- *
- * A due day the month does not have becomes its last day rather than spilling
- * into the next one: the 31st in February is the 28th, or the 29th in a leap
- * year, and never the 3rd of March.
- */
-export function dueDateFor(month: string, dueDay: number): string {
-  const last = daysInMonth(month)
-  const day = Math.min(Math.max(Math.trunc(dueDay), 1), last)
-  return `${month.slice(0, 7)}-${String(day).padStart(2, '0')}`
-}
 
 /* -------------------------------------------------------------------------- */
 /* What a voucher comes to                                                    */
@@ -95,17 +93,17 @@ export interface VoucherAmounts {
 /**
  * The concession actually applied.
  *
- * A student's concession may be larger than the package they end up on — the
- * office lowers a package, or moves somebody to a cheaper one, and forgets the
- * discount. It is capped at the fee rather than allowed to turn the bill
- * negative: the college does not owe a family money for attending.
+ * A student's concession may be larger than the fee they end up with — the
+ * office lowers a head, or removes one, and forgets the concession. It is
+ * capped at the fee rather than allowed to turn the bill negative: the
+ * college does not owe a family money for attending.
  */
 export function discountFor(grossPaisa: number, studentDiscountPaisa: number): number {
   if (!Number.isFinite(studentDiscountPaisa) || studentDiscountPaisa <= 0) return 0
   return Math.min(Math.trunc(studentDiscountPaisa), Math.max(0, Math.trunc(grossPaisa)))
 }
 
-/** What is owed on a voucher in total: the fee, less the concession, plus any fine. */
+/** What is owed in total: the year's fee, less the concession, plus any fine. */
 export function netPayable(amounts: Pick<VoucherAmounts, 'grossPaisa' | 'discountPaisa' | 'lateFinePaisa'>): number {
   return Math.max(0, amounts.grossPaisa - amounts.discountPaisa + amounts.lateFinePaisa)
 }
@@ -132,32 +130,38 @@ export function statusFor(amounts: VoucherAmounts, cancelled: boolean): FeeVouch
   return amounts.paidPaisa >= netPayable(amounts) ? 'PAID' : 'PARTIALLY_PAID'
 }
 
+/** How much of the year's fee has come in, as a whole percentage. */
+export function paidShare(amounts: VoucherAmounts): number {
+  const payable = netPayable(amounts)
+  if (payable <= 0) return 100
+  return Math.min(100, Math.round((amounts.paidPaisa / payable) * 100))
+}
+
 /**
  * The late fine owed on a voucher **today**.
  *
- * Flat, not per day: the college asked for "a fine applied after the due
- * date", and a fine that grows every night is a different promise. It is
- * charged once the due date has passed and something is still owed, so a
- * family who paid in full on the last day is never fined, and a voucher
- * already settled cannot grow a fine later.
- *
- * It is worked out rather than stored, so no nightly job has to run for the
- * figures to be right, and nothing drifts when nobody opens the app for a week.
+ * Only when the college has set both a due date and a fine. Families here pay
+ * in instalments as they can, so most vouchers carry no date and no fine ever
+ * applies; where the college does set one, it is flat, charged once the day
+ * has passed and something is still owed. It is worked out rather than
+ * stored, so nothing drifts when nobody opens the app for a week.
  */
 export function lateFineDue(
-  voucher: { dueDate: string; grossPaisa: number; discountPaisa: number; paidPaisa: number; cancelled: boolean },
+  voucher: { dueDate: string | null; grossPaisa: number; discountPaisa: number; paidPaisa: number; cancelled: boolean },
   today: string,
   lateFinePaisa: number,
 ): number {
   if (voucher.cancelled) return 0
+  if (!voucher.dueDate) return 0
   if (!Number.isFinite(lateFinePaisa) || lateFinePaisa <= 0) return 0
   if (today <= voucher.dueDate) return 0
   const owedBeforeFine = Math.max(0, voucher.grossPaisa - voucher.discountPaisa) - voucher.paidPaisa
   return owedBeforeFine > 0 ? Math.trunc(lateFinePaisa) : 0
 }
 
-/** Past its due date with something still owed. */
-export function isOverdue(voucher: { dueDate: string; status: FeeVoucherStatusValue }, today: string): boolean {
+/** Past its due date with something still owed. Never, when there is no date. */
+export function isOverdue(voucher: { dueDate: string | null; status: FeeVoucherStatusValue }, today: string): boolean {
+  if (!voucher.dueDate) return false
   if (voucher.status === 'PAID' || voucher.status === 'CANCELLED') return false
   return today > voucher.dueDate
 }
@@ -197,19 +201,11 @@ export function decideCanVoidPayment(payment: { voidedAt: Date | string | null }
 }
 
 /**
- * Whether a student should be billed for a month at all.
+ * Whether a student should be billed for a session at all.
  *
- * Somebody admitted in October has no September bill, and somebody who left in
- * March has no April one. Their status now does not decide it: a student who
- * left owes what they owed while they were here.
+ * Somebody with no fee lines for that year is not billed: the office has not
+ * said what they owe, and a voucher for nothing helps nobody.
  */
-export function shouldBillForMonth(
-  student: { admissionDate: string; leavingDate?: string | null; hasPackage: boolean },
-  month: string,
-): boolean {
-  if (!student.hasPackage) return false
-  const lastDayOfMonth = `${month.slice(0, 7)}-${String(daysInMonth(month)).padStart(2, '0')}`
-  if (student.admissionDate > lastDayOfMonth) return false
-  if (student.leavingDate && student.leavingDate < month) return false
-  return true
+export function shouldBillForSession(student: { hasFeeLines: boolean; alreadyBilled: boolean }): boolean {
+  return student.hasFeeLines && !student.alreadyBilled
 }

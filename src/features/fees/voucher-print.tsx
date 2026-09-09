@@ -19,6 +19,11 @@ import type { FeeVoucherDetail } from '@/server/services/fees.service'
  * Three identical parts on one A4 sheet, which is how a fee voucher is used in
  * Pakistan: one for the bank, one for the college, one for the family. Each
  * carries the same figures, and each is signed separately.
+ *
+ * The college asked that a voucher show **what has been paid and what is
+ * left**, not the year's total. A family pays in instalments, so "remaining"
+ * is the only figure they need at the counter, and printing the whole year's
+ * fee beside it invites paying the wrong number.
  */
 export function VoucherPrint({ voucher, collegeName }: { voucher: FeeVoucherDetail; collegeName: string }) {
   return (
@@ -61,26 +66,25 @@ function VoucherCopy({ copy, voucher, collegeName }: { copy: string; voucher: Fe
 
       <div className="mt-2">
         <Line label="Voucher no." value={voucher.voucherNumber} strong />
-        <Line label="Month" value={voucher.monthLabel} />
-        <Line label="Due date" value={formatDate(voucher.dueDate)} strong />
+        <Line label="Session" value={voucher.academicSessionName} />
+        {voucher.dueDate ? <Line label="Due date" value={formatDate(voucher.dueDate)} strong /> : null}
       </div>
 
       <div className="mt-2 border-t border-black/25 pt-2">
         <Line label="Student" value={voucher.studentName} />
         <Line label="Student ID" value={voucher.studentCode} />
         {voucher.sectionLabel ? <Line label="Class" value={voucher.sectionLabel} /> : null}
-        <Line label="Fee package" value={voucher.packageName} />
       </div>
 
+      {/* What the family needs at the counter: what they have paid, and what
+          is left. The year's total is deliberately not printed. */}
       <div className="mt-2 border-t border-black/25 pt-2">
-        <Line label="Monthly fee" value={formatPaisa(voucher.grossPaisa)} />
-        {voucher.discountPaisa > 0 ? <Line label="Concession" value={`− ${formatPaisa(voucher.discountPaisa)}`} /> : null}
+        <Line label="Paid so far" value={formatPaisa(voucher.paidPaisa)} />
         {voucher.lateFinePaisa > 0 ? <Line label="Late fine" value={`+ ${formatPaisa(voucher.lateFinePaisa)}`} /> : null}
-        {voucher.paidPaisa > 0 ? <Line label="Already paid" value={`− ${formatPaisa(voucher.paidPaisa)}`} /> : null}
       </div>
 
       <div className="mt-2 flex items-baseline justify-between border-y-2 border-black/70 py-1.5">
-        <span className="text-[11px] font-semibold uppercase tracking-wide">Payable</span>
+        <span className="text-[11px] font-semibold uppercase tracking-wide">Remaining</span>
         <span className="text-[15px] font-bold tabular-nums">{formatPaisa(voucher.outstandingPaisa)}</span>
       </div>
 
@@ -89,7 +93,7 @@ function VoucherCopy({ copy, voucher, collegeName }: { copy: string; voucher: Fe
       </p>
 
       <p className="mt-2 text-[9px] leading-snug text-black/70">
-        A fine is charged after the due date. Please quote the voucher number when paying. Keep this copy as your receipt.
+        The fee may be paid in instalments. Please quote the voucher number when paying, and keep this copy as your receipt.
       </p>
 
       <div className="mt-5 flex items-end justify-between gap-3 text-[9px]">

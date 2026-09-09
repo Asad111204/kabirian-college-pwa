@@ -10,6 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox, Field, Input, Select, Textarea } from '@/components/ui/field'
 import { Alert } from '@/components/ui/feedback'
 import { api, ApiError } from '@/lib/api-client'
+import { FeeLinesEditor, emptyFeeLines, feeLinesPayload, type FeeLineDraft } from '@/features/fees/fee-lines-editor'
+import { AdmissionDocuments, uploadAdmissionFiles, type AdmissionDocumentType, type AdmissionFiles } from './admission-documents'
 import { studentCreateSchema } from '@/validation/students'
 import { TemporaryPasswordPanel } from '@/features/users/shared'
 import {
@@ -66,15 +68,22 @@ export function AddStudentForm({
   defaultSessionId,
   nextStudentCode,
   nextAdmissionNumber,
+  documentTypes,
 }: {
   sessions: SessionOption[]
   defaultSessionId: string
   nextStudentCode: string | null
   nextAdmissionNumber: string | null
+  /** The college's document checklist, so files can be attached at the counter. */
+  documentTypes: AdmissionDocumentType[]
 }) {
   const router = useRouter()
 
   const [details, setDetails] = React.useState(EMPTY_DETAILS)
+  const [feeLines, setFeeLines] = React.useState<FeeLineDraft[]>(emptyFeeLines)
+  const [feeDiscount, setFeeDiscount] = React.useState('')
+  const [documentFiles, setDocumentFiles] = React.useState<AdmissionFiles>({})
+  const [uploadFailures, setUploadFailures] = React.useState<string[]>([])
   const [enrollment, setEnrollment] = React.useState<EnrollmentValue>({
     ...EMPTY_ENROLLMENT,
     academicSessionId: defaultSessionId,
@@ -121,6 +130,9 @@ export function AddStudentForm({
       },
       createAccount,
       username: createAccount ? username : undefined,
+      // The year's fee, head by head. Every head is optional, so only the
+      // ones the office filled in are sent.
+      fee: { lines: feeLinesPayload(feeLines), feeDiscountPaisa: feeDiscount || 0 },
     }
   }
 
@@ -148,6 +160,13 @@ export function AddStudentForm({
     setSubmitting(true)
     try {
       const result = await api.post<CreatedStudent>('/api/v1/students', payload)
+
+      // The files could not be attached until the record existed. An upload
+      // that fails does not undo the admission; the office is told which one
+      // to try again on the student's page.
+      const failed = await uploadAdmissionFiles(result.student.id, documentFiles)
+      setUploadFailures(failed)
+
       setCreated(result)
       toast.success(`${result.student.fullName} admitted as ${result.student.studentCode}.`)
     } catch (error) {
@@ -173,6 +192,12 @@ export function AddStudentForm({
             Student ID <strong>{created.student.studentCode}</strong>
           </Alert>
 
+          {uploadFailures.length > 0 ? (
+            <Alert variant="warning" title="Some documents did not upload">
+              {uploadFailures.join(', ')} could not be attached. The admission is saved; try again from the student&apos;s page.
+            </Alert>
+          ) : null}
+
           {created.account ? (
             <TemporaryPasswordPanel
               username={created.account.username}
@@ -193,6 +218,10 @@ export function AddStudentForm({
                 setEnrollment((prev) => ({ ...EMPTY_ENROLLMENT, academicSessionId: prev.academicSessionId }))
                 setCreateAccount(false)
                 setUsername('')
+                setFeeLines(emptyFeeLines())
+                setFeeDiscount('')
+                setDocumentFiles({})
+                setUploadFailures([])
                 router.refresh()
               }}
             >
@@ -526,6 +555,32 @@ export function AddStudentForm({
             disabled={submitting}
             errors={fieldErrors}
           />
+        </CardContent>
+      </Card>
+
+      {/* Fees for the year */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Fees for the year</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <FeeLinesEditor
+            lines={feeLines}
+            onChange={setFeeLines}
+            disabled={submitting}
+            discount={feeDiscount}
+            onDiscountChange={setFeeDiscount}
+          />
+        </CardContent>
+      </Card>
+
+      {/* Documents */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Documents</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <AdmissionDocuments types={documentTypes} files={documentFiles} onChange={setDocumentFiles} disabled={submitting} />
         </CardContent>
       </Card>
 

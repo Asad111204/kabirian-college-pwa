@@ -18,12 +18,12 @@ import { api, ApiError } from '@/lib/api-client'
 import { formatDate } from '@/lib/format'
 import { formatPaisa } from '@/lib/money'
 import { FEE_VOUCHER_STATUSES, FEE_VOUCHER_STATUS_LABEL, FEE_VOUCHER_STATUS_TONE } from '@/server/fees/fees-policy'
-import type { FeeMonthSummary, FeeVoucherRow, VoucherRunResult } from '@/server/services/fees.service'
+import type { FeeSessionSummary, FeeVoucherRow, VoucherRunResult } from '@/server/services/fees.service'
 import type { PaginatedResult } from '@/server/services/service-utils'
 
 /**
- * Admin → Fees. One month's vouchers, what they came to, and the button that
- * issues the next month's.
+ * Admin → Fees. One academic year's vouchers, what they came to, and the
+ * button that issues them.
  *
  * The run always offers a dry run first: a bill run for four hundred families
  * is not something anybody should press blind.
@@ -31,19 +31,19 @@ import type { PaginatedResult } from '@/server/services/service-utils'
 export function VoucherListScreen({
   page,
   summary,
-  month,
+  sessions,
   canManage,
 }: {
   page: PaginatedResult<FeeVoucherRow>
-  summary: FeeMonthSummary
-  month: string
+  summary: FeeSessionSummary
+  sessions: { id: string; name: string }[]
   canManage: boolean
 }) {
   const router = useRouter()
   const [running, setRunning] = React.useState(false)
 
   const go = (params: Record<string, string>) => {
-    const search = new URLSearchParams({ month })
+    const search = new URLSearchParams({ academicSessionId: summary.academicSessionId })
     for (const [key, value] of Object.entries(params)) {
       if (value) search.set(key, value)
       else search.delete(key)
@@ -57,15 +57,20 @@ export function VoucherListScreen({
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex items-center gap-2 pb-2 text-sm text-foreground-muted">
             <CalendarRange className="h-4 w-4" aria-hidden />
-            Month
+            Year
           </div>
-          <Input
-            type="month"
-            value={month.slice(0, 7)}
-            onChange={(e) => router.push(e.target.value ? `/admin/fees?month=${e.target.value}-01` : '/admin/fees')}
-            aria-label="Billing month"
-            className="max-w-[12rem]"
-          />
+          <Select
+            value={summary.academicSessionId}
+            aria-label="Academic session"
+            onChange={(e) => router.push(`/admin/fees?academicSessionId=${e.target.value}`)}
+            className="w-auto max-w-full"
+          >
+            {sessions.map((session) => (
+              <option key={session.id} value={session.id}>
+                {session.name}
+              </option>
+            ))}
+          </Select>
           <div className="relative min-w-0 flex-1 sm:max-w-xs">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground-subtle" aria-hidden />
             <Input
@@ -86,8 +91,8 @@ export function VoucherListScreen({
               </option>
             ))}
           </Select>
-          <Button type="button" variant="secondary" size="sm" onClick={() => go({ overdueOnly: 'true' })}>
-            Overdue only
+          <Button type="button" variant="secondary" size="sm" onClick={() => go({ owingOnly: 'true' })}>
+            Still owing
           </Button>
           {canManage ? (
             <Button type="button" size="sm" onClick={() => setRunning(true)}>
@@ -102,9 +107,9 @@ export function VoucherListScreen({
         <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-5">
           {[
             ['Vouchers', String(summary.vouchers)],
-            ['Billed', formatPaisa(summary.billedPaisa)],
+            ['Charged', formatPaisa(summary.billedPaisa)],
             ['Collected', formatPaisa(summary.collectedPaisa)],
-            ['Outstanding', formatPaisa(summary.outstandingPaisa)],
+            ['Still owed', formatPaisa(summary.outstandingPaisa)],
             ['Overdue', String(summary.overdueVouchers)],
           ].map(([label, value]) => (
             <div key={label}>
@@ -113,15 +118,15 @@ export function VoucherListScreen({
             </div>
           ))}
         </dl>
-        <p className="mt-2 text-xs text-foreground-subtle">{summary.monthLabel}</p>
+        <p className="mt-2 text-xs text-foreground-subtle">{summary.academicSessionName}</p>
       </Card>
 
       {page.items.length === 0 ? (
         <Card>
           <EmptyState
             icon={Receipt}
-            title="No vouchers for this month"
-            description={canManage ? 'Issue them with the button above, once every student is on a fee package.' : 'Nothing has been issued for this month.'}
+            title="No vouchers for this year"
+            description={canManage ? "Set each student's fee on their record, then issue the year's vouchers with the button above." : 'Nothing has been issued for this year.'}
           />
         </Card>
       ) : (
@@ -132,10 +137,9 @@ export function VoucherListScreen({
                 <TR>
                   <TH>Voucher</TH>
                   <TH>Student</TH>
-                  <TH>Due</TH>
-                  <TH className="text-right">Payable</TH>
-                  <TH className="text-right">Paid</TH>
-                  <TH className="text-right">Outstanding</TH>
+                  <TH className="text-right">Charged</TH>
+                  <TH className="text-right">Collected</TH>
+                  <TH className="text-right">Remaining</TH>
                   <TH>State</TH>
                 </TR>
               </THead>
@@ -146,21 +150,21 @@ export function VoucherListScreen({
                       <Link href={`/admin/fees/${row.id}`} className="font-medium text-primary hover:underline">
                         {row.voucherNumber}
                       </Link>
-                      <span className="block text-xs text-foreground-muted">{row.packageName}</span>
+                      <span className="block text-xs text-foreground-muted">
+                        {row.academicSessionName}
+                        {row.dueDate ? ` · due ${formatDate(row.dueDate)}` : ''}
+                      </span>
                     </TD>
                     <TD>
                       <span className="text-foreground">{row.studentName}</span>
                       <span className="block text-xs text-foreground-muted">{row.studentCode}</span>
-                    </TD>
-                    <TD className="text-sm">
-                      {formatDate(row.dueDate)}
-                      {row.overdue ? <span className="block text-xs font-medium text-danger-600">Overdue</span> : null}
                     </TD>
                     <TD className="text-right tabular-nums">{formatPaisa(row.netPayablePaisa)}</TD>
                     <TD className="text-right tabular-nums">{formatPaisa(row.paidPaisa)}</TD>
                     <TD className="text-right font-medium tabular-nums">{formatPaisa(row.outstandingPaisa)}</TD>
                     <TD>
                       <Badge variant={FEE_VOUCHER_STATUS_TONE[row.status]}>{FEE_VOUCHER_STATUS_LABEL[row.status]}</Badge>
+                      {row.overdue ? <span className="block text-xs font-medium text-danger-600">Overdue</span> : null}
                     </TD>
                   </TR>
                 ))}
@@ -176,23 +180,32 @@ export function VoucherListScreen({
         </div>
       ) : null}
 
-      <RunDialog open={running} month={month} onOpenChange={setRunning} onIssued={() => router.refresh()} />
+      <RunDialog
+        open={running}
+        academicSessionId={summary.academicSessionId}
+        sessionName={summary.academicSessionName}
+        onOpenChange={setRunning}
+        onIssued={() => router.refresh()}
+      />
     </>
   )
 }
 
 function RunDialog({
   open,
-  month,
+  academicSessionId,
+  sessionName,
   onOpenChange,
   onIssued,
 }: {
   open: boolean
-  month: string
+  academicSessionId: string
+  sessionName: string
   onOpenChange: (open: boolean) => void
   onIssued: () => void
 }) {
   const [preview, setPreview] = React.useState<VoucherRunResult | null>(null)
+  const [dueDate, setDueDate] = React.useState('')
   const [busy, setBusy] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
 
@@ -201,6 +214,7 @@ function RunDialog({
     setWasOpen(open)
     if (open) {
       setPreview(null)
+      setDueDate('')
       setError(null)
     }
   }
@@ -209,7 +223,11 @@ function RunDialog({
     setBusy(true)
     setError(null)
     try {
-      const result = await api.post<VoucherRunResult>('/api/v1/fees/run', { month, dryRun })
+      const result = await api.post<VoucherRunResult>('/api/v1/fees/run', {
+        academicSessionId,
+        dueDate: dueDate || undefined,
+        dryRun,
+      })
       setPreview(result)
       if (!dryRun) {
         toast.success(`${result.issued} voucher${result.issued === 1 ? '' : 's'} issued.`)
@@ -224,10 +242,14 @@ function RunDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent title="Issue this month's vouchers" description="One voucher per student, for everybody on a fee package who does not have one yet.">
+      <DialogContent title={`Issue vouchers for ${sessionName}`} description="One voucher per student, for everybody who has a fee set for this year and does not have one yet.">
         <div className="space-y-4">
-          <Field label="Month" htmlFor="run-month">
-            <Input id="run-month" value={month.slice(0, 7)} readOnly />
+          <Field
+            label="Due date"
+            htmlFor="run-due-date"
+            hint="Optional. Families pay in instalments, so leave it empty unless the college wants a date on the voucher."
+          >
+            <Input id="run-due-date" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="max-w-[14rem]" />
           </Field>
 
           {preview ? (
@@ -235,11 +257,10 @@ function RunDialog({
               <ul className="mt-1 space-y-0.5 text-sm">
                 <li>
                   {preview.issued} voucher{preview.issued === 1 ? '' : 's'} {preview.dryRun ? 'would be issued' : 'issued'}, {formatPaisa(preview.totalBilledPaisa)} in
-                  total, due {formatDate(preview.dueDate)}.
+                  total{preview.dueDate ? `, due ${formatDate(preview.dueDate)}` : ''}.
                 </li>
-                {preview.skippedExisting > 0 ? <li>{preview.skippedExisting} already had one for this month.</li> : null}
-                {preview.skippedNoPackage > 0 ? <li>{preview.skippedNoPackage} are not on a fee package.</li> : null}
-                {preview.skippedNotYetAdmitted > 0 ? <li>{preview.skippedNotYetAdmitted} were admitted after this month.</li> : null}
+                {preview.skippedExisting > 0 ? <li>{preview.skippedExisting} already had one for this year.</li> : null}
+                {preview.skippedNoFee > 0 ? <li>{preview.skippedNoFee} have no fee set for this year.</li> : null}
               </ul>
             </Alert>
           ) : (

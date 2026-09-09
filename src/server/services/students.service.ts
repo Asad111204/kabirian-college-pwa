@@ -19,6 +19,7 @@ import { prisma } from '../db/prisma'
 import { currentPhotoIds } from './documents.service'
 import { authorize, type AuthContext } from '../auth/context'
 import { writeAuditLog } from '../audit/audit'
+import { createFeeLinesForAdmission } from './fees.service'
 import { ConflictError, NotFoundError, ValidationError } from '../api/errors'
 import { generateTemporaryPassword, hashPassword } from '../auth/password'
 import { nextCode } from './code-sequence'
@@ -588,6 +589,11 @@ export async function createStudent(
             createdByUserId: ctx.userId,
           },
         })
+
+        // The year's fee, head by head, if the office set one at the counter.
+        if (input.fee && (input.fee.lines.length > 0 || input.fee.feeDiscountPaisa > 0)) {
+          await createFeeLinesForAdmission(tx, student.id, input.enrollment.academicSessionId, input.fee.lines, input.fee.feeDiscountPaisa)
+        }
 
         await writeAuditLog(
           ctx,

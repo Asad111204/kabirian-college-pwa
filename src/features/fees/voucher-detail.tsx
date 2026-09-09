@@ -65,7 +65,8 @@ export function VoucherDetailScreen({ voucher: initial, today, printBase }: { vo
               {voucher.sectionLabel ? ` · ${voucher.sectionLabel}` : ''}
             </p>
             <p className="mt-0.5 text-xs text-foreground-subtle">
-              {voucher.monthLabel} · {voucher.packageName} · due {formatDate(voucher.dueDate)}
+              {voucher.academicSessionName}
+              {voucher.dueDate ? ` · due ${formatDate(voucher.dueDate)}` : ' · payable in instalments'}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -80,13 +81,12 @@ export function VoucherDetailScreen({ voucher: initial, today, printBase }: { vo
           </div>
         </CardHeader>
         <CardContent>
-          <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-5">
+          <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
             {[
-              ['Fee', formatPaisa(voucher.grossPaisa)],
+              ["Year's fee", formatPaisa(voucher.grossPaisa)],
               ['Concession', voucher.discountPaisa > 0 ? `− ${formatPaisa(voucher.discountPaisa)}` : '—'],
-              ['Late fine', voucher.lateFinePaisa > 0 ? `+ ${formatPaisa(voucher.lateFinePaisa)}` : '—'],
-              ['Payable', formatPaisa(voucher.netPayablePaisa)],
-              ['Outstanding', formatPaisa(voucher.outstandingPaisa)],
+              ['Collected', formatPaisa(voucher.paidPaisa)],
+              ['Remaining', formatPaisa(voucher.outstandingPaisa)],
             ].map(([label, value]) => (
               <div key={label}>
                 <dt className="text-xs text-foreground-muted">{label}</dt>
@@ -94,6 +94,31 @@ export function VoucherDetailScreen({ voucher: initial, today, printBase }: { vo
               </div>
             ))}
           </dl>
+
+          {/* How far through the year's fee this family is. */}
+          <div className="mt-3">
+            <div className="mb-1 flex items-baseline justify-between text-xs text-foreground-muted">
+              <span>{voucher.paidPercent}% collected</span>
+              {voucher.lateFinePaisa > 0 ? <span className="text-danger-600">Late fine {formatPaisa(voucher.lateFinePaisa)} included</span> : null}
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-surface-muted">
+              <div className="h-full rounded-full bg-success-600" style={{ width: `${voucher.paidPercent}%` }} />
+            </div>
+          </div>
+
+          {voucher.lines.length > 0 ? (
+            <div className="mt-4">
+              <p className="mb-1 text-xs font-medium text-foreground-muted">What the year was charged for</p>
+              <ul className="divide-y divide-border rounded-[var(--radius-control)] border border-border">
+                {voucher.lines.map((line) => (
+                  <li key={line.id} className="flex items-baseline justify-between gap-3 px-3 py-1.5 text-sm">
+                    <span className="text-foreground">{line.name}</span>
+                    <span className="tabular-nums text-foreground-muted">{formatPaisa(line.amountPaisa)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
 
           {voucher.status === 'CANCELLED' && voucher.cancelReason ? (
             <Alert variant="info" className="mt-4" title="Cancelled">

@@ -93,6 +93,8 @@ export interface StaffDetail extends StaffListItem {
   email: string | null
   address: string | null
   qualification: string | null
+  /** What the college pays them each month, in paisa; null when not recorded. */
+  salaryPaisa: number | null
   leavingDate: Date | null
   notes: string | null
   createdAt: Date
@@ -356,6 +358,7 @@ export async function getStaff(ctx: AuthContext, id: string): Promise<StaffDetai
     email: staff.email,
     address: staff.address,
     qualification: staff.qualification,
+    salaryPaisa: staff.salaryPaisa,
     leavingDate: staff.leavingDate,
     notes: staff.notes,
     createdAt: staff.createdAt,
@@ -399,6 +402,7 @@ function toStaffData(input: StaffCreateInput | StaffUpdateInput) {
     departmentId: input.departmentId ?? null,
     staffType: input.staffType,
     qualification: input.qualification ?? null,
+    salaryPaisa: input.salaryPaisa ?? null,
     notes: input.notes ?? null,
   }
 }

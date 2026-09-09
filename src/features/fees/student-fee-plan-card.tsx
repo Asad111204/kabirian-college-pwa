@@ -6,64 +6,73 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Field, Input, Select } from '@/components/ui/field'
 import { Alert } from '@/components/ui/feedback'
 import { api, ApiError } from '@/lib/api-client'
-import { formatPaisa, paisaToRupeeInput } from '@/lib/money'
-import type { FeePackageView, StudentFeePlanView } from '@/server/services/fees.service'
+import { paisaToRupeeInput } from '@/lib/money'
+import { FEE_HEADS } from '@/server/fees/fees-policy'
+import type { StudentFeePlanView } from '@/server/services/fees.service'
+import { FeeLinesEditor, feeLinesPayload, type FeeLineDraft } from './fee-lines-editor'
 
 /**
- * The fee plan on a student's record: which package they are on, and their
- * own concession on top of it.
+ * The fee on a student's record: what they are charged for this year, head by
+ * head, and their own concession on top.
  *
- * The concession is a monthly amount in rupees. A percentage concession is a
- * package — that is what packages are for — so there is one kind of discount
- * to reason about rather than two.
+ * The college charges by the year and a family pays in instalments, so these
+ * are annual amounts. Changing them does not touch a voucher already issued:
+ * what that charged is frozen on it.
  */
-export function StudentFeePlanCard({
-  plan,
-  packages,
-  canManage,
-}: {
-  plan: StudentFeePlanView
-  packages: FeePackageView[]
-  canManage: boolean
-}) {
+export function StudentFeePlanCard({ plan, canManage }: { plan: StudentFeePlanView; canManage: boolean }) {
   const router = useRouter()
-  const [packageId, setPackageId] = React.useState(plan.feePackageId ?? '')
+
+  const initial = (): FeeLineDraft[] =>
+    FEE_HEADS.map((head) => {
+      const existing = plan.lines.find((line) => line.head === head)
+      return {
+        head,
+        amount: existing ? paisaToRupeeInput(existing.amountPaisa) : '',
+        label: existing?.label ?? '',
+      }
+    })
+
+  const [lines, setLines] = React.useState<FeeLineDraft[]>(initial)
   const [discount, setDiscount] = React.useState(paisaToRupeeInput(plan.feeDiscountPaisa))
   const [saving, setSaving] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
 
-  const chosen = packages.find((p) => p.id === packageId) ?? null
-  const gross = chosen?.monthlyAmountPaisa ?? null
-  const discountPaisa = Math.round(Number(discount.replace(/,/g, '') || '0') * 100)
-  const payable = gross === null ? null : Math.max(0, gross - Math.min(Math.max(0, discountPaisa), gross))
+  // A different student, or a different year, arrives as a fresh page render.
+  const [seen, setSeen] = React.useState(plan.studentId + plan.academicSessionId)
+  if (plan.studentId + plan.academicSessionId !== seen) {
+    setSeen(plan.studentId + plan.academicSessionId)
+    setLines(initial())
+    setDiscount(paisaToRupeeInput(plan.feeDiscountPaisa))
+  }
 
   async function save(event: React.FormEvent) {
     event.preventDefault()
     setSaving(true)
     setError(null)
     try {
-      await api.put(`/api/v1/students/${plan.studentId}/fee-plan`, { feePackageId: packageId || undefined, feeDiscountPaisa: discount || 0 })
-      toast.success('Fee plan saved.')
+      await api.put(`/api/v1/students/${plan.studentId}/fee-plan`, {
+        academicSessionId: plan.academicSessionId,
+        lines: feeLinesPayload(lines),
+        feeDiscountPaisa: discount || 0,
+      })
+      toast.success('Fee saved.')
       router.refresh()
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'The fee plan could not be saved. Please try again.')
+      setError(e instanceof ApiError ? e.message : 'The fee could not be saved. Please try again.')
     } finally {
       setSaving(false)
     }
   }
 
-  const active = packages.filter((p) => p.isActive || p.id === plan.feePackageId)
-
   return (
     <Card>
       <CardHeader>
         <div className="min-w-0">
-          <CardTitle>Fees</CardTitle>
+          <CardTitle>Fees · {plan.academicSessionName}</CardTitle>
           <p className="mt-0.5 text-sm text-foreground-muted">
-            {plan.packageName ? `On ${plan.packageName}` : 'Not on a fee package, so nothing is billed to them.'}
+            {plan.lines.length === 0 ? 'No fee set for this year yet, so nothing is billed to them.' : "The whole year's fee, head by head."}
           </p>
         </div>
         <Link href={`/admin/fees?studentId=${plan.studentId}`} className="text-sm text-primary hover:underline">
@@ -71,37 +80,23 @@ export function StudentFeePlanCard({
         </Link>
       </CardHeader>
       <CardContent>
-        {active.length === 0 ? (
-          <Alert variant="info">
-            The college has no fee packages yet. Add one under <Link href="/admin/fees/packages" className="underline">Fees → Packages</Link> before putting anybody on a plan.
+        {plan.billed ? (
+          <Alert variant="info" className="mb-4">
+            A voucher has already been issued for {plan.academicSessionName}. Changing these amounts does not change it — what it charged is
+            frozen on it. Cancel and reissue the voucher if the year&apos;s fee is genuinely wrong.
           </Alert>
-        ) : (
-          <form onSubmit={save} className="flex flex-wrap items-end gap-4">
-            <Field label="Fee package" htmlFor="plan-package" className="min-w-[14rem] flex-1">
-              <Select id="plan-package" value={packageId} onChange={(e) => setPackageId(e.target.value)} disabled={!canManage}>
-                <option value="">No package</option>
-                {active.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} — {formatPaisa(p.monthlyAmountPaisa)}
-                    {p.isActive ? '' : ' (retired)'}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="Concession (Rs / month)" htmlFor="plan-discount" hint="Taken off every voucher. Never more than the fee itself.">
-              <Input id="plan-discount" inputMode="decimal" value={discount} onChange={(e) => setDiscount(e.target.value)} disabled={!canManage} className="max-w-[10rem]" />
-            </Field>
-            {canManage ? (
-              <Button type="submit" loading={saving}>
-                Save plan
-              </Button>
-            ) : null}
-          </form>
-        )}
+        ) : null}
 
-        <p className="mt-3 text-sm text-foreground-muted">
-          {payable === null ? 'No monthly amount until they are on a package.' : <>A month comes to <span className="font-semibold text-foreground">{formatPaisa(payable)}</span> before any late fine.</>}
-        </p>
+        <form onSubmit={save}>
+          <FeeLinesEditor lines={lines} onChange={setLines} disabled={!canManage} discount={discount} onDiscountChange={setDiscount} />
+          {canManage ? (
+            <div className="mt-4 flex justify-end">
+              <Button type="submit" loading={saving}>
+                Save fee
+              </Button>
+            </div>
+          ) : null}
+        </form>
 
         {error ? (
           <Alert variant="danger" className="mt-3" title="Not saved">

@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react'
 import { requirePortalAccess } from '@/server/auth/context'
 import { listAcademicSessions } from '@/server/services/academic-structure.service'
 import { peekNextCode } from '@/server/services/code-sequence'
+import { listDocumentTypes } from '@/server/services/documents.service'
 import { PageHeader } from '@/components/layout/app-shell'
 import { Button } from '@/components/ui/button'
 import { Alert } from '@/components/ui/feedback'
@@ -15,10 +16,11 @@ export const dynamic = 'force-dynamic'
 export default async function AddStudentPage() {
   const ctx = await requirePortalAccess(['ADMIN'])
 
-  const [sessions, nextStudentCode, nextAdmissionNumber] = await Promise.all([
+  const [sessions, nextStudentCode, nextAdmissionNumber, documentTypes] = await Promise.all([
     listAcademicSessions(ctx),
     peekNextCode('STUDENT'),
     peekNextCode('ADMISSION'),
+    listDocumentTypes('STUDENT'),
   ])
 
   const currentSession = sessions.find((s) => s.isCurrent) ?? sessions[0]
@@ -48,6 +50,7 @@ export default async function AddStudentPage() {
           defaultSessionId={currentSession?.id ?? ''}
           nextStudentCode={nextStudentCode}
           nextAdmissionNumber={nextAdmissionNumber}
+          documentTypes={documentTypes.map((type) => ({ key: type.key, name: type.label, isRequired: type.isRequired }))}
         />
       )}
     </>

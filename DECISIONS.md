@@ -3001,3 +3001,29 @@ The migration was applied to Neon on 2026-09-10 (seventeen migrations, zero drif
 **One real bug found on the way, in this phase's own work.** The unread counts were first read with `prisma.groupBy`, which through the driver adapter bound its parameters wrongly and turned the whole dashboard into a 500 — but *only* for somebody who actually had notifications waiting, which is why it survived the first pass and was caught by the two-portal account in the harness. Counting the rows instead is the same work at this size and has no such failure mode. A second, quieter one: a malformed reply from the summary endpoint would have replaced the count on screen and crashed every signed-in page, so only a well-formed summary is now allowed to.
 
 The migration was applied to Neon on 2026-09-11 (eighteen migrations, zero drift), with the table, its two indexes, the seven kinds and the internal-link constraint confirmed on the live database.
+
+---
+
+## ADR-177 · The fee is annual, paid in instalments, and made of optional heads
+
+**Status:** Accepted · 2026-09-11 · Phase 28 · replaces the billing decision in ADR-174
+
+**Context.** Phase 25 built the fee module monthly, on the answer the college gave on 7 September: *"Billing: Monthly. One voucher per student per month with a due date, and a late fine applied after it."* Setting the module in front of the college produced a different answer: **"We have annual fee plan not monthly, but they can pay in installments that totally depends on them, they pay the fees when they are easy."** They also named the heads a fee is made of, said every one of them is optional, asked for fee packages to go, and asked that a printed voucher show only what has been paid and what is left.
+
+**Decision.** The fee is **annual**. One voucher per student per academic session, holding the year's fee; a family pays it in instalments whenever they can, and each instalment is a payment against that one voucher. The monthly run, the day-of-month due date and the month column are gone.
+
+**A due date is optional.** "They pay when they are easy" means most vouchers should carry no date at all, so `due_date` is nullable, the run leaves it empty unless the office types one, and the late fine only ever applies where the office set a date. A voucher with no date is never overdue and never fined — the arithmetic says so, not a screen.
+
+**The fee is a set of heads, each optional.** Tuition, annual funds, events funds, board registration, board admission, tour, and an "Others" the office names itself. A student may be charged one head or all seven. This replaces fee packages entirely: the college asked for them to go, and with amounts typed per student a package was a template nobody would keep current.
+
+**What a voucher charged is frozen on it, line by line.** `fee_voucher_lines` copies the student's heads at the moment the voucher is issued. Changing next year's tuition, or fixing this year's, must never rewrite what a family was already asked for — and with instalments running for months, that window is long.
+
+**The printed voucher shows paid and remaining, not the total.** A family paying in instalments needs one number at the counter: what is left. Printing the year's total beside it invites paying the wrong figure. The office's own screen still shows the whole sum, itemised, because the office is reconciling rather than paying.
+
+**Admission captures the fee and the documents.** The heads are on the admission form, all optional, written in the same transaction that creates the student. Documents are attached at the counter and uploaded the moment the record exists — a file cannot belong to a student who does not exist yet. An upload that fails does not undo the admission: the office is told which file to try again, because losing an admission over a photocopy would be the wrong trade. A **salary** was added to the staff form for the same reason: it is known when somebody is hired.
+
+**Alternatives.** *Keeping monthly billing and calling the annual figure a total* — the vouchers would still say "September", and every instalment would have to be argued about. *Keeping packages as templates* — the college asked for them to go, and a template that drifts from what students are actually charged is worse than no template. *A frequency switch per head* — offered, and the college's answer made it unnecessary: the whole fee is annual.
+
+**Consequences.** The migration **deletes** what the fee tables hold, because a monthly voucher cannot become an annual one. On the live database that was two test packages, one voucher for a student recorded as “testing as student” and one Rs 150 cash payment — listed row by row and shown to the college before anything ran. Through the production build: a fee set from three heads adding to the year with the concession off, and the office's own words kept for an "Others" line; another student charged tuition alone; a head the college does not charge, a line of nothing and an amount with an extra zero each refused, with the fee unchanged after every refusal; a dry run that wrote nothing, then a run issuing one voucher each with no due date, then the same run issuing nothing; the fee changed afterwards without rewriting the voucher already issued; two instalments, the first leaving exactly 24,500 and reporting 29% collected, the second settling it; a void putting it back to part paid; a voucher with no due date carrying no fine and never overdue; a cancelled voucher reissued; a family seeing only their own; and the admission form offering every head and the document checklist, and the staff form asking for a salary. Sixty-five checks.
+
+The migration is written and was **not** applied to Neon in this phase.
