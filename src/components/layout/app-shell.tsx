@@ -14,6 +14,8 @@ import { LogoWordmark } from './logo'
 import { NAVIGATION, PORTAL_LABELS, type NavSection } from './nav-config'
 // Pure, and shared with the server so both name the portals the same way.
 import { PORTAL_LABEL } from '@/server/auth/portals'
+import { NotificationBell, NotificationProvider, useNotifications, type NotificationSummaryView } from './notification-bell'
+import { countFor } from '@/server/notifications/notifications-policy'
 import { OfflineBanner } from '@/components/pwa/offline-banner'
 import { IosInstallDialog, useInstallMethod } from '@/components/pwa/install-prompt'
 import type { UserRole } from '@/generated/prisma/enums'
@@ -37,11 +39,14 @@ export function AppShell({
   user,
   collegeName,
   sessionLabel,
+  notifications,
   children,
 }: {
   user: AppShellUser
   collegeName: string
   sessionLabel?: string | null
+  /** What is unread when the page was rendered, so the dots are right at once. */
+  notifications: NotificationSummaryView
   children: React.ReactNode
 }) {
   const [mobileOpen, setMobileOpen] = React.useState(false)
@@ -49,6 +54,7 @@ export function AppShell({
   const sections = NAVIGATION[user.role]
 
   return (
+    <NotificationProvider initial={notifications}>
     <div className="min-h-dvh bg-background">
       {/* Desktop sidebar */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-sidebar text-sidebar-foreground lg:flex">
@@ -109,6 +115,7 @@ export function AppShell({
             ) : null}
           </div>
 
+          <NotificationBell />
           <UserMenu user={user} />
         </header>
 
@@ -116,6 +123,7 @@ export function AppShell({
         <main className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 sm:py-6">{children}</main>
       </div>
     </div>
+    </NotificationProvider>
   )
 }
 
@@ -128,6 +136,8 @@ function SidebarNav({
   pathname: string
   onNavigate?: () => void
 }) {
+  const byKind = useNotifications()?.summary.byKind ?? {}
+
   return (
     <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
       {sections.map((section, index) => (
@@ -164,6 +174,11 @@ function SidebarNav({
                 )
               }
 
+              // A red dot on the button whatever is unread belongs to. It
+              // goes when the page is opened, because opening it marks that
+              // part of the college read.
+              const unread = countFor(item.href, byKind)
+
               return (
                 <li key={item.href}>
                   <Link
@@ -179,6 +194,14 @@ function SidebarNav({
                   >
                     <item.icon className="h-4 w-4 shrink-0" />
                     <span className="truncate">{item.label}</span>
+                    {unread > 0 ? (
+                      <span
+                        className="ml-auto min-w-[1.25rem] rounded-full bg-danger-600 px-1.5 text-center text-[11px] font-semibold leading-5 text-white"
+                        aria-label={`${unread} unread`}
+                      >
+                        {unread > 99 ? '99+' : unread}
+                      </span>
+                    ) : null}
                   </Link>
                 </li>
               )

@@ -23,6 +23,8 @@ import type { Prisma } from '@/generated/prisma/client'
 import { prisma } from '../db/prisma'
 import { authorize, type AuthContext } from '../auth/context'
 import { writeAuditLog } from '../audit/audit'
+import { notify } from './notifications.service'
+import { recipientsForAudience } from '../notifications/audience-recipients'
 import { NotFoundError, ValidationError } from '../api/errors'
 import { logger } from '../logger'
 import { getStorageProvider } from '../storage/provider'
@@ -546,6 +548,24 @@ export async function setNoticeStatus(
     before: { status: existing.status },
     after: { status: updated.status },
   })
+
+  // Publishing is the moment the college has said something. Everybody it was
+  // addressed to is told once; archiving and publishing again does not tell
+  // them twice, because only this transition notifies.
+  if (status === 'PUBLISHED' && existing.status !== 'PUBLISHED') {
+    await notify(
+      await recipientsForAudience(updated.targets),
+      {
+        kind: 'NOTICE',
+        title: updated.title,
+        body: 'The college has published a notice for you.',
+        link: '/student/notices',
+        entityType: 'notice',
+        entityId: id,
+      },
+      { exceptUserId: ctx.userId },
+    )
+  }
 
   return toDetail(updated, await createdByName(updated.createdByUserId))
 }

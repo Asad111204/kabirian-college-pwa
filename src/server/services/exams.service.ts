@@ -21,6 +21,7 @@ import { Prisma } from '@/generated/prisma/client'
 import { prisma } from '../db/prisma'
 import { authorize, type AuthContext } from '../auth/context'
 import { writeAuditLog } from '../audit/audit'
+import { notify, studentUserIdsInClasses } from './notifications.service'
 import { ConflictError, NotFoundError, ValidationError } from '../api/errors'
 import { collegeDateToStorage, storageToCollegeDate } from '../time/college-date'
 import {
@@ -1016,6 +1017,24 @@ export async function setDateSheetPublished(ctx: AuthContext, examId: string, pu
     after: { status: updated.status },
     metadata: { paperCount: detail.papers.length },
   })
+
+  // A published date sheet is the thing students actually wait for. The
+  // classes the exam covers are told; withdrawing it is office business.
+  if (publish) {
+    const classIds = [...new Set(detail.papers.map((paper) => paper.classId))]
+    await notify(
+      await studentUserIdsInClasses(classIds),
+      {
+        kind: 'EXAM',
+        title: `Date sheet published: ${updated.name}`,
+        body: `${detail.papers.length} paper${detail.papers.length === 1 ? '' : 's'}. Check the dates and times.`,
+        link: '/student/results',
+        entityType: 'exam',
+        entityId: examId,
+      },
+      { exceptUserId: ctx.userId },
+    )
+  }
 
   return updated
 }

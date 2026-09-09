@@ -22,6 +22,7 @@ import { prisma } from '../db/prisma'
 import { authorize, can, type AuthContext } from '../auth/context'
 import { ForbiddenError, NotFoundError, ValidationError } from '../api/errors'
 import { writeAuditLog } from '../audit/audit'
+import { notify, officeUserIds, studentUserId } from './notifications.service'
 import { paginate, paginatedResult, type PaginatedResult } from './service-utils'
 import {
   COMPLAINT_CATEGORY_LABEL,
@@ -340,6 +341,21 @@ export async function submitComplaint(
     return row
   })
 
+  // The office is told, because an application nobody sees is the failure
+  // this whole feature exists to prevent.
+  await notify(
+    await officeUserIds(),
+    {
+      kind: 'COMPLAINT',
+      title: `New application: ${input.subject}`,
+      body: `${COMPLAINT_CATEGORY_LABEL[input.category]} · from a student.`,
+      link: `/admin/complaints/${created.id}`,
+      entityType: 'complaint',
+      entityId: created.id,
+    },
+    { exceptUserId: ctx.userId },
+  )
+
   return getComplaint(ctx, created.id)
 }
 
@@ -381,6 +397,21 @@ export async function replyToComplaint(
       tx,
     )
   })
+
+  // Whoever did not write it is told. The office hears from the student; the
+  // student hears from the college.
+  await notify(
+    byOffice ? await studentUserId(row.studentId) : await officeUserIds(),
+    {
+      kind: 'COMPLAINT',
+      title: byOffice ? `The office replied: ${row.subject}` : `New reply: ${row.subject}`,
+      body: byOffice ? 'There is an answer on your application.' : 'A student has added to their application.',
+      link: byOffice ? `/student/complaints/${id}` : `/admin/complaints/${id}`,
+      entityType: 'complaint',
+      entityId: id,
+    },
+    { exceptUserId: ctx.userId },
+  )
 
   return getComplaint(ctx, id)
 }
@@ -430,6 +461,19 @@ export async function setComplaintStatus(
       tx,
     )
   })
+
+  await notify(
+    await studentUserId(row.studentId),
+    {
+      kind: 'COMPLAINT',
+      title: `${COMPLAINT_STATUS_LABEL[input.status]}: ${row.subject}`,
+      body: input.status === 'RESOLVED' ? 'The office has finished with your application.' : 'The office has picked your application back up.',
+      link: `/student/complaints/${id}`,
+      entityType: 'complaint',
+      entityId: id,
+    },
+    { exceptUserId: ctx.userId },
+  )
 
   return getComplaint(ctx, id)
 }

@@ -17,6 +17,7 @@ import { prisma } from '../db/prisma'
 import { authorize, can, type AuthContext } from '../auth/context'
 import { ForbiddenError, NotFoundError, ValidationError } from '../api/errors'
 import { writeAuditLog } from '../audit/audit'
+import { notify, studentUserIdsInSections } from './notifications.service'
 import { paginate, paginatedResult, type PaginatedResult } from './service-utils'
 import { getScopedSectionIds } from './staff-portal.service'
 import { collegeDateToStorage, storageToCollegeDate, todayInCollegeTimezone } from '../time/college-date'
@@ -294,6 +295,22 @@ export async function createHomework(ctx: AuthContext, input: HomeworkCreateInpu
     await writeAuditLog(ctx, { action: 'homework.created', entityType: 'homework', entityId: row.id, entityLabel: `${row.title} · ${row.subject.name} · Section ${row.section.name}`, after: { title: row.title, dueDate: input.dueDate ?? null }, request }, tx)
     return row
   })
+
+  // The section it was set for, and nobody else. The teacher who set it is
+  // left out: they know.
+  await notify(
+    await studentUserIdsInSections([created.sectionId]),
+    {
+      kind: 'HOMEWORK',
+      title: `${created.subject.name}: ${created.title}`,
+      body: created.dueDate ? `Due ${storageToCollegeDate(created.dueDate)}.` : 'No due date given.',
+      link: `/student/homework/${created.id}`,
+      entityType: 'homework',
+      entityId: created.id,
+    },
+    { exceptUserId: ctx.userId },
+  )
+
   return { ...toRow(created, true, todayInCollegeTimezone()), instructions: created.instructions, attachments: [] }
 }
 

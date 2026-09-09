@@ -9,6 +9,7 @@ import { getAuthContext, portalPathForRole } from '@/server/auth/context'
 import { getCurrentAcademicSession } from '@/server/services/academic-structure.service'
 import { env } from '@/server/config/env'
 import { currentPhotoIds } from '@/server/services/documents.service'
+import { getNotificationSummary } from '@/server/services/notifications.service'
 import { AppShell } from '@/components/layout/app-shell'
 import { redirect } from 'next/navigation'
 
@@ -24,11 +25,16 @@ export default async function PortalLayout({ children }: { children: React.React
   // Their own photograph for the user menu, when they have one on file.
   const photoUrl = await ownPhotoUrl(ctx)
 
+  // What is unread, so the dots and the bell are right on the first paint
+  // rather than a moment after it.
+  const notifications = await getNotificationSummary(ctx)
+
   return (
     <AppShell
       user={{ fullName: ctx.fullName, username: ctx.username, role: ctx.role, portals: ctx.portals, photoUrl }}
       collegeName={env.APP_COLLEGE_NAME}
       sessionLabel={currentSession?.name ?? null}
+      notifications={notifications}
     >
       {children}
     </AppShell>

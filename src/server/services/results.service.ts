@@ -23,6 +23,7 @@ import { Prisma } from '@/generated/prisma/client'
 import { prisma } from '../db/prisma'
 import { authorize, type AuthContext } from '../auth/context'
 import { writeAuditLog } from '../audit/audit'
+import { notify } from './notifications.service'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../api/errors'
 import { readSetting } from '../settings/settings-store'
 import {
@@ -997,6 +998,28 @@ export async function setResultsPublished(
 
     return updated.count
   })
+
+  // Publishing a result card is the news a family waits for. Only the
+  // students whose own result was published are told, and only on publishing:
+  // withdrawing a result is between the office and the teacher.
+  if (publish && affected > 0) {
+    const rows = await prisma.result.findMany({
+      where: { examId, status: 'PUBLISHED' },
+      select: { studentId: true, student: { select: { userId: true } } },
+    })
+    await notify(
+      rows.map((r) => r.student.userId),
+      {
+        kind: 'RESULT',
+        title: `Your result for ${exam.name} is out`,
+        body: 'Open it to see your marks and your result card.',
+        link: '/student/results',
+        entityType: 'exam',
+        entityId: examId,
+      },
+      { exceptUserId: ctx.userId },
+    )
+  }
 
   return { affected }
 }

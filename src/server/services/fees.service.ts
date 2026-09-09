@@ -24,6 +24,8 @@ import { prisma } from '../db/prisma'
 import { authorize, type AuthContext } from '../auth/context'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../api/errors'
 import { writeAuditLog } from '../audit/audit'
+import { notify, studentUserId } from './notifications.service'
+import { formatPaisa } from '@/lib/money'
 import { assertAdminArea, paginate, paginatedResult, withUniqueConstraintHandling, type PaginatedResult } from './service-utils'
 import { nextCode } from './code-sequence'
 import { collegeDateToStorage, storageToCollegeDate, todayInCollegeTimezone } from '../time/college-date'
@@ -671,6 +673,21 @@ export async function runVouchers(ctx: AuthContext, input: VoucherRunInput): Pro
       tx,
     )
   })
+
+  // Each family is told about their own voucher, and only their own.
+  for (const voucher of toIssue) {
+    await notify(
+      await studentUserId(voucher.studentId),
+      {
+        kind: 'FEE',
+        title: `Fee voucher for ${result.monthLabel}`,
+        body: `${formatPaisa(Math.max(0, voucher.gross - voucher.discount))} is due by ${dueDate}.`,
+        link: '/student/fees',
+        entityType: 'fee_voucher',
+      },
+      { exceptUserId: ctx.userId },
+    )
+  }
 
   return result
 }

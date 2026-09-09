@@ -17,9 +17,9 @@ export function FinanceTiles({ finance }: { finance: FinanceSummary | null }) {
   if (!finance) return null
 
   return (
-    <section className="mb-5" aria-label="Money">
+    <section className="mb-5" aria-label="Payments">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-sm font-semibold text-foreground">Money · {finance.monthLabel}</h2>
+        <h2 className="text-sm font-semibold text-foreground">Payments · {finance.monthLabel}</h2>
         <span className="flex gap-3 text-sm">
           <Link href="/admin/fees" className="text-primary hover:underline">
             Fee vouchers

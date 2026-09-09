@@ -347,6 +347,21 @@ enum FeePaymentMethod {
 
 /// What the college spent money on (Phase 26). Broad on purpose: a long list
 /// nobody keeps up to date is worse than eight headings everybody understands.
+/// Which part of the college a notification came from (Phase 27). The name is
+/// also what decides which button in the menu wears a red dot, so it is the
+/// module rather than the exact event.
+enum NotificationKind {
+  NOTICE
+  EVENT
+  HOMEWORK
+  EXAM
+  RESULT
+  COMPLAINT
+  FEE
+
+  @@map("notification_kind")
+}
+
 enum ExpenseCategory {
   SALARIES
   UTILITIES
@@ -433,6 +448,7 @@ model User {
   feePaymentsVoided     FeePayment[]      @relation("FeePaymentVoidedBy")
   expensesRecorded      Expense[]         @relation("ExpenseRecordedBy")
   expensesVoided        Expense[]         @relation("ExpenseVoidedBy")
+  notifications         Notification[]
 
   @@index([role, status])
   @@map("users")
@@ -1266,6 +1282,41 @@ model Expense {
   @@index([spentOn(sort: Desc)])
   @@index([category, spentOn(sort: Desc)])
   @@map("expenses")
+}
+
+/// One thing one person has not looked at yet (Phase 27).
+///
+/// Written by fan-out at the moment something happens: a notice published to
+/// four hundred students is four hundred rows. That is deliberate. It makes
+/// "what have I not seen?" one indexed query per person, keeps read state
+/// per person rather than shared, and means a student admitted next week is
+/// not shown last week's news as if it were new.
+model Notification {
+  id     String           @id @default(uuid(7)) @db.Uuid
+  userId String           @map("user_id") @db.Uuid
+  kind   NotificationKind
+
+  /// One line, as it appears in the list.
+  title String  @db.VarChar(160)
+  /// A little more, when there is more worth saying.
+  body  String? @db.VarChar(400)
+  /// Where it takes the reader. Always a path inside this app.
+  link  String  @db.VarChar(300)
+
+  /// What it is about, so a record's notifications can be found again.
+  entityType String? @map("entity_type") @db.VarChar(40)
+  entityId   String? @map("entity_id") @db.Uuid
+
+  readAt    DateTime? @map("read_at") @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// The two questions asked on every page load: what is unread, and what is
+  /// unread in this part of the college.
+  @@index([userId, readAt, createdAt(sort: Desc)])
+  @@index([userId, kind, readAt])
+  @@map("notifications")
 }
 
 model Document {

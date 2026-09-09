@@ -130,9 +130,12 @@ export default async function AdminDashboardPage() {
         </div>
       </section>
 
+      {/* The college's money comes first: it is what the office opens the
+          dashboard to look at. */}
+      <FinanceTiles finance={data.finance} />
+
       <TodayTiles operations={data.operations} today={data.today} />
       <SessionTiles operations={data.operations} sessionName={currentSession?.name ?? null} />
-      <FinanceTiles finance={data.finance} />
 
       {/* ---------------------------------------------------------------- */}
       {/* Academic building blocks                                          */}

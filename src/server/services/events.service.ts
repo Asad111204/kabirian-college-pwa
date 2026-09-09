@@ -14,6 +14,8 @@ import type { Prisma } from '@/generated/prisma/client'
 import { prisma } from '../db/prisma'
 import { authorize, type AuthContext } from '../auth/context'
 import { writeAuditLog } from '../audit/audit'
+import { notify } from './notifications.service'
+import { recipientsForAudience } from '../notifications/audience-recipients'
 import { NotFoundError, ValidationError } from '../api/errors'
 import { logger } from '../logger'
 import { getStorageProvider } from '../storage/provider'
@@ -298,6 +300,23 @@ export async function setEventStatus(ctx: AuthContext, id: string, status: Event
     before: { status: existing.status },
     after: { status: updated.status },
   })
+
+  // Published, and cancelled: both are news. Nobody needs telling twice that
+  // the same event was published, so only the transition into a state does it.
+  if (existing.status !== status && (status === 'PUBLISHED' || status === 'CANCELLED')) {
+    await notify(
+      await recipientsForAudience([{ audience: updated.audience }]),
+      {
+        kind: 'EVENT',
+        title: status === 'CANCELLED' ? `Cancelled: ${updated.title}` : updated.title,
+        body: status === 'CANCELLED' ? 'This event will not take place.' : 'The college has added an event.',
+        link: '/student/events',
+        entityType: 'event',
+        entityId: id,
+      },
+      { exceptUserId: ctx.userId },
+    )
+  }
 
   return toDetail(updated, await createdByName(updated.createdByUserId))
 }
