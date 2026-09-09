@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | **Phase 28 complete: the fee is annual, made of optional heads, and paid in instalments.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Everything through Phase 29 is live on Neon (nineteen migrations, zero drift). The college charges one fee per student per year, built from tuition, annual funds, events, board registration, board admission, a tour and anything else, all optional and all set at admission; families pay whenever they can, and a printed voucher shows only what has been paid and what is left. Documents are attached at the counter, and a salary is recorded when staff are added. The college now has a printable **handbook** covering every part of the system, and the app finally shows the college's own logo rather than a placeholder. **The Phase 28 migration was applied to Neon on 2026-09-09.** |
-| **Last updated** | 2026-09-09 (rev. 48 — Phase 28 applied to Neon) |
+| **Status** | **Phase 28 complete: the fee is annual, made of optional heads, and paid in instalments.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Everything through Phase 29 is live on Neon (nineteen migrations, zero drift). The college charges one fee per student per year, built from tuition, annual funds, events, board registration, board admission, a tour and anything else, all optional and all set at admission; families pay whenever they can, and a printed voucher shows only what has been paid and what is left. Documents are attached at the counter, and a salary is recorded when staff are added. The college now has a printable **handbook** covering every part of the system, and the app finally shows the college's own logo rather than a placeholder. **The Phase 28 migration was applied to Neon on 2026-09-09.** The college's previous FoxPro system has been read into this one: **188 of its 192 enrolled students are live, each with a portal login**, every class counted back against the old file. |
+| **Last updated** | 2026-09-09 (rev. 49 — the old system's 192 students imported) |
 | **Companion docs** | [DECISIONS.md](DECISIONS.md) · [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) · [README.md](README.md) |
 
 ---
@@ -2081,6 +2081,28 @@ The college looked at the finished fee module and corrected the assumption under
 **Verified through the production build (65 fee checks, all passing, alongside the rest — 731 in total)**: a fee set from three heads adding to the year with the concession off, keeping the office's own words for the "Others" line; another student charged tuition alone; a head the college does not charge, a line of nothing and an amount with an extra zero each refused, with the fee unchanged after every refusal; a dry run that wrote nothing, then a run issuing one voucher each with no due date, then the same run issuing nothing; the fee changed afterwards without rewriting the voucher already issued; two instalments, the first leaving exactly 24,500 and reporting 29% collected, the second settling it; a void putting it back to part paid; a voucher with no due date carrying no fine and never overdue; a cancelled voucher reissued; a family seeing only their own; the admission form offering every head and the document checklist; and the staff form asking for a salary.
 
 **Tests: 1,497 across 85 files.** The fee policy, validation and screens were reworked rather than added to, because the model underneath them changed.
+
+### 22.59 The college's old system, read into this one (2026-09-09)
+
+The previous system — a Visual FoxPro database that is no longer used — held **192 currently enrolled students**. `scripts/convert-old-students.ts` reads its student table directly and writes a CSV; `scripts/import-students.ts` sends each row through `POST /api/v1/students`, so every rule the admission form obeys applied, and all 188 admissions are in the audit log under the administrator who ran it. Nothing about the system itself was changed to accommodate the old data.
+
+**188 students created, each with a portal login.** Counted back class by class against the old file, every one of the seventeen groups matches exactly, with three differences that are each accounted for:
+
+| | old system | in the app | why |
+|---|---|---|---|
+| 1st Year / Boys / FA | 1 | 0 | M Ikram: his B-Form is the number already recorded for Rabia Parveen — a typo in the old system |
+| 1st Year / Girls / FA | 10 | 9 | Umm E Ammara: the old record has no father's name |
+| 1st Year / Boys / ICS Physics | 6 | 7 | the office's own "testing as student" record, which predates the import |
+
+Two more rows were refused and should have been: **Fajar Zahra** and **Alina Gul** were entered by hand in August *and* exist in the old file — same father, same class, same B-Form. The system will not put one B-Form on two students, so it declined to duplicate them.
+
+**The translation is written out rather than inferred.** `SECTION_MAP` turns each of the seventeen old class/section spellings — including `FA P2 | B0YS`, whose "BOYS" carries a zero — into a class, division, program, section and gender. A combination that is not in the map stops the run: a student landing quietly in the wrong class is worse than a failed conversion.
+
+**A quarter of the board results were nearly lost.** The old file spreads a student's previous exam across three numbered slots and which one was used depended on who typed the record. Reading only the first, as the converter began by doing, dropped the result for 47 of the 192; checking one student's record against the file caught it. All three slots are read now, and the one that looks like matric wins: 118 results, 120 mark pairs and 139 roll numbers instead of 71, 71 and 93.
+
+**Logins.** The importer asks the application to create each account, so the password is generated and hashed server-side and the account is marked *must change password*. Usernames follow the rule the admission form suggests — "Muhammad Ali" becomes `muhammad.ali`; of 188, five needed the admission number appended to stay unique. A temporary password exists in readable form exactly once, in the reply that creates it, so it is written to `student-logins.csv` and never to the terminal: printed, handed out, deleted. Both that file and the old `.DBF` files are ignored by git — they hold 192 families' B-Forms and addresses.
+
+**Verified on the live database after the run**: 191 students, 191 enrolments, 188 imported and 188 with a login, every one of them active, student-role and must-change-password; no duplicate username, no duplicate admission number, no login left without a student, no unhashed password; 188 `student.created` and 188 `user.created` audit entries. Rehearsed first against a throwaway copy carrying the same academic structure, where three of the issued logins were used to sign in.
 
 ### 22.58 Phase 29, the handbook and the real logo (2026-09-11)
 
