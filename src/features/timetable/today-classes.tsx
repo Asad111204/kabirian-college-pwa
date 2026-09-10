@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/feedback'
 import type { TodayClasses } from '@/server/services/timetable.service'
 import { DAY_LABEL } from '@/validation/timetable'
+import { whoIsInTheRoom } from './shared'
 
 /**
  * What this teacher is teaching today, on their own dashboard.
@@ -61,8 +62,7 @@ export function TodayClassesCard({ today }: { today: TodayClasses }) {
                     {lesson.subjectName}
                   </p>
                   <p className="truncate text-xs text-foreground-muted">
-                    {lesson.className} · {lesson.divisionName} · {lesson.programName} · Section{' '}
-                    {lesson.sectionName}
+                    {whoIsInTheRoom(lesson)}
                     {lesson.room ? ` · ${lesson.room}` : ''}
                   </p>
                 </div>

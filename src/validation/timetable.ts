@@ -102,7 +102,18 @@ export const timetableSlotCreateSchema = z.object({
    * quietly filed under the wrong year.
    */
   academicSessionId: uuid.optional(),
-  sectionId: uuid,
+  /**
+   * Every section this one lesson covers.
+   *
+   * One is the ordinary case. Several is a class taught together — a column of
+   * the college's printed timetable like "1st Year Girls Bio/Math" is two of
+   * this system's sections in one room with one teacher — and writing it as
+   * one lesson is what keeps the teacher from clashing with themselves.
+   */
+  sectionIds: z
+    .array(uuid)
+    .min(1, 'Choose at least one section.')
+    .max(20, 'That is more sections than one lesson can hold.'),
   subjectId: uuid,
   staffId: uuid,
   dayOfWeek,
@@ -123,6 +134,11 @@ export const timetableSlotUpdateSchema = z.object({
   subjectId: uuid,
   staffId: uuid,
   room: optionalText(50),
+  /** Which sections sit in it may change; where it is in the week may not. */
+  sectionIds: z
+    .array(uuid)
+    .min(1, 'Choose at least one section.')
+    .max(20, 'That is more sections than one lesson can hold.'),
 })
 
 export type TimetableSlotUpdateInput = z.infer<typeof timetableSlotUpdateSchema>

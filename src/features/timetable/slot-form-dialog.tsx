@@ -3,10 +3,10 @@
 import * as React from 'react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog'
-import { Field, Input, Select } from '@/components/ui/field'
+import { Checkbox, Field, Input, Select } from '@/components/ui/field'
 import { Alert } from '@/components/ui/feedback'
 import { api, ApiError } from '@/lib/api-client'
-import type { TimetableSubjectOption } from '@/server/services/timetable.service'
+import type { TimetableSectionSummary, TimetableSubjectOption } from '@/server/services/timetable.service'
 import { DAY_LABEL, type DayOfWeekValue } from '@/validation/timetable'
 
 /** The cell being filled, and what is already in it. */
@@ -20,6 +20,8 @@ export interface SlotTarget {
   subjectId?: string
   staffId?: string
   room?: string
+  /** When editing: every section the lesson already covers, this one included. */
+  sectionIds?: string[]
 }
 
 /**
@@ -33,7 +35,8 @@ export interface SlotTarget {
 const CONFLICT_TEXT: Record<string, string> = {
   staffId: 'Teacher is already scheduled during this period.',
   room: 'Room is already occupied during this period.',
-  period: 'This section already has a class during this period.',
+  period: 'One of these sections already has this subject during this period.',
+  sectionIds: 'Those sections cannot all take this lesson.',
 }
 
 function conflictFields(error: ApiError): Record<string, string[]> {
@@ -71,6 +74,7 @@ export function SlotFormDialog({
   open,
   onOpenChange,
   sectionId,
+  allSections,
   target,
   subjects,
   onSaved,
@@ -78,6 +82,13 @@ export function SlotFormDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
   sectionId: string
+  /**
+   * Every section in the session, so a lesson can be given to more than one.
+   * The college teaches whole columns of its timetable together — "1st Year
+   * Girls Bio/Math" is two of these sections in one room — and writing that as
+   * one lesson is what stops the teacher clashing with themselves.
+   */
+  allSections: TimetableSectionSummary[]
   target: SlotTarget | null
   subjects: TimetableSubjectOption[]
   onSaved: () => void | Promise<void>
@@ -87,6 +98,11 @@ export function SlotFormDialog({
   const [subjectId, setSubjectId] = React.useState(target?.subjectId ?? '')
   const [staffId, setStaffId] = React.useState(target?.staffId ?? '')
   const [room, setRoom] = React.useState(target?.room ?? '')
+  // The other sections sitting in this lesson. The one whose grid is open is
+  // always in it and is not listed as a choice.
+  const [alsoTaughtTo, setAlsoTaughtTo] = React.useState<string[]>(
+    (target?.sectionIds ?? []).filter((id) => id !== sectionId),
+  )
   const [submitting, setSubmitting] = React.useState(false)
   const [formError, setFormError] = React.useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = React.useState<Record<string, string[]>>({})
@@ -101,10 +117,18 @@ export function SlotFormDialog({
       setSubjectId(target?.subjectId ?? '')
       setStaffId(target?.staffId ?? '')
       setRoom(target?.room ?? '')
+      setAlsoTaughtTo((target?.sectionIds ?? []).filter((id) => id !== sectionId))
       setFormError(null)
       setFieldErrors({})
     }
   }
+
+  // Every other section in the year. The one whose grid is open is already in
+  // the lesson, so it is not offered as something to add.
+  const others = React.useMemo(
+    () => allSections.filter((section) => section.sectionId !== sectionId),
+    [allSections, sectionId],
+  )
 
   const teachers = React.useMemo(
     () => subjects.find((s) => s.subjectId === subjectId)?.teachers ?? [],
@@ -130,10 +154,11 @@ export function SlotFormDialog({
           subjectId,
           staffId: effectiveStaffId,
           room: room.trim(),
+          sectionIds: [sectionId, ...alsoTaughtTo],
         })
       } else {
         await api.post('/api/v1/timetable', {
-          sectionId,
+          sectionIds: [sectionId, ...alsoTaughtTo],
           subjectId,
           staffId: effectiveStaffId,
           dayOfWeek: target.dayOfWeek,
@@ -232,7 +257,38 @@ export function SlotFormDialog({
             />
           </Field>
 
+          {others.length > 0 ? (
+            <Field
+              label="Also taught to"
+              hint="Tick any other section sitting in this same lesson — one teacher, one room, one period."
+              error={fieldErrors.sectionIds}
+            >
+              <div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-border p-2">
+                {others.map((section) => (
+                  <Checkbox
+                    key={section.sectionId}
+                    label={`${section.className} · ${section.divisionName} · ${section.programName} · Section ${section.sectionName}`}
+                    checked={alsoTaughtTo.includes(section.sectionId)}
+                    disabled={submitting}
+                    onChange={() =>
+                      setAlsoTaughtTo((chosen) =>
+                        chosen.includes(section.sectionId)
+                          ? chosen.filter((id) => id !== section.sectionId)
+                          : [...chosen, section.sectionId],
+                      )
+                    }
+                  />
+                ))}
+              </div>
+            </Field>
+          ) : null}
+
           <DialogFooter>
+            <p className="mr-auto text-xs text-foreground-muted">
+              {alsoTaughtTo.length === 0
+                ? 'This section only.'
+                : `${alsoTaughtTo.length + 1} sections together.`}
+            </p>
             <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>

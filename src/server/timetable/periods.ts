@@ -52,8 +52,31 @@ export const PERIODS: readonly CollegePeriod[] = [
   { period: 9, start: '12:40', end: '13:20', isBreak: false },
 ] as const
 
+/** The period the college breaks in when a campus has not said otherwise. */
+export const DEFAULT_BREAK_PERIOD: number = PERIODS.find((p) => p.isBreak)?.period ?? 0
+
 /** The periods a lesson may actually be put in — the grid without the break. */
 export const TEACHING_PERIODS: readonly CollegePeriod[] = PERIODS.filter((p) => !p.isBreak)
+
+/**
+ * The periods a lesson may be put in for one campus.
+ *
+ * The college runs both campuses off the same bells but they do not break
+ * together — the girls stop at 11:10, the boys teach through it and stop at
+ * 11:40. The grid is the college's; which of its periods is the break is the
+ * campus's, so it is passed in rather than read from the constant above.
+ * Nothing is passed for a college with one break, and the default applies.
+ */
+export function teachingPeriodsFor(breakPeriod: number | null | undefined): CollegePeriod[] {
+  const theBreak = breakPeriod ?? DEFAULT_BREAK_PERIOD
+  return PERIODS.filter((p) => p.period !== theBreak)
+}
+
+/** Whether this period is the break for a campus that breaks in `breakPeriod`. */
+export function isBreakPeriodFor(period: number, breakPeriod: number | null | undefined): boolean {
+  if (!isValidPeriodNumber(period)) return false
+  return period === (breakPeriod ?? DEFAULT_BREAK_PERIOD)
+}
 
 /** The period with this number, or `null` if the grid has no such period. */
 export function findPeriod(period: number): CollegePeriod | null {

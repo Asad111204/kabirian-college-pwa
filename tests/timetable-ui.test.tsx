@@ -54,6 +54,7 @@ const section = {
 
 const slot = (over: Record<string, unknown> = {}) => ({
   id: 'slot-1',
+  sectionIds: ['section-1'],
   dayOfWeek: 'MONDAY',
   period: 3,
   startTime: '09:10',
@@ -136,11 +137,17 @@ const lesson = (over: Record<string, unknown> = {}) => ({
   endTime: '10:00',
   subjectId: 'subject-1',
   subjectName: 'Biology',
-  sectionId: 'section-1',
-  sectionName: 'A',
-  className: '1st Year',
-  divisionName: 'Boys',
-  programName: 'Pre-Medical',
+  // A lesson names every section in the room: one here, more when the college
+  // teaches sections together.
+  sections: [
+    {
+      sectionId: 'section-1',
+      sectionName: 'A',
+      className: '1st Year',
+      divisionName: 'Boys',
+      programName: 'Pre-Medical',
+    },
+  ],
   room: 'Lab 1',
   ...over,
 })
@@ -316,7 +323,8 @@ describe('the master timetable builder', () => {
     const [url, body] = post.mock.calls[0]!
     expect(url).toBe('/api/v1/timetable')
     expect(body).toEqual({
-      sectionId: 'section-1',
+      // A list, because one lesson may be taught to several sections at once.
+      sectionIds: ['section-1'],
       subjectId: 'subject-1',
       staffId: 'staff-1',
       dayOfWeek: 'TUESDAY',
@@ -341,8 +349,15 @@ describe('the master timetable builder', () => {
     await waitFor(() => expect(patch).toHaveBeenCalledTimes(1))
     const [url, body] = patch.mock.calls[0]!
     expect(url).toBe('/api/v1/timetable/slot-1')
-    expect(body).toEqual({ subjectId: 'subject-1', staffId: 'staff-1', room: 'Room 7' })
-    for (const forbidden of ['dayOfWeek', 'period', 'sectionId', 'academicSessionId', 'startTime', 'endTime']) {
+    // Which sections sit in the lesson may change on an edit; where it is in
+    // the week may not.
+    expect(body).toEqual({
+      subjectId: 'subject-1',
+      staffId: 'staff-1',
+      room: 'Room 7',
+      sectionIds: ['section-1'],
+    })
+    for (const forbidden of ['dayOfWeek', 'period', 'academicSessionId', 'startTime', 'endTime']) {
       expect(Object.keys(body as object)).not.toContain(forbidden)
     }
   })
@@ -386,7 +401,8 @@ describe('the master timetable builder', () => {
   it.each([
     ['staffId', 'Teacher is already scheduled during this period.'],
     ['room', 'Room is already occupied during this period.'],
-    ['period', 'This section already has a class during this period.'],
+    ['period', 'One of these sections already has this subject during this period.'],
+    ['sectionIds', 'Those sections cannot all take this lesson.'],
   ])('turns a 409 on %s into a sentence', async (field, sentence) => {
     const u = user()
     await openSection(u)
@@ -577,6 +593,27 @@ describe('a teacher’s own timetable', () => {
     // The class line does not end in a dangling separator either.
     const table = screen.getByRole('table')
     expect(within(table).getByText(/1st Year · Section A$/)).toBeTruthy()
+  })
+
+  it('names every section when a lesson is taught to more than one', () => {
+    // The college teaches whole columns of its timetable together. A teacher
+    // reading their week needs to know who is actually in front of them.
+    render(
+      <TeacherTimetableGrid
+        timetable={week({
+          lessons: [
+            lesson({
+              sections: [
+                { sectionId: 's1', sectionName: 'A', className: '1st Year', divisionName: 'Girls', programName: 'Pre-Medical' },
+                { sectionId: 's2', sectionName: 'B', className: '1st Year', divisionName: 'Girls', programName: 'Pre-Engineering' },
+              ],
+            }),
+          ],
+        })}
+      />,
+    )
+    const table = screen.getByRole('table')
+    expect(within(table).getByText(/Sections A \+ B/)).toBeTruthy()
   })
 
   it('shows every period with its number and its configured time', () => {

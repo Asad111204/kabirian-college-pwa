@@ -26,7 +26,13 @@ import { findPeriod } from './periods'
 export interface TimetableSlotFacts {
   id: string
   academicSessionId: string
-  sectionId: string
+  /**
+   * Every section sitting in this lesson. A normal lesson has one; a class
+   * taught together has several, which is the whole point of the change that
+   * introduced this list (ADR-181).
+   */
+  sectionIds: readonly string[]
+  subjectId: string
   staffId: string
   /** Free text, or null when the college has not said where the lesson is. */
   room: string | null
@@ -40,7 +46,9 @@ export interface ProposedSlot {
   /** Set when editing, so a lesson is never found to clash with itself. */
   id?: string
   academicSessionId: string
-  sectionId: string
+  /** The sections it is to cover; at least one. */
+  sectionIds: readonly string[]
+  subjectId: string
   staffId: string
   room?: string | null
   dayOfWeek: DayOfWeek
@@ -48,6 +56,12 @@ export interface ProposedSlot {
 }
 
 export type ClashKind = 'SECTION' | 'TEACHER' | 'ROOM'
+
+/** One campus and the period it stops in, for the break rule below. */
+export interface CampusBreak {
+  divisionName: string
+  breakPeriod: number
+}
 
 export interface TimetableClash {
   kind: ClashKind
@@ -102,25 +116,35 @@ function contenders(
 /* -------------------------------------------------------------------------- */
 
 /**
- * The section is already doing something else in this period.
+ * One of these sections is already taking this subject in this period.
  *
- * The database enforces this too, through a unique index over
- * `(section, session, day, period)` that applies to ACTIVE rows only. It is
- * repeated here so the admin gets a sentence rather than a constraint
- * violation — and so the reason can name the lesson that is in the way.
+ * Note what this does *not* refuse. A section may perfectly well be in two
+ * lessons at once — that is how the college writes an elective split, where
+ * some of the room does Chemistry and the rest does Computer at the same hour.
+ * What cannot happen is the same section being given the *same subject* twice
+ * in one period, which is a duplicate rather than a split.
+ *
+ * The database holds the same rule, through a partial unique index over
+ * `(section, session, day, period, subject)` on the active rows of
+ * `timetable_slot_sections`. This exists so the admin gets a sentence rather
+ * than a constraint violation.
  */
 export function findSectionClash(
   proposed: ProposedSlot,
   existing: readonly TimetableSlotFacts[],
 ): TimetableClash | null {
+  const wanted = new Set(proposed.sectionIds)
   const clash = contenders(proposed, existing).find(
-    (slot) => sameCell(proposed, slot) && slot.sectionId === proposed.sectionId,
+    (slot) =>
+      sameCell(proposed, slot) &&
+      slot.subjectId === proposed.subjectId &&
+      slot.sectionIds.some((sectionId) => wanted.has(sectionId)),
   )
   return clash
     ? {
         kind: 'SECTION',
         slotId: clash.id,
-        reason: 'This section already has a lesson in this period.',
+        reason: 'One of these sections already has this subject in this period.',
       }
     : null
 }
@@ -130,7 +154,12 @@ export function findSectionClash(
 /* -------------------------------------------------------------------------- */
 
 /**
- * The teacher is already teaching another section in this period.
+ * The teacher is already taking another lesson in this period.
+ *
+ * A person can only be in one place, and that is now exactly what the rule
+ * says: a class taught to three sections at once is ONE lesson, so it no
+ * longer looks like three clashes with itself the way it did when a lesson
+ * belonged to a single section.
  *
  * The database refuses this too, through a partial unique index over
  * `(staff, session, day, period)` on active rows — this check exists so the
@@ -241,7 +270,7 @@ export interface TeacherAssignmentFacts {
  * The break is refused here, in the rules, precisely so nobody is tempted to
  * hold the cell with a made-up subject and a made-up teacher.
  */
-export function decidePeriodAllowed(period: number): TimetableDecision {
+export function decidePeriodAllowed(period: number, breaks: readonly CampusBreak[] = []): TimetableDecision {
   const configured = findPeriod(period)
 
   if (configured === null) {
@@ -252,7 +281,20 @@ export function decidePeriodAllowed(period: number): TimetableDecision {
     }
   }
 
-  if (configured.isBreak) {
+  // Which campus breaks when is the campus's own business, so it is passed in
+  // rather than read from the grid: the girls stop at 11:10 and the boys teach
+  // through it. A lesson covering both campuses in a period one of them breaks
+  // in is refused, and the message says whose break it is.
+  const breaking = breaks.find((campus) => period === campus.breakPeriod)
+  if (breaking) {
+    return {
+      allowed: false,
+      code: 'BREAK_PERIOD',
+      reason: `Period ${configured.period} (${configured.start}–${configured.end}) is the ${breaking.divisionName} break and cannot be timetabled.`,
+    }
+  }
+
+  if (breaks.length === 0 && configured.isBreak) {
     return {
       allowed: false,
       code: 'BREAK_PERIOD',

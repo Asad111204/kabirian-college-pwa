@@ -19,13 +19,14 @@ import {
  * to, and which teacher is asking.
  */
 
+const OTHER_SECTION = '018f4d3e-9a1b-7c2d-8e3f-4a5b6c7d8ff2'
 const SECTION = '11111111-1111-4111-8111-111111111111'
 const SUBJECT = '22222222-2222-4222-8222-222222222222'
 const STAFF = '33333333-3333-4333-8333-333333333333'
 const SESSION = '44444444-4444-4444-8444-444444444444'
 
 const lesson = (over: Record<string, unknown> = {}) => ({
-  sectionId: SECTION,
+  sectionIds: [SECTION],
   subjectId: SUBJECT,
   staffId: STAFF,
   dayOfWeek: 'MONDAY',
@@ -56,8 +57,19 @@ describe('a proposed lesson', () => {
     expect(timetableSlotCreateSchema.safeParse(lesson({ room: 'x'.repeat(51) })).success).toBe(false)
   })
 
+  it('refuses a section list that is not a list of ids', () => {
+    expect(timetableSlotCreateSchema.safeParse(lesson({ sectionIds: ['nope'] })).success).toBe(false)
+    expect(timetableSlotCreateSchema.safeParse(lesson({ sectionIds: [] })).success).toBe(false)
+    expect(timetableSlotCreateSchema.safeParse(lesson({ sectionIds: SECTION })).success).toBe(false)
+  })
+
+  it('takes several sections, because a class can be taught to more than one', () => {
+    const parsed = timetableSlotCreateSchema.parse(lesson({ sectionIds: [SECTION, OTHER_SECTION] }))
+    expect(parsed.sectionIds).toEqual([SECTION, OTHER_SECTION])
+  })
+
   it('refuses ids that are not ids', () => {
-    for (const field of ['sectionId', 'subjectId', 'staffId']) {
+    for (const field of ['subjectId', 'staffId']) {
       expect(timetableSlotCreateSchema.safeParse(lesson({ [field]: 'not-a-uuid' })).success).toBe(
         false,
       )
@@ -126,13 +138,14 @@ describe('editing a lesson', () => {
       room: 'Room 2',
       dayOfWeek: 'FRIDAY',
       period: 9,
-      sectionId: SECTION,
+      sectionIds: [SECTION],
     })
-    // Moving a lesson is clearing one cell and filling another, so none of
-    // these may ride along on an edit.
+    // Moving a lesson is clearing one cell and filling another, so neither of
+    // these may ride along on an edit. Which sections sit in it is a different
+    // matter and may change — a class taught together can gain or lose one.
     expect(parsed).not.toHaveProperty('dayOfWeek')
     expect(parsed).not.toHaveProperty('period')
-    expect(parsed).not.toHaveProperty('sectionId')
+    expect(parsed.sectionIds).toEqual([SECTION])
   })
 
   it('still requires a subject and a teacher', () => {

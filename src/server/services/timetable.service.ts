@@ -34,7 +34,7 @@ import { authorize, type AuthContext } from '../auth/context'
 import { writeAuditLog } from '../audit/audit'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../api/errors'
 import { todayInCollegeTimezone, todaysCollegeWeekday } from '../time/college-date'
-import { PERIODS, type CollegePeriod } from '../timetable/periods'
+import { DEFAULT_BREAK_PERIOD, PERIODS, type CollegePeriod } from '../timetable/periods'
 import {
   decidePeriodAllowed,
   decideSubjectAllowed,
@@ -69,6 +69,11 @@ export interface TimetableSlotRow {
   staffName: string
   staffCode: string
   room: string | null
+  /**
+   * Every section sitting in this lesson. A grid drawing one section's week
+   * uses it to say "also taught to …", and the edit form to prefill them.
+   */
+  sectionIds: string[]
 }
 
 /** A section, named the way the college names it. */
@@ -112,11 +117,11 @@ export interface SectionTimetable {
 export interface TimetableListRow extends TimetableSlotRow {
   academicSessionId: string
   sessionName: string
-  sectionId: string
-  sectionName: string
-  className: string
-  divisionName: string
-  programName: string
+  /**
+   * Every section sitting in this lesson. A class taught together names them
+   * all, which is how a grid draws one cell across more than one column.
+   */
+  sections: TimetableSectionSummary[]
   isActive: boolean
 }
 
@@ -152,11 +157,12 @@ export interface TeacherLesson {
   endTime: string
   subjectId: string
   subjectName: string
-  sectionId: string
-  sectionName: string
-  className: string
-  divisionName: string
-  programName: string
+  /**
+   * Every section in the room for this lesson. Usually one; more when the
+   * college teaches sections together, which the teacher needs to see because
+   * it is who is actually in front of them.
+   */
+  sections: { sectionId: string; sectionName: string; className: string; divisionName: string; programName: string }[]
   room: string | null
 }
 
@@ -185,7 +191,8 @@ type SectionWithGroup = {
     classId: string
     programId: string
     class: { name: string }
-    division: { name: string }
+    /** `breakPeriod` is which period this campus stops in; null is the default. */
+    division: { name: string; breakPeriod: number | null }
     program: { name: string }
     academicSession: { name: string }
   }
@@ -210,14 +217,45 @@ const periodOf = (period: number): CollegePeriod | null =>
 const LIST_INCLUDE = {
   subject: { select: { id: true, name: true } },
   staff: { select: { id: true, fullName: true, staffCode: true } },
-  section: {
+  sections: {
     include: {
-      academicGroup: {
-        include: { class: true, division: true, program: true, academicSession: true },
+      section: {
+        include: {
+          academicGroup: {
+            include: { class: true, division: true, program: true, academicSession: true },
+          },
+        },
       },
     },
   },
 } as const
+
+interface ListedSection {
+  section: {
+    id: string
+    name: string
+    academicSessionId: string
+    academicGroup: {
+      class: { name: string }
+      division: { name: string }
+      program: { name: string }
+      academicSession: { name: string }
+    }
+  }
+}
+
+/** The same summary as `toSectionSummary`, from the narrower listed shape. */
+function listedSectionSummary(section: ListedSection['section']): TimetableSectionSummary {
+  return {
+    sectionId: section.id,
+    sectionName: section.name,
+    className: section.academicGroup.class.name,
+    divisionName: section.academicGroup.division.name,
+    programName: section.academicGroup.program.name,
+    academicSessionId: section.academicSessionId,
+    sessionName: section.academicGroup.academicSession.name,
+  }
+}
 
 interface ListedSlot {
   id: string
@@ -228,29 +266,18 @@ interface ListedSlot {
   isActive: boolean
   subject: { id: string; name: string }
   staff: { id: string; fullName: string; staffCode: string }
-  section: {
-    id: string
-    name: string
-    academicGroup: {
-      class: { name: string }
-      division: { name: string }
-      program: { name: string }
-      academicSession: { name: string }
-    }
-  }
+  sections: ListedSection[]
 }
 
 function toListRow(slot: ListedSlot): TimetableListRow {
   const period = periodOf(slot.period)
+  const sections = slot.sections.map((row) => listedSectionSummary(row.section))
   return {
     id: slot.id,
     academicSessionId: slot.academicSessionId,
-    sessionName: slot.section.academicGroup.academicSession.name,
-    sectionId: slot.section.id,
-    sectionName: slot.section.name,
-    className: slot.section.academicGroup.class.name,
-    divisionName: slot.section.academicGroup.division.name,
-    programName: slot.section.academicGroup.program.name,
+    sessionName: slot.sections[0]?.section.academicGroup.academicSession.name ?? '',
+    sections,
+    sectionIds: sections.map((section) => section.sectionId),
     dayOfWeek: slot.dayOfWeek as DayOfWeekValue,
     period: slot.period,
     // Never stored. The college's bell schedule lives in periods.ts.
@@ -341,12 +368,14 @@ export async function listTimetable(
   const slots = await prisma.timetableSlot.findMany({
     where: {
       academicSessionId: query.academicSessionId,
-      ...(query.sectionId ? { sectionId: query.sectionId } : {}),
+      // A lesson is asked for by section through its list of them, so a class
+      // taught together is found by every section sitting in it.
+      ...(query.sectionId ? { sections: { some: { sectionId: query.sectionId } } } : {}),
       ...(query.dayOfWeek ? { dayOfWeek: query.dayOfWeek } : {}),
       ...(query.includeInactive ? {} : { isActive: true }),
     },
     include: LIST_INCLUDE,
-    orderBy: [{ section: { name: 'asc' } }, { dayOfWeek: 'asc' }, { period: 'asc' }],
+    orderBy: [{ dayOfWeek: 'asc' }, { period: 'asc' }],
   })
 
   return slots.map(toListRow)
@@ -379,6 +408,22 @@ async function loadSection(sectionId: string): Promise<SectionWithGroup> {
   })
   if (!section) throw new NotFoundError('That section does not exist.')
   return section
+}
+
+/**
+ * Every section a lesson is to cover, in the order the caller listed them.
+ *
+ * One that does not exist is a refusal for the whole lesson rather than a
+ * lesson quietly covering fewer sections than the office asked for.
+ */
+async function loadSections(sectionIds: readonly string[]): Promise<SectionWithGroup[]> {
+  const unique = [...new Set(sectionIds)]
+  const sections = await prisma.section.findMany({
+    where: { id: { in: unique } },
+    include: SECTION_INCLUDE,
+  })
+  if (sections.length !== unique.length) throw new NotFoundError('One of those sections does not exist.')
+  return unique.map((id) => sections.find((section) => section.id === id)!)
 }
 
 /**
@@ -431,6 +476,7 @@ async function loadSubjectOptions(section: SectionWithGroup): Promise<TimetableS
 const SLOT_INCLUDE = {
   subject: { select: { id: true, name: true } },
   staff: { select: { id: true, fullName: true, staffCode: true } },
+  sections: { where: { isActive: true }, select: { sectionId: true } },
 } as const
 
 function toSlotRow(slot: {
@@ -440,6 +486,7 @@ function toSlotRow(slot: {
   room: string | null
   subject: { id: string; name: string }
   staff: { id: string; fullName: string; staffCode: string }
+  sections: { sectionId: string }[]
 }): TimetableSlotRow {
   const period = periodOf(slot.period)
   return {
@@ -454,6 +501,7 @@ function toSlotRow(slot: {
     staffName: slot.staff.fullName,
     staffCode: slot.staff.staffCode,
     room: slot.room,
+    sectionIds: slot.sections.map((row) => row.sectionId),
   }
 }
 
@@ -467,7 +515,7 @@ export async function getSectionTimetable(
   const section = await loadSection(sectionId)
   const [slots, subjects] = await Promise.all([
     prisma.timetableSlot.findMany({
-      where: { sectionId: section.id, isActive: true },
+      where: { sections: { some: { sectionId: section.id, isActive: true } }, isActive: true },
       include: SLOT_INCLUDE,
       orderBy: [{ dayOfWeek: 'asc' }, { period: 'asc' }],
     }),
@@ -533,15 +581,16 @@ async function loadCellOccupants(
     select: {
       id: true,
       academicSessionId: true,
-      sectionId: true,
+      subjectId: true,
       staffId: true,
       room: true,
       dayOfWeek: true,
       period: true,
       isActive: true,
+      sections: { where: { isActive: true }, select: { sectionId: true } },
     },
   })
-  return rows as TimetableSlotFacts[]
+  return rows.map((row) => ({ ...row, sectionIds: row.sections.map((s) => s.sectionId) }))
 }
 
 /**
@@ -552,33 +601,58 @@ async function loadCellOccupants(
  * way at once and sending the admin round the loop three times would be rude.
  */
 async function assertLessonIsAllowed(
-  section: SectionWithGroup,
+  sections: readonly SectionWithGroup[],
   proposed: ProposedSlot,
   subjectId: string,
 ): Promise<void> {
-  assertAllowed(decidePeriodAllowed(proposed.period), 'period')
+  // Which period may be taught in is the campus's own business, and a lesson
+  // covering both campuses must satisfy both. The break each one takes is read
+  // from its division, so the refusal can say whose break it is.
+  const breaks = sections
+    .map((section) => ({
+      divisionName: section.academicGroup.division.name,
+      breakPeriod: section.academicGroup.division.breakPeriod ?? DEFAULT_BREAK_PERIOD,
+    }))
+    .filter((campus, at, all) => all.findIndex((other) => other.divisionName === campus.divisionName) === at)
+  assertAllowed(decidePeriodAllowed(proposed.period, breaks), 'period')
 
-  const subjects = await loadSubjectOptions(section)
-  assertAllowed(
-    decideSubjectAllowed({ subjectIds: subjects.map((s) => s.subjectId) }, subjectId),
-    'subjectId',
-  )
+  // Every section must study the subject, and the teacher must be assigned it
+  // in every one of them. A class taught together is still each section's own
+  // lesson as far as the curriculum and the assignments are concerned, and one
+  // section that does not take the subject is enough to refuse the lot.
+  for (const section of sections) {
+    const subjects = await loadSubjectOptions(section)
+    const decision = decideSubjectAllowed({ subjectIds: subjects.map((s) => s.subjectId) }, subjectId)
+    if (!decision.allowed) {
+      throw new ConflictError(
+        sections.length === 1
+          ? decision.reason
+          : `${decision.reason} (${section.academicGroup.class.name} · ${section.academicGroup.program.name} · Section ${section.name})`,
+        { subjectId: [decision.reason] },
+      )
+    }
 
-  const assignments = await prisma.teacherAssignment.findMany({
-    where: { sectionId: section.id, subjectId, staffId: proposed.staffId },
-    select: { staffId: true, sectionId: true, subjectId: true, isActive: true },
-  })
-  assertAllowed(
-    decideTeacherAllowed(assignments, {
+    const assignments = await prisma.teacherAssignment.findMany({
+      where: { sectionId: section.id, subjectId, staffId: proposed.staffId },
+      select: { staffId: true, sectionId: true, subjectId: true, isActive: true },
+    })
+    const teacher = decideTeacherAllowed(assignments, {
       staffId: proposed.staffId,
       sectionId: section.id,
       subjectId,
-    }),
-    'staffId',
-  )
+    })
+    if (!teacher.allowed) {
+      throw new ConflictError(
+        sections.length === 1
+          ? teacher.reason
+          : `${teacher.reason} (${section.academicGroup.class.name} · ${section.academicGroup.program.name} · Section ${section.name})`,
+        { staffId: [teacher.reason] },
+      )
+    }
+  }
 
   const occupants = await loadCellOccupants(
-    section.academicSessionId,
+    proposed.academicSessionId,
     proposed.dayOfWeek,
     proposed.period,
   )
@@ -602,34 +676,42 @@ export async function createTimetableSlot(
 ): Promise<TimetableSlotRow> {
   requireTimetableAdmin(ctx, 'timetable.manage')
 
-  const section = await loadSection(input.sectionId)
+  const sections = await loadSections(input.sectionIds)
+
+  // Every section must be in the same year, or the lesson belongs to no one
+  // year at all. The session is taken from them, never from the request.
+  const academicSessionId = sections[0]!.academicSessionId
+  if (sections.some((section) => section.academicSessionId !== academicSessionId)) {
+    throw new ValidationError('Those sections are not all in the same academic session.', {
+      sectionIds: ['A lesson cannot cover sections from different years.'],
+    })
+  }
 
   // A session may be sent, but only so it can be checked. If the caller thinks
-  // this section is in a different year from the one the database records, that
-  // is a mistake worth showing rather than silently overruling.
-  if (input.academicSessionId && input.academicSessionId !== section.academicSessionId) {
-    throw new ValidationError('That section does not belong to that academic session.', {
-      academicSessionId: ['That section does not belong to that academic session.'],
+  // these sections are in a different year from the one the database records,
+  // that is a mistake worth showing rather than silently overruling.
+  if (input.academicSessionId && input.academicSessionId !== academicSessionId) {
+    throw new ValidationError('Those sections do not belong to that academic session.', {
+      academicSessionId: ['Those sections do not belong to that academic session.'],
     })
   }
 
   const proposed: ProposedSlot = {
-    academicSessionId: section.academicSessionId,
-    sectionId: section.id,
+    academicSessionId,
+    sectionIds: sections.map((section) => section.id),
+    subjectId: input.subjectId,
     staffId: input.staffId,
     room: input.room ?? null,
     dayOfWeek: input.dayOfWeek,
     period: input.period,
   }
-  await assertLessonIsAllowed(section, proposed, input.subjectId)
+  await assertLessonIsAllowed(sections, proposed, input.subjectId)
 
   const created = await withUniqueConstraintHandling(
     () =>
       prisma.timetableSlot.create({
         data: {
-          sectionId: section.id,
-          // From the section, never from the request.
-          academicSessionId: section.academicSessionId,
+          academicSessionId,
           subjectId: input.subjectId,
           staffId: input.staffId,
           dayOfWeek: input.dayOfWeek,
@@ -637,6 +719,18 @@ export async function createTimetableSlot(
           room: input.room ?? null,
           createdByUserId: ctx.userId,
           updatedByUserId: ctx.userId,
+          // The day, period and subject are copied onto each one: they are the
+          // lesson's facts, kept here so the "same subject twice" rule can be
+          // an index rather than a hope.
+          sections: {
+            create: sections.map((section) => ({
+              sectionId: section.id,
+              academicSessionId: section.academicSessionId,
+              subjectId: input.subjectId,
+              dayOfWeek: input.dayOfWeek,
+              period: input.period,
+            })),
+          },
         },
         include: SLOT_INCLUDE,
       }),
@@ -645,11 +739,12 @@ export async function createTimetableSlot(
   )
 
   const row = toSlotRow(created)
+  const where = sections.map((section) => section.name).join(', ')
   await writeAuditLog(ctx, {
     action: 'timetable_slot.created',
     entityType: 'timetable_slot',
     entityId: created.id,
-    entityLabel: `${row.subjectName} · ${section.name} · ${row.dayOfWeek} period ${row.period}`,
+    entityLabel: `${row.subjectName} · ${where} · ${row.dayOfWeek} period ${row.period}`,
     after: row,
   })
   return row
@@ -669,33 +764,62 @@ export async function updateTimetableSlot(
   })
   if (!existing || !existing.isActive) throw new NotFoundError('That lesson does not exist.')
 
-  const section = await loadSection(existing.sectionId)
+  const sections = await loadSections(input.sectionIds)
+  const academicSessionId = sections[0]!.academicSessionId
+  if (sections.some((section) => section.academicSessionId !== academicSessionId)) {
+    throw new ValidationError('Those sections are not all in the same academic session.', {
+      sectionIds: ['A lesson cannot cover sections from different years.'],
+    })
+  }
+  if (academicSessionId !== existing.academicSessionId) {
+    throw new ValidationError('A lesson cannot be moved to a different academic session.', {
+      sectionIds: ['Those sections are in a different year from this lesson.'],
+    })
+  }
 
   const proposed: ProposedSlot = {
     id: existing.id,
-    academicSessionId: section.academicSessionId,
-    sectionId: section.id,
+    academicSessionId,
+    sectionIds: sections.map((section) => section.id),
+    subjectId: input.subjectId,
     staffId: input.staffId,
     room: input.room ?? null,
     dayOfWeek: existing.dayOfWeek as DayOfWeekValue,
     period: existing.period,
   }
-  await assertLessonIsAllowed(section, proposed, input.subjectId)
+  await assertLessonIsAllowed(sections, proposed, input.subjectId)
 
   const before = toSlotRow(existing)
   // Wrapped for the same reason a create is: moving a teacher or a room into a
   // cell another administrator is filling at that moment is the same race.
+  //
+  // The section rows are written out and put back rather than patched: they
+  // carry the lesson's subject, day and period, and rewriting them from what
+  // the lesson now says is the thing that keeps them from ever disagreeing
+  // with it.
   const updated = await withUniqueConstraintHandling(
     () =>
-      prisma.timetableSlot.update({
-        where: { id: slotId },
-        data: {
-          subjectId: input.subjectId,
-          staffId: input.staffId,
-          room: input.room ?? null,
-          updatedByUserId: ctx.userId,
-        },
-        include: SLOT_INCLUDE,
+      prisma.$transaction(async (tx) => {
+        await tx.timetableSlotSection.deleteMany({ where: { slotId } })
+        return tx.timetableSlot.update({
+          where: { id: slotId },
+          data: {
+            subjectId: input.subjectId,
+            staffId: input.staffId,
+            room: input.room ?? null,
+            updatedByUserId: ctx.userId,
+            sections: {
+              create: sections.map((section) => ({
+                sectionId: section.id,
+                academicSessionId: section.academicSessionId,
+                subjectId: input.subjectId,
+                dayOfWeek: existing.dayOfWeek,
+                period: existing.period,
+              })),
+            },
+          },
+          include: SLOT_INCLUDE,
+        })
       }),
     CLASH_MESSAGES,
     CLASH_FALLBACK,
@@ -715,7 +839,7 @@ export async function updateTimetableSlot(
       action: 'timetable_slot.updated',
       entityType: 'timetable_slot',
       entityId: slotId,
-      entityLabel: `${after.subjectName} · ${section.name} · ${after.dayOfWeek} period ${after.period}`,
+      entityLabel: `${after.subjectName} · ${sections.map((x) => x.name).join(', ')} · ${after.dayOfWeek} period ${after.period}`,
       before: Object.fromEntries(Object.entries(changed).map(([k, v]) => [k, v.from])),
       after: Object.fromEntries(Object.entries(changed).map(([k, v]) => [k, v.to])),
       metadata: { changedFields: Object.keys(changed) },
@@ -741,10 +865,20 @@ export async function deactivateTimetableSlot(ctx: AuthContext, slotId: string):
   })
   if (!existing || !existing.isActive) throw new NotFoundError('That lesson does not exist.')
 
-  await prisma.timetableSlot.update({
-    where: { id: slotId },
-    data: { isActive: false, updatedByUserId: ctx.userId },
-  })
+  // The section rows go inactive with it, in one transaction.
+  //
+  // They carry the partial unique index that keeps a section from taking the
+  // same subject twice in a period, and that index only looks at active rows.
+  // Leaving them behind would let a lesson nobody teaches any more hold its
+  // cell for ever — which is precisely what the index was made partial to
+  // avoid.
+  await prisma.$transaction([
+    prisma.timetableSlotSection.updateMany({ where: { slotId }, data: { isActive: false } }),
+    prisma.timetableSlot.update({
+      where: { id: slotId },
+      data: { isActive: false, updatedByUserId: ctx.userId },
+    }),
+  ])
 
   await writeAuditLog(ctx, {
     action: 'timetable_slot.deactivated',
@@ -780,8 +914,13 @@ function requireOwnStaffId(ctx: AuthContext): string {
 
 const LESSON_INCLUDE = {
   subject: { select: { id: true, name: true } },
-  section: {
-    include: { academicGroup: { include: { class: true, division: true, program: true } } },
+  sections: {
+    where: { isActive: true },
+    include: {
+      section: {
+        include: { academicGroup: { include: { class: true, division: true, program: true } } },
+      },
+    },
   },
 } as const
 
@@ -791,11 +930,13 @@ function toTeacherLesson(slot: {
   period: number
   room: string | null
   subject: { id: string; name: string }
-  section: {
-    id: string
-    name: string
-    academicGroup: { class: { name: string }; division: { name: string }; program: { name: string } }
-  }
+  sections: {
+    section: {
+      id: string
+      name: string
+      academicGroup: { class: { name: string }; division: { name: string }; program: { name: string } }
+    }
+  }[]
 }): TeacherLesson {
   const period = periodOf(slot.period)
   return {
@@ -806,11 +947,13 @@ function toTeacherLesson(slot: {
     endTime: period?.end ?? '',
     subjectId: slot.subject.id,
     subjectName: slot.subject.name,
-    sectionId: slot.section.id,
-    sectionName: slot.section.name,
-    className: slot.section.academicGroup.class.name,
-    divisionName: slot.section.academicGroup.division.name,
-    programName: slot.section.academicGroup.program.name,
+    sections: slot.sections.map(({ section }) => ({
+      sectionId: section.id,
+      sectionName: section.name,
+      className: section.academicGroup.class.name,
+      divisionName: section.academicGroup.division.name,
+      programName: section.academicGroup.program.name,
+    })),
     room: slot.room,
   }
 }

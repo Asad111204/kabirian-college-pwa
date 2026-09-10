@@ -73,8 +73,12 @@ check('A has exactly three lessons (two today, one decoy on another day)', lesso
 check('all three are A’s own slots', JSON.stringify(slotIds(a)) === JSON.stringify([ids.slots.slotA1, ids.slots.slotA2, ids.slots.slotA3].sort()))
 check('A never sees B’s slot', !slotIds(a).includes(ids.slots.slotB1))
 check('A sees Biology only', subjects(a).every((s) => s === 'Biology'))
-check('A sees both 1st Year and 2nd Year', lessonsOf(a).some((l) => l.className === '1st Year') && lessonsOf(a).some((l) => l.className === '2nd Year'))
-check('A sees Section A and Section B', lessonsOf(a).some((l) => l.sectionName === 'A') && lessonsOf(a).some((l) => l.sectionName === 'B'))
+// A lesson names every section in the room, because the college teaches some
+// of them together and the teacher needs to know who is in front of them.
+const sectionsOf = (r) => lessonsOf(r).flatMap((l) => l.sections ?? [])
+check('every lesson names the sections sitting in it', lessonsOf(a).every((l) => Array.isArray(l.sections) && l.sections.length >= 1))
+check('A sees both 1st Year and 2nd Year', sectionsOf(a).some((s) => s.className === '1st Year') && sectionsOf(a).some((s) => s.className === '2nd Year'))
+check('A sees Section A and Section B', sectionsOf(a).some((s) => s.sectionName === 'A') && sectionsOf(a).some((s) => s.sectionName === 'B'))
 check('period 2 carries the configured 08:30-09:00', lessonsOf(a).some((l) => l.period === 2 && l.startTime === '08:30' && l.endTime === '09:00'))
 check('period 4 carries the configured 10:10-10:40', lessonsOf(a).some((l) => l.period === 4 && l.startTime === '10:10' && l.endTime === '10:40'))
 check('the room is present where set and null where not', lessonsOf(a).some((l) => l.room === 'Lab 1') && lessonsOf(a).some((l) => l.room === null))

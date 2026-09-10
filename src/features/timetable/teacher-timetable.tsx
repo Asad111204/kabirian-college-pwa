@@ -2,6 +2,7 @@ import * as React from 'react'
 import { EmptyState } from '@/components/ui/feedback'
 import type { TeacherTimetable } from '@/server/services/timetable.service'
 import { DAY_LABEL, TIMETABLE_DAYS, type DayOfWeekValue } from '@/validation/timetable'
+import { whoIsInTheRoom, whoIsInTheRoomShort } from './shared'
 
 /**
  * A teacher's own week.
@@ -58,8 +59,7 @@ export function TeacherTimetableGrid({ timetable }: { timetable: TeacherTimetabl
                     </p>
                   </div>
                   <p className="mt-0.5 text-xs text-foreground-muted">
-                    {lesson.className} · {lesson.divisionName} · {lesson.programName} · Section{' '}
-                    {lesson.sectionName}
+                    {whoIsInTheRoom(lesson)}
                     {lesson.room ? ` · ${lesson.room}` : ''}
                   </p>
                 </li>
@@ -138,7 +138,7 @@ export function TeacherTimetableGrid({ timetable }: { timetable: TeacherTimetabl
                               {lesson.subjectName}
                             </p>
                             <p className="truncate text-xs text-foreground-muted">
-                              {lesson.className} · Section {lesson.sectionName}
+                              {whoIsInTheRoomShort(lesson)}
                               {lesson.room ? ` · ${lesson.room}` : ''}
                             </p>
                           </div>

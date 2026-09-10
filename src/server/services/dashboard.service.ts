@@ -348,7 +348,7 @@ async function operationsFor(ctx: AuthContext, sessionId: string | null): Promis
       : 0,
     has('timetable.view') && sessionId
       ? prisma.section.count({
-          where: { academicSessionId: sessionId, isActive: true, timetableSlots: { some: { isActive: true } } },
+          where: { academicSessionId: sessionId, isActive: true, timetableSections: { some: { isActive: true } } },
         })
       : 0,
     has('documents.view') ? prisma.documentType.count({ where: { ownerType: 'STUDENT', isRequired: true, isActive: true } }) : 0,

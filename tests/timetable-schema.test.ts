@@ -89,6 +89,8 @@ beforeAll(async () => {
 /* -------------------------------------------------------------------------- */
 
 interface SlotOptions {
+  /** Every section this lesson covers; overrides `section` when given. */
+  sections?: string[]
   id?: string
   section?: string
   session?: string
@@ -99,24 +101,59 @@ interface SlotOptions {
   room?: string | null
 }
 
+/**
+ * One lesson and the sections sitting in it.
+ *
+ * A lesson no longer belongs to a section: it lists them. `sections` takes as
+ * many as the lesson covers, and the join rows carry the lesson's own subject,
+ * day and period, which is what lets the "same subject twice" rule be an index.
+ */
 async function insertSlot(options: SlotOptions = {}): Promise<string> {
   const id = options.id ?? uid()
+  const session = options.session ?? ID.session
+  const subject = options.subject ?? ID.biology
+  const day = options.day ?? 'MONDAY'
+  const period = options.period ?? 1
+  const sections = options.sections ?? [options.section ?? ID.section]
+
   await db.query(
     `INSERT INTO timetable_slots
-       (id, section_id, academic_session_id, subject_id, staff_id, day_of_week, period, room, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), now())`,
-    [
-      id,
-      options.section ?? ID.section,
-      options.session ?? ID.session,
-      options.subject ?? ID.biology,
-      options.staff ?? ID.staff,
-      options.day ?? 'MONDAY',
-      options.period ?? 1,
-      options.room === undefined ? 'Lab 1' : options.room,
-    ],
+       (id, academic_session_id, subject_id, staff_id, day_of_week, period, room, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, now(), now())`,
+    [id, session, subject, options.staff ?? ID.staff, day, period, options.room === undefined ? 'Lab 1' : options.room],
   )
+
+  // All or nothing, as the service writes it — but by clearing up rather than
+  // by a transaction, because two of the tests below run inserts concurrently
+  // against this one connection and an explicit transaction would serialise
+  // them. A lesson whose sections are refused must leave nothing behind, or
+  // the half-written row goes on holding the teacher's cell.
+  try {
+    for (const sectionId of sections) {
+      await db.query(
+        `INSERT INTO timetable_slot_sections
+           (id, slot_id, section_id, academic_session_id, subject_id, day_of_week, period, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, now())`,
+        [uid(), id, sectionId, session, subject, day, period],
+      )
+    }
+  } catch (error) {
+    await db.query(`DELETE FROM timetable_slots WHERE id = $1`, [id])
+    throw error
+  }
   return id
+}
+
+/**
+ * Removing a lesson from a cell, exactly as the service does it.
+ *
+ * The lesson AND its section rows go inactive together. Only doing the first
+ * would leave the section rows holding the cell through their own partial
+ * unique index, and the cell could never be filled again.
+ */
+async function deactivate(slotId: string): Promise<void> {
+  await db.query(`UPDATE timetable_slots SET is_active = false WHERE id = $1`, [slotId])
+  await db.query(`UPDATE timetable_slot_sections SET is_active = false WHERE slot_id = $1`, [slotId])
 }
 
 const rejects = async (fn: () => Promise<unknown>) => {
@@ -218,7 +255,7 @@ describe('a section can only be doing one thing at a time', () => {
     const first = await insertSlot({ day: 'FRIDAY', period: 5 })
     await rejects(() => insertSlot({ day: 'FRIDAY', period: 5, subject: ID.chemistry }))
 
-    await db.query(`UPDATE timetable_slots SET is_active = false WHERE id = $1`, [first])
+    await deactivate(first)
     await expect(
       insertSlot({ day: 'FRIDAY', period: 5, subject: ID.chemistry }),
     ).resolves.toBeTruthy()
@@ -226,7 +263,7 @@ describe('a section can only be doing one thing at a time', () => {
 
   it('keeps the removed lesson as history rather than deleting it', async () => {
     const id = await insertSlot({ day: 'FRIDAY', period: 7 })
-    await db.query(`UPDATE timetable_slots SET is_active = false WHERE id = $1`, [id])
+    await deactivate(id)
     const r = await db.query<{ count: string }>(
       `SELECT count(*)::text AS count FROM timetable_slots WHERE id = $1`,
       [id],
@@ -237,13 +274,110 @@ describe('a section can only be doing one thing at a time', () => {
   it('is a partial index, so many inactive rows may share one cell', async () => {
     for (const subject of [ID.biology, ID.chemistry, ID.biology]) {
       const id = await insertSlot({ day: 'SATURDAY', period: 8, subject })
-      await db.query(`UPDATE timetable_slots SET is_active = false WHERE id = $1`, [id])
+      await deactivate(id)
     }
     const r = await db.query<{ count: string }>(
       `SELECT count(*)::text AS count FROM timetable_slots
        WHERE day_of_week = 'SATURDAY' AND period = 8 AND is_active = false`,
     )
     expect(r.rows[0]?.count).toBe('3')
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+/* A class taught to several sections, and a section split between subjects   */
+/* -------------------------------------------------------------------------- */
+
+describe('one lesson, several sections', () => {
+  it('lets one teacher take two sections in the same period', async () => {
+    // The college's own timetable is full of these: "1st Year Girls Bio/Math"
+    // is one column, one teacher, one room — and two of these sections.
+    const id = await insertSlot({
+      sections: [ID.section, ID.sectionB],
+      day: 'THURSDAY',
+      period: 7,
+      room: 'Hall',
+    })
+    const r = await db.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM timetable_slot_sections WHERE slot_id = $1`,
+      [id],
+    )
+    expect(r.rows[0]?.count).toBe('2')
+  })
+
+  it('still refuses that one teacher a second lesson in the same period', async () => {
+    await insertSlot({ sections: [ID.section, ID.sectionB], day: 'THURSDAY', period: 9, room: null })
+    await rejects(() =>
+      insertSlot({ section: ID.sectionB, day: 'THURSDAY', period: 9, subject: ID.chemistry, room: null }),
+    )
+  })
+
+  it('refuses a section that belongs to another session, however many are listed', async () => {
+    await rejects(() =>
+      insertSlot({ sections: [ID.section, ID.otherSection], day: 'WEDNESDAY', period: 5, room: null }),
+    )
+  })
+
+  it('takes the lesson away from every section at once', async () => {
+    const id = await insertSlot({
+      sections: [ID.section, ID.sectionB],
+      day: 'THURSDAY',
+      period: 5,
+      room: null,
+    })
+    await deactivate(id)
+    const r = await db.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM timetable_slot_sections WHERE slot_id = $1 AND is_active`,
+      [id],
+    )
+    expect(r.rows[0]?.count).toBe('0')
+  })
+})
+
+describe('a section may split between subjects in one period', () => {
+  it('allows two lessons at once when the subjects differ', async () => {
+    // The elective split: some of the room does Biology, the rest Chemistry,
+    // each with its own teacher.
+    await insertSlot({ day: 'THURSDAY', period: 1, subject: ID.biology, room: 'A' })
+    await expect(
+      insertSlot({ day: 'THURSDAY', period: 1, subject: ID.chemistry, staff: ID.staff2, room: 'B' }),
+    ).resolves.toBeTruthy()
+  })
+
+  it('refuses the same subject twice in one period for one section', async () => {
+    await insertSlot({ day: 'THURSDAY', period: 2, subject: ID.biology, room: 'A' })
+    await rejects(() =>
+      insertSlot({ day: 'THURSDAY', period: 2, subject: ID.biology, staff: ID.staff2, room: 'B' }),
+    )
+  })
+
+  it('lets a cell be filled again once the first lesson is removed', async () => {
+    const first = await insertSlot({ day: 'THURSDAY', period: 6, subject: ID.biology, room: null })
+    await rejects(() =>
+      insertSlot({ day: 'THURSDAY', period: 6, subject: ID.biology, staff: ID.staff2, room: null }),
+    )
+    await deactivate(first)
+    await expect(
+      insertSlot({ day: 'THURSDAY', period: 6, subject: ID.biology, staff: ID.staff2, room: null }),
+    ).resolves.toBeTruthy()
+  })
+})
+
+describe('each campus keeps its own break', () => {
+  it('records a break period against a division, and allows none', async () => {
+    await db.query(`UPDATE divisions SET break_period = 7 WHERE id = $1`, [ID.division])
+    const r = await db.query<{ break_period: number | null }>(
+      `SELECT break_period FROM divisions WHERE id = $1`,
+      [ID.division],
+    )
+    expect(r.rows[0]?.break_period).toBe(7)
+
+    await db.query(`UPDATE divisions SET break_period = NULL WHERE id = $1`, [ID.division])
+    const cleared = await db.query<{ break_period: number | null }>(
+      `SELECT break_period FROM divisions WHERE id = $1`,
+      [ID.division],
+    )
+    expect(cleared.rows[0]?.break_period).toBeNull()
   })
 })
 

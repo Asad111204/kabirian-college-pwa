@@ -103,8 +103,14 @@ export function TimetableBuilder({ initialOptions }: { initialOptions: Timetable
     if (sectionId) await loadTimetable(sectionId)
   }, [sectionId, loadTimetable])
 
-  const slotAt = (day: DayOfWeekValue, period: number) =>
-    timetable?.slots.find((s) => s.dayOfWeek === day && s.period === period) ?? null
+  /**
+   * Everything this section is doing in one cell.
+   *
+   * More than one is normal now: an elective split puts Chemistry and Computer
+   * in the same hour for the same room of students, each with its own teacher.
+   */
+  const slotsAt = (day: DayOfWeekValue, period: number) =>
+    timetable?.slots.filter((s) => s.dayOfWeek === day && s.period === period) ?? []
 
   /* ---------------------------------------------------------------------- */
 
@@ -262,18 +268,24 @@ export function TimetableBuilder({ initialOptions }: { initialOptions: Timetable
                     <tr key={period.period}>
                       {heading}
                       {TIMETABLE_DAYS.map((day) => {
-                        const slot = slotAt(day, period.period)
+                        const slots = slotsAt(day, period.period)
                         const where = `${DAY_LABEL[day]}, period ${period.period}`
                         return (
                           <td key={day} className="border border-border px-2 py-1.5 align-top">
-                            {slot ? (
-                              <div className="min-w-0">
+                            {slots.map((slot) => (
+                              <div key={slot.id} className="min-w-0 border-b border-border/60 pb-1.5 last:border-0 last:pb-0 [&+div]:pt-1.5">
                                 <p className="text-sm font-medium text-foreground">
                                   {slot.subjectName}
                                 </p>
                                 <p className="text-xs text-foreground-muted">{slot.staffName}</p>
                                 {slot.room ? (
                                   <p className="text-xs text-foreground-muted">Room {slot.room}</p>
+                                ) : null}
+                                {(slot.sectionIds?.length ?? 1) > 1 ? (
+                                  <p className="text-xs text-foreground-muted">
+                                    with {slot.sectionIds.length - 1} other section
+                                    {slot.sectionIds.length === 2 ? '' : 's'}
+                                  </p>
                                 ) : null}
                                 <div className="mt-1 flex gap-1">
                                   <Button
@@ -289,6 +301,7 @@ export function TimetableBuilder({ initialOptions }: { initialOptions: Timetable
                                         subjectId: slot.subjectId,
                                         staffId: slot.staffId,
                                         room: slot.room ?? '',
+                                        sectionIds: slot.sectionIds,
                                       })
                                     }
                                     aria-label={`Edit ${slot.subjectName} on ${where}`}
@@ -307,25 +320,30 @@ export function TimetableBuilder({ initialOptions }: { initialOptions: Timetable
                                   </Button>
                                 </div>
                               </div>
-                            ) : (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                disabled={timetable.subjects.length === 0}
-                                onClick={() =>
-                                  setFormTarget({
-                                    dayOfWeek: day,
-                                    period: period.period,
-                                    startTime: period.start,
-                                    endTime: period.end,
-                                  })
-                                }
-                                aria-label={`Add a class on ${where}`}
-                              >
-                                <Plus className="h-3.5 w-3.5" aria-hidden />
-                                Add Class
-                              </Button>
-                            )}
+                            ))}
+
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className={slots.length > 0 ? 'mt-1' : undefined}
+                              disabled={timetable.subjects.length === 0}
+                              onClick={() =>
+                                setFormTarget({
+                                  dayOfWeek: day,
+                                  period: period.period,
+                                  startTime: period.start,
+                                  endTime: period.end,
+                                })
+                              }
+                              aria-label={
+                                slots.length > 0
+                                  ? `Add another class on ${where}`
+                                  : `Add a class on ${where}`
+                              }
+                            >
+                              <Plus className="h-3.5 w-3.5" aria-hidden />
+                              {slots.length > 0 ? 'Add another' : 'Add Class'}
+                            </Button>
                           </td>
                         )
                       })}
@@ -342,6 +360,7 @@ export function TimetableBuilder({ initialOptions }: { initialOptions: Timetable
               if (!open) setFormTarget(null)
             }}
             sectionId={timetable.section.sectionId}
+            allSections={options.sections}
             target={formTarget}
             subjects={timetable.subjects}
             onSaved={async () => {

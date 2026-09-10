@@ -205,21 +205,30 @@ for (const [staff, section, subject] of assignments) {
 // Class 12 / B / Biology / period 4 -- both on today's weekday so the
 // dashboard has something to show. A decoy for A on another day, and one
 // lesson for B today.
+// A lesson lists the sections sitting in it, so each of these carries an array
+// even when it is the ordinary one-section case.
 const slots = [
-  ['slotA1', ID.sec11A, ID.biology, ID.staffA, weekday, 2, 'Lab 1'],
-  ['slotA2', ID.sec12B, ID.biology, ID.staffA, weekday, 4, null],
-  ['slotA3', ID.sec11A, ID.biology, ID.staffA, otherDay, 7, 'Lab 1'],
-  ['slotB1', ID.sec11B, ID.chemistry, ID.staffB, weekday, 3, 'Lab 2'],
+  ['slotA1', [ID.sec11A], ID.biology, ID.staffA, weekday, 2, 'Lab 1'],
+  ['slotA2', [ID.sec12B], ID.biology, ID.staffA, weekday, 4, null],
+  ['slotA3', [ID.sec11A], ID.biology, ID.staffA, otherDay, 7, 'Lab 1'],
+  ['slotB1', [ID.sec11B], ID.chemistry, ID.staffB, weekday, 3, 'Lab 2'],
 ]
 const slotIds = {}
-for (const [key, section, subject, staff, day, period, room] of slots) {
+for (const [key, sections, subject, staff, day, period, room] of slots) {
   const id = uid()
   slotIds[key] = id
   await client.query(
-    `INSERT INTO timetable_slots (id, section_id, academic_session_id, subject_id, staff_id, day_of_week, period, room, is_active, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, now(), now())`,
-    [id, section, ID.session, subject, staff, day, period, room],
+    `INSERT INTO timetable_slots (id, academic_session_id, subject_id, staff_id, day_of_week, period, room, is_active, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, true, now(), now())`,
+    [id, ID.session, subject, staff, day, period, room],
   )
+  for (const section of sections) {
+    await client.query(
+      `INSERT INTO timetable_slot_sections (id, slot_id, section_id, academic_session_id, subject_id, day_of_week, period, is_active, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, true, now())`,
+      [uid(), id, section, ID.session, subject, day, period],
+    )
+  }
 }
 
 // Phase 24: teacher B is also an administrator — one account, both portals.

@@ -3081,3 +3081,31 @@ That the operation is a replace is decided from the database, not from anything 
 **They are told before they submit, not after.** A file chosen in the person's own view opens a dialogue saying plainly that it cannot be changed or removed afterwards and that a correction means asking the office. Only then is anything sent. A wrong file handed in by a sixteen-year-old is a trip to the office for somebody, and the moment to prevent it is before the upload, not in a message afterwards.
 
 **Consequences.** Through the production build: a student uploads their own missing roll-number slip, is refused when they upload over it, is refused when they delete it, and the office is bound by none of that. A teacher may hand in their own CV and not a second one; neither may touch anybody else's record. Eight tests cover the dialogue, including that nothing is sent while it is open and nothing is sent when it is refused.
+
+---
+
+## ADR-181 · A lesson covers sections; it does not belong to one
+
+**Status:** Accepted · 2026-09-10 · Phase 31
+
+**Context.** The college sent its printed timetable, and it does two things the table could not hold.
+
+Its columns are **combinations**. "1st Year Girls Bio/Math" is one column, one teacher, one room — and two of this system's sections sitting together. Written the only way the old shape allowed, as two lessons, the teacher's own partial unique index called it a clash: one teacher cannot be in two places, and it was quite right.
+
+Its cells are sometimes **several lessons at once**. "Ch / Comp / Isl(E) — Sir Hassan / Miss Arooj / Miss Huma" is three teachers taking one room of students split by what they take. The section's unique index refused that outright: one lesson per section per period.
+
+And the two campuses **do not break together** — the girls stop at 11:10, the boys teach through it and stop at 11:40 — while the break was a property of one college-wide grid.
+
+**Decision.** A `TimetableSlot` no longer has a `sectionId`. It belongs to a session and lists the sections it covers, through `timetable_slot_sections`.
+
+That single change answers the first two at once. **A combined class is one row**, which is both the truth and the thing that makes the teacher's index work again — one teacher, one lesson, one period, however many sections are in the room. **A split is two rows over the same section**, which the new index allows as long as the subjects differ.
+
+**The section rule is weakened deliberately, and only as far as it must be.** The old index said "one lesson per section per period". The new one says "not the same *subject* twice", which is the weakest rule that still catches a genuine duplicate while letting an elective split exist. It lives on the join table, which carries the lesson's day, period and subject copied down for that purpose. Those columns are not facts of their own — they are the lesson's — so the service rewrites every join row whenever a lesson changes rather than patching them, and there is nothing to drift.
+
+**The break belongs to the campus.** `divisions.break_period`, null meaning the college-wide default. A lesson covering both campuses in a period either of them breaks in is refused, and the refusal names whose break it is.
+
+**Alternatives.** *Named teaching groups* — set the seven columns up once and build against them. Better for a college whose combinations are stable, and the college chose against it: they would rather tick sections each time than maintain another list. *Keeping one row per section with a shared group key* — no migration of the section column, but the teacher's rule could then no longer be a unique index, and this codebase treats "the index is what settles a simultaneous save" as the point of having one.
+
+**Consequences.** Everything that read a lesson's section now reads its sections: the office's grid draws several lessons in a cell and says when one is shared, and a teacher's week names every section in the room rather than one of them. Thirty-eight schema tests attack the new indexes on a real PostgreSQL, which is also how the migration is proved to replay cleanly on top of the nineteen before it.
+
+**A bug the tests caught before the college did.** Deactivating a lesson left its section rows active, and those rows carry the partial index — so a lesson nobody taught any more would have held its cell for ever, which is precisely what a partial index exists to prevent. They now go inactive together, in one transaction.
