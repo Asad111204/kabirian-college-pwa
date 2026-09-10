@@ -57,6 +57,30 @@ function complain(line: string): void {
   console.error(line)
 }
 
+/**
+ * A request that survives the network having a bad moment.
+ *
+ * This talks to a hosted application over the open internet, several hundred
+ * times in a row, and one dropped connection was enough to end a run that had
+ * done almost all of its work — "fetch failed", with a third of the payments
+ * still to record. A refusal from the server is an answer and is returned as
+ * it is; only a connection that never produced one is worth trying again.
+ */
+async function request(input: string, init?: RequestInit, attempts = 4): Promise<Response> {
+  let lastError: unknown
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await fetch(input, init)
+    } catch (error) {
+      lastError = error
+      if (attempt === attempts) break
+      // A short, growing wait: a moment for whatever it was to pass.
+      await new Promise((resolve) => setTimeout(resolve, attempt * 1500))
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError))
+}
+
 const NEWLINE = String.fromCharCode(10)
 
 function writeReport(path: string): void {
@@ -153,7 +177,7 @@ async function main() {
 
   const { username, password } = await askCredentials()
 
-  const loginRes = await fetch(`${url}/api/v1/auth/login`, {
+  const loginRes = await request(`${url}/api/v1/auth/login`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', origin: url },
     body: JSON.stringify({ username, password }),
@@ -167,7 +191,7 @@ async function main() {
   const headers = { cookie, origin: url, 'content-type': 'application/json' }
 
   const get = async <T>(path: string): Promise<T> => {
-    const res = await fetch(`${url}${path}`, { headers })
+    const res = await request(`${url}${path}`, { headers })
     const body = (await res.json()) as { data?: T; error?: { message?: string } }
     if (!res.ok) throw new Error(`${path}: ${body.error?.message ?? res.status}`)
     return body.data as T
@@ -221,7 +245,7 @@ async function main() {
     ].filter((line) => line.amountPaisa > 0)
 
     if (apply && !skipPlans) {
-      const res = await fetch(`${url}/api/v1/students/${student.id}/fee-plan`, {
+      const res = await request(`${url}/api/v1/students/${student.id}/fee-plan`, {
         method: 'PUT',
         headers,
         body: JSON.stringify({ academicSessionId: current.id, lines, feeDiscountPaisa: plan.concession }),
@@ -266,7 +290,7 @@ async function main() {
       // A ceiling on the rounds, so a server that always reports work left
       // cannot spin here for ever.
       for (let round = 0; round < 60; round += 1) {
-        const res = await fetch(`${url}/api/v1/fees/run`, {
+        const res = await request(`${url}/api/v1/fees/run`, {
           method: 'POST',
           headers,
           body: JSON.stringify({ ...scope, academicSessionId: current.id, limit: AT_A_TIME }),
@@ -350,19 +374,29 @@ async function main() {
         continue
       }
 
-      const res = await fetch(`${url}/api/v1/fees/vouchers/${voucher.id}/payments`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          amountPaisa: payment.amountPaisa,
-          paidOn: payment.paidOn,
-          method: 'CASH',
-          remarks: `Carried over from the previous college system (${payment.month}).`,
-        }),
-      })
-      if (!res.ok) {
-        const body = (await res.json()) as { error?: { message?: string } }
-        problems.push(`payments line ${payment.line} (${payment.fullName}): ${body.error?.message ?? res.status}`)
+      // One receipt that will not go through is a problem to report, not a
+      // reason to abandon the thirty after it. Whatever this run does record
+      // stands, and running again picks up the rest.
+      try {
+        const res = await request(`${url}/api/v1/fees/vouchers/${voucher.id}/payments`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            amountPaisa: payment.amountPaisa,
+            paidOn: payment.paidOn,
+            method: 'CASH',
+            remarks: `Carried over from the previous college system (${payment.month}).`,
+          }),
+        })
+        if (!res.ok) {
+          const body = (await res.json()) as { error?: { message?: string } }
+          problems.push(`payments line ${payment.line} (${payment.fullName}): ${body.error?.message ?? res.status}`)
+          continue
+        }
+      } catch (error) {
+        problems.push(
+          `payments line ${payment.line} (${payment.fullName}): ${error instanceof Error ? error.message : String(error)}`,
+        )
         continue
       }
       paymentsOk += 1
