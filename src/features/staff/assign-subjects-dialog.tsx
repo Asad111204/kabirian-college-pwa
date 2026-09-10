@@ -8,6 +8,7 @@ import { Checkbox, Field, Select } from '@/components/ui/field'
 import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog'
 import { Alert } from '@/components/ui/feedback'
 import { api, ApiError } from '@/lib/api-client'
+import { SectionQuickSelect } from '@/features/academics/section-quick-select'
 import type { AssignmentOptionGroup } from '@/server/services/staff.service'
 
 /** What the server did with one save, so the office can see it plainly. */
@@ -85,6 +86,19 @@ export function AssignSubjectsDialog({
   }, [sessionId])
 
   const groups = loaded?.sessionId === sessionId ? loaded.groups : null
+
+  /** Every section in the year, flattened, for the whole-year buttons. */
+  const everySection = React.useMemo(
+    () =>
+      (groups ?? []).flatMap((group) =>
+        group.sections.map((section) => ({
+          id: section.id,
+          className: group.className,
+          divisionName: group.divisionName,
+        })),
+      ),
+    [groups],
+  )
 
   /** Every ticked section, in the order the college lists them, with its group. */
   const chosen = React.useMemo(() => {
@@ -197,6 +211,12 @@ export function AssignSubjectsDialog({
                 <p className="mb-2 text-xs text-foreground-muted">
                   {sectionIds.length === 0 ? 'Tick every section this teacher takes.' : `${sectionIds.length} chosen`}
                 </p>
+                <SectionQuickSelect
+                  sections={everySection}
+                  selected={sectionIds}
+                  onChange={setSectionIds}
+                  disabled={busy}
+                />
                 <div className="max-h-72 space-y-3 overflow-y-auto rounded-lg border border-border p-3">
                   {groups === null ? (
                     <p className="text-xs text-foreground-muted">Loading the structure…</p>

@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | **Phase 28 complete: the fee is annual, made of optional heads, and paid in instalments.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Everything through Phase 29 is live on Neon (nineteen migrations, zero drift). The college charges one fee per student per year, built from tuition, annual funds, events, board registration, board admission, a tour and anything else, all optional and all set at admission; families pay whenever they can, and a printed voucher shows only what has been paid and what is left. Documents are attached at the counter, and a salary is recorded when staff are added. The college now has a printable **handbook** covering every part of the system, and the app finally shows the college's own logo rather than a placeholder. **The Phase 28 migration was applied to Neon on 2026-09-09.** The college's previous FoxPro system has been read into this one: **188 of its 192 enrolled students are live, each with a portal login**, every class counted back against the old file, and **its 2026-27 fee ledger with them**: 111 students charged Rs 3,449,930 for the year, Rs 273,200 already received, reconciled to the rupee. |
-| **Last updated** | 2026-09-10 (rev. 53 — combined classes, elective splits, per-campus breaks) |
+| **Last updated** | 2026-09-10 (rev. 54 — a whole year of sections in one press) |
 | **Companion docs** | [DECISIONS.md](DECISIONS.md) · [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) · [README.md](README.md) |
 
 ---
@@ -2097,6 +2097,20 @@ The college sent its printed timetable, and it does three things the system coul
 **Applied to Neon on 2026-09-10** (twenty-one migrations, zero drift). The census differed in exactly what it should: the new join table with four rows, one per existing lesson, and a table count of 51. Every lesson kept its section, its teacher and its active state; nothing was deleted, because there was nothing here to delete.
 
 **A bug the tests caught before the college did.** Deactivating a lesson left its section rows active, and those rows carry the partial unique index — so a lesson nobody taught any more would have held its cell for ever, which is precisely what a partial index exists to prevent.
+
+### 22.65 A whole year in one press (2026-09-10)
+
+The college's point: *"if there is a common subject like English that is in all the sections of 1st year, there must be a system so the admin can add accordingly."*
+
+There are **24 sections** — twelve in each year, six programmes on each campus. Putting one teacher against English for the whole of 1st Year meant ticking twelve boxes, and the timetable's "also taught to" was the same twelve again. That is the sort of chore that gets done wrong on a Friday afternoon and then quietly wrong all year.
+
+Both lists now carry a row of buttons — **All 1st Year**, **All 2nd Year**, and a campus button where a year has more than one. Press a year, tick English once, press **same as the first**, and the whole year is done in three clicks rather than twenty-four.
+
+They are **built from the sections themselves**, not written down, so a new class or a new campus appears the day the college creates one. Each is a toggle, so overshooting is one press to undo, and a button shows as on only when *every* one of its sections is — a year that is eleven-twelfths ticked is not a ticked year.
+
+**Nothing here decides anything.** It ticks boxes a person could have ticked one at a time, and every pairing is still checked by the server against that section's own curriculum.
+
+**Tests: 11 new.** The whole year in one press; one campus without the other; pressing off again; showing on only when every section is; keeping selections made elsewhere; no campus button for a year that has only one; and the same button working inside the assignment dialogue. **1,571 in total across 89 files.**
 
 ### 22.64 A teacher's subjects need not be the same in every class (2026-09-10)
 

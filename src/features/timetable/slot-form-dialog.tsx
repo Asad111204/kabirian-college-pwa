@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog'
 import { Checkbox, Field, Input, Select } from '@/components/ui/field'
 import { Alert } from '@/components/ui/feedback'
 import { api, ApiError } from '@/lib/api-client'
+import { SectionQuickSelect } from '@/features/academics/section-quick-select'
 import type { TimetableSectionSummary, TimetableSubjectOption } from '@/server/services/timetable.service'
 import { DAY_LABEL, type DayOfWeekValue } from '@/validation/timetable'
 
@@ -263,6 +264,16 @@ export function SlotFormDialog({
               hint="Tick any other section sitting in this same lesson — one teacher, one room, one period."
               error={fieldErrors.sectionIds}
             >
+              <SectionQuickSelect
+                sections={others.map((section) => ({
+                  id: section.sectionId,
+                  className: section.className,
+                  divisionName: section.divisionName,
+                }))}
+                selected={alsoTaughtTo}
+                onChange={setAlsoTaughtTo}
+                disabled={submitting}
+              />
               <div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-border p-2">
                 {others.map((section) => (
                   <Checkbox

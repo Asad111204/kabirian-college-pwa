@@ -176,6 +176,22 @@ describe('assigning subjects to a teacher', () => {
     expect(screen.getByText('2 assignments will be made.')).toBeTruthy()
   })
 
+  it('takes a whole year in one press, for a subject everybody studies', async () => {
+    // English is taken by every section of 1st Year. Ticking them one at a
+    // time is the chore this button exists to remove.
+    const user = userEvent.setup()
+    post.mockResolvedValue({ created: [], alreadyHeld: [], refused: [] })
+    open()
+    await screen.findByText('1st Year · Girls · Pre-Medical')
+
+    await user.click(screen.getByRole('button', { name: 'All 1st Year' }))
+    expect(screen.getByText('1 chosen')).toBeTruthy()
+
+    // Its subjects are then set once and copied down.
+    await user.click(screen.getAllByRole('checkbox', { name: 'English' })[0]!)
+    expect(screen.getByText('1 assignment will be made.')).toBeTruthy()
+  })
+
   it('cannot be saved with nothing chosen', async () => {
     open()
     await screen.findByText('1st Year · Girls · Pre-Medical')
