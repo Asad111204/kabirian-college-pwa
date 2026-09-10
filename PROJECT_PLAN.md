@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | **Phase 28 complete: the fee is annual, made of optional heads, and paid in instalments.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Everything through Phase 29 is live on Neon (nineteen migrations, zero drift). The college charges one fee per student per year, built from tuition, annual funds, events, board registration, board admission, a tour and anything else, all optional and all set at admission; families pay whenever they can, and a printed voucher shows only what has been paid and what is left. Documents are attached at the counter, and a salary is recorded when staff are added. The college now has a printable **handbook** covering every part of the system, and the app finally shows the college's own logo rather than a placeholder. **The Phase 28 migration was applied to Neon on 2026-09-09.** The college's previous FoxPro system has been read into this one: **188 of its 192 enrolled students are live, each with a portal login**, every class counted back against the old file. |
-| **Last updated** | 2026-09-10 (rev. 51 — the last coming-soon pages, and self-service documents) |
+| **Status** | **Phase 28 complete: the fee is annual, made of optional heads, and paid in instalments.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Everything through Phase 29 is live on Neon (nineteen migrations, zero drift). The college charges one fee per student per year, built from tuition, annual funds, events, board registration, board admission, a tour and anything else, all optional and all set at admission; families pay whenever they can, and a printed voucher shows only what has been paid and what is left. Documents are attached at the counter, and a salary is recorded when staff are added. The college now has a printable **handbook** covering every part of the system, and the app finally shows the college's own logo rather than a placeholder. **The Phase 28 migration was applied to Neon on 2026-09-09.** The college's previous FoxPro system has been read into this one: **188 of its 192 enrolled students are live, each with a portal login**, every class counted back against the old file, and **its 2026-27 fee ledger with them**: 111 students charged Rs 3,449,930 for the year, Rs 273,200 already received, reconciled to the rupee. |
+| **Last updated** | 2026-09-10 (rev. 52 — the old system's fee ledger reconciled onto Neon) |
 | **Companion docs** | [DECISIONS.md](DECISIONS.md) · [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) · [README.md](README.md) |
 
 ---
@@ -2081,6 +2081,34 @@ The college looked at the finished fee module and corrected the assumption under
 **Verified through the production build (65 fee checks, all passing, alongside the rest — 731 in total)**: a fee set from three heads adding to the year with the concession off, keeping the office's own words for the "Others" line; another student charged tuition alone; a head the college does not charge, a line of nothing and an amount with an extra zero each refused, with the fee unchanged after every refusal; a dry run that wrote nothing, then a run issuing one voucher each with no due date, then the same run issuing nothing; the fee changed afterwards without rewriting the voucher already issued; two instalments, the first leaving exactly 24,500 and reporting 29% collected, the second settling it; a void putting it back to part paid; a voucher with no due date carrying no fine and never overdue; a cancelled voucher reissued; a family seeing only their own; the admission form offering every head and the document checklist; and the staff form asking for a salary.
 
 **Tests: 1,497 across 85 files.** The fee policy, validation and screens were reworked rather than added to, because the model underneath them changed.
+
+### 22.62 The old system's fee ledger, brought across (2026-09-10)
+
+The previous system's `installment.DBF` holds one row per student per session: the year's tuition, any concession, the annual and events funds, and twelve months of what was asked for, what came in and when. For **2026-27** that is 111 students and 35 receipts, and all of it is now in this system, set through the same endpoints the office's own screens use.
+
+**Reconciled against the old ledger, student by student:**
+
+| | |
+|---|---|
+| Students charged | **111 of 111**, to the rupee |
+| Concessions | **111 of 111** |
+| Receipts matching | **110 of 111 students** |
+| Vouchers | 111 · **Rs 3,449,930** billed for the year |
+| Money received | **Rs 273,200** across 34 payments |
+
+The one student who does not match is **Ayesha Huma**: Rs 2,800 of her Rs 6,300 is in, and the missing Rs 3,500 is dated **10 October 2026** in the old file — a month in the future, which this system refuses. It needs the office to say what the date should be. **Laiba Munir's** Rs 5,000 went in as the old system has it, dated 25 August **2025**, which reads like a typo for 2026; correcting it means voiding the payment and recording it again.
+
+**It took five attempts, and each one taught something worth keeping.**
+
+*A whole college in one request.* The first run put every voucher in a single transaction and failed having issued nothing. Batching inside the transaction was the obvious fix and was the wrong one: the transaction was never the limit, **the request** was. A hosted request is stopped after a fixed number of seconds whatever it is doing — sections of eleven students went through, sections of seventeen, twenty and twenty-nine came back as 500s. A run may now be **bounded**: `limit` says how many vouchers to issue and the reply says how many are still waiting, so the caller comes back rather than being cut off. Anyone who already has a voucher is skipped, which is what makes calling it in a loop safe.
+
+*Two runs ended with nothing to go on but "done".* A terminal scrolls and a window gets closed, and a failure that is only printed is a failure nobody can act on. The importer now writes **`fee-import-report.txt`** every time — finished or fallen over, message and stack included. The very next run's report named the three failing sections in one line, after two blind attempts had named nothing.
+
+*One dropped connection ended a run that had done almost all of its work.* Several hundred requests over the open internet will have a bad moment; every one now retries a connection that never produced an answer, and a single receipt that will not go through is reported rather than abandoning the thirty after it.
+
+*The password was on screen.* Twice — readline only hides typing when it decides the input is a terminal, and Windows `cmd.exe` does not satisfy it. Both importers now read it from the raw input stream with nothing echoed at all.
+
+**The guard earned its place.** Every one of the five runs was safe to repeat because each step skips what is already done: plans are replaced rather than added to, vouchers skip anyone who has one, and payments refuse a voucher that had money on it before the run began. Twenty-three of the last run's twenty-three "problems" were that guard declining to record a receipt twice.
 
 ### 22.61 The last two "coming soon" pages, and handing in your own papers (2026-09-10)
 
