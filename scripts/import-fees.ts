@@ -32,9 +32,41 @@
  * The administrator's password is asked for on the terminal and never written
  * anywhere.
  */
-import { readFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { askCredentials } from './prompt'
 import { parseCsv, normaliseHeader } from '../src/lib/csv-read'
+
+/**
+ * Everything this run said, kept as well as printed.
+ *
+ * A terminal scrolls, a window gets closed, and "it did not work" is not
+ * something anybody can act on. Every line goes to a report file as well as
+ * the screen, including the line where it gave up, so what happened can be
+ * read afterwards. No password ever passes through here — the only thing that
+ * asks for one writes nothing.
+ */
+const transcript: string[] = []
+
+function say(line = ''): void {
+  transcript.push(line)
+  console.log(line)
+}
+
+function complain(line: string): void {
+  transcript.push(line)
+  console.error(line)
+}
+
+const NEWLINE = String.fromCharCode(10)
+
+function writeReport(path: string): void {
+  try {
+    writeFileSync(path, transcript.join(NEWLINE) + NEWLINE, 'utf8')
+    console.log(`${NEWLINE}A copy of this run is in ${path}${NEWLINE}`)
+  } catch {
+    // A report that cannot be written is not worth failing the run over.
+  }
+}
 
 function argValue(flag: string): string | undefined {
   const index = process.argv.indexOf(flag)
@@ -94,7 +126,7 @@ async function main() {
   const skipPlans = process.argv.includes('--no-plans')
 
   if (!plansFile) {
-    console.error('\nGive the plans CSV: --plans old-fee-plans.csv [--payments old-fee-payments.csv] [--url https://…] [--apply]\n')
+    complain('\nGive the plans CSV: --plans old-fee-plans.csv [--payments old-fee-payments.csv] [--url https://…] [--no-plans] [--apply]\n')
     process.exit(1)
   }
 
@@ -129,7 +161,7 @@ async function main() {
   })
   const cookie = (loginRes.headers.get('set-cookie') ?? '').split(';')[0] ?? ''
   if (!cookie.startsWith('kc_session=')) {
-    console.error(`\nSign-in failed (${loginRes.status}).\n`)
+    complain(`\nSign-in failed (${loginRes.status}). Check the username and password.\n`)
     process.exit(1)
   }
   const headers = { cookie, origin: url, 'content-type': 'application/json' }
@@ -147,7 +179,7 @@ async function main() {
   const sessionList = Array.isArray(sessions) ? sessions : (sessions.items ?? [])
   const current = sessionList.find((s) => s.isCurrent)
   if (!current) {
-    console.error('\nNo current academic session is set.\n')
+    complain('\nNo current academic session is set.\n')
     process.exit(1)
   }
 
@@ -162,8 +194,8 @@ async function main() {
     if (page >= (body.totalPages ?? 1)) break
   }
 
-  console.log(`\nFees into session ${current.name}${apply ? '' : ' — DRY RUN, nothing will be created'}`)
-  console.log(`  ${byAdmissionNumber.size} students in the system to match against\n`)
+  say(`\nFees into session ${current.name}${apply ? '' : ' — DRY RUN, nothing will be created'}`)
+  say(`  ${byAdmissionNumber.size} students in the system to match against\n`)
 
   const problems: string[] = []
 
@@ -202,9 +234,9 @@ async function main() {
     }
     plansOk += 1
     charged += plan.tuition + plan.annualFunds + plan.eventsFunds - plan.concession
-    if (apply && plansOk % 25 === 0) console.log(`  ${plansOk} fee plans set…`)
+    if (apply && plansOk % 25 === 0) say(`  ${plansOk} fee plans set…`)
   }
-  console.log(
+  say(
     skipPlans && apply
       ? `  Left ${plansOk} fee plan${plansOk === 1 ? '' : 's'} as they are — ${rupees(charged)} charged for the year.`
       : `  ${apply ? 'Set' : 'Would set'} ${plansOk} fee plan${plansOk === 1 ? '' : 's'} — ${rupees(charged)} charged for the year.`,
@@ -240,9 +272,9 @@ async function main() {
     for (const [at, sectionId] of sectionIds.entries()) await issueVouchers({ academicSessionId: current.id, sectionId }, `section ${at + 1}`)
     await issueVouchers({ academicSessionId: current.id }, 'the rest of the session')
 
-    console.log(`  Issued ${issued} voucher${issued === 1 ? '' : 's'} — ${rupees(billed)} billed.`)
+    say(`  Issued ${issued} voucher${issued === 1 ? '' : 's'} — ${rupees(billed)} billed.`)
   } else if (!apply) {
-    console.log('  Would issue one voucher per student with a fee, the same as the "Issue vouchers" button.')
+    say('  Would issue one voucher per student with a fee, the same as the "Issue vouchers" button.')
   }
 
   /* ------------------------------------------------------------- payments */
@@ -319,20 +351,28 @@ async function main() {
       paymentsOk += 1
       received += payment.amountPaisa
     }
-    console.log(`  ${apply ? 'Recorded' : 'Would record'} ${paymentsOk} payment${paymentsOk === 1 ? '' : 's'} — ${rupees(received)} received.`)
+    say(`  ${apply ? 'Recorded' : 'Would record'} ${paymentsOk} payment${paymentsOk === 1 ? '' : 's'} — ${rupees(received)} received.`)
   }
 
   if (problems.length > 0) {
-    console.log(`\n${problems.length} row${problems.length === 1 ? '' : 's'} with problems:`)
-    for (const problem of problems) console.log(`  - ${problem}`)
+    say(`\n${problems.length} row${problems.length === 1 ? '' : 's'} with problems:`)
+    for (const problem of problems) say(`  - ${problem}`)
   }
-  console.log('')
+  say('')
   // Let the process end on its own: process.exit() here trips a libuv
   // assertion on Windows while fetch's sockets are still closing.
   process.exitCode = problems.length > 0 ? 1 : 0
 }
 
-main().catch((error) => {
-  console.error('\nImport failed:', error instanceof Error ? error.message : error)
-  process.exit(1)
-})
+const reportPath = argValue('--report') ?? 'fee-import-report.txt'
+
+main()
+  .then(() => writeReport(reportPath))
+  .catch((error) => {
+    // Where it gave up, written down rather than only shown on a screen that
+    // scrolls: this is the line that says why nothing happened.
+    complain(`\nImport failed: ${error instanceof Error ? error.message : String(error)}`)
+    if (error instanceof Error && error.stack) transcript.push(error.stack)
+    writeReport(reportPath)
+    process.exitCode = 1
+  })
