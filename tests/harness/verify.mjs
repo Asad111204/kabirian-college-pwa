@@ -159,7 +159,9 @@ r = await call('teacherA', '/staff/timetable')
 check('A’s timetable page renders', r.status === 200, String(r.status))
 check('it names Biology, 1st Year and 2nd Year', r.text.includes('Biology') && r.text.includes('1st Year') && r.text.includes('2nd Year'))
 check('it never shows Chemistry (B’s subject)', !r.text.includes('Chemistry'))
-check('it marks the break', r.text.includes('Break'))
+// There is no break any more: every hour of the day is an ordinary period
+// the college may fill or leave empty (ADR-182).
+check('it shows no break row, because there is no break', !r.text.includes('Break'))
 // React SSR separates adjacent text nodes with <!-- -->, so allow it.
 const times = (t) => new RegExp(t.replace('–', '(?:<!-- -->)?–(?:<!-- -->)?')).test(r.text)
 check('it shows the configured period times', times('08:30–09:00') && times('12:40–13:20'))

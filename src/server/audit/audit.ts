@@ -142,6 +142,7 @@ export type AuditAction =
   | 'timetable_slot.created'
   | 'timetable_slot.updated'
   | 'timetable_slot.deactivated'
+  | 'timetable.periods_updated'
   | 'notice.created'
   | 'notice.updated'
   | 'notice.status_changed'

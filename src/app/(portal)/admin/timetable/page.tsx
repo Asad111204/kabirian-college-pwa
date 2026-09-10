@@ -3,6 +3,9 @@ import { requirePortalAccess } from '@/server/auth/context'
 import { getTimetableOptions } from '@/server/services/timetable.service'
 import { PageHeader } from '@/components/layout/app-shell'
 import { TimetableBuilder } from '@/features/timetable/timetable-builder'
+import { PeriodsEditor } from '@/features/timetable/periods-editor'
+import { getCollegePeriods } from '@/server/timetable/period-settings'
+import { can } from '@/server/auth/context'
 
 export const metadata: Metadata = { title: 'Timetable' }
 export const dynamic = 'force-dynamic'
@@ -17,7 +20,7 @@ export const dynamic = 'force-dynamic'
  */
 export default async function AdminTimetablePage() {
   const ctx = await requirePortalAccess(['ADMIN'])
-  const options = await getTimetableOptions(ctx)
+  const [options, periods] = await Promise.all([getTimetableOptions(ctx), getCollegePeriods()])
 
   return (
     <>
@@ -26,6 +29,14 @@ export default async function AdminTimetablePage() {
         description="The weekly master timetable. Choose a session and a section to build its week."
       />
       <TimetableBuilder initialOptions={options} />
+
+      {/* The bells themselves. Kept below the week the office came here to
+          build, because changing the day is the rarer errand. */}
+      {can(ctx, 'settings.manage') ? (
+        <div className="mt-6">
+          <PeriodsEditor initial={periods} />
+        </div>
+      ) : null}
     </>
   )
 }

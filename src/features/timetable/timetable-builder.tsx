@@ -247,23 +247,6 @@ export function TimetableBuilder({ initialOptions }: { initialOptions: Timetable
                     </th>
                   )
 
-                  // The break is the college's own, and nothing may be put in
-                  // it. It is spelled out in words, not signalled by shading.
-                  if (period.isBreak) {
-                    return (
-                      <tr key={period.period}>
-                        {heading}
-                        <td
-                          colSpan={TIMETABLE_DAYS.length}
-                          aria-disabled="true"
-                          className="border border-border bg-surface-muted px-2 py-3 text-center text-xs font-semibold uppercase tracking-wide text-foreground-muted"
-                        >
-                          Break — no classes are scheduled
-                        </td>
-                      </tr>
-                    )
-                  }
-
                   return (
                     <tr key={period.period}>
                       {heading}

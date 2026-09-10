@@ -15,7 +15,7 @@
  */
 import { z } from 'zod'
 import { optionalText, uuid } from './common'
-import { PERIODS } from '@/server/timetable/periods'
+import { MAX_PERIOD_NUMBER } from '@/server/timetable/periods'
 
 /* -------------------------------------------------------------------------- */
 /* Days                                                                       */
@@ -60,46 +60,47 @@ export const dayOfWeek = z.enum(DAYS_OF_WEEK, { error: 'Choose a day.' })
 /* Periods                                                                    */
 /* -------------------------------------------------------------------------- */
 
-const PERIOD_NUMBERS = PERIODS.map((p) => p.period)
-const BREAK_PERIOD_NUMBERS = PERIODS.filter((p) => p.isBreak).map((p) => p.period)
-const FIRST = PERIODS[0]!.period
-const LAST = PERIODS[PERIODS.length - 1]!.period
-
 /**
- * A period a lesson may occupy.
+ * A period number.
  *
- * The break is refused here as well as in the policy, so the form can say why
- * before the request is made. The policy is still the authority — this is the
- * convenience copy.
+ * Only the shape is checked here — that it is a whole number inside the range
+ * a college day could possibly have. *Which* numbers exist is the college's
+ * own grid, which lives in the database and can be edited, so the service
+ * checks it against that rather than this file pretending to know.
  */
 export const teachingPeriod = z.coerce
   .number({ error: 'Choose a period.' })
   .int('Choose a period.')
-  .min(FIRST, `Periods run from ${FIRST} to ${LAST}.`)
-  .max(LAST, `Periods run from ${FIRST} to ${LAST}.`)
-  // "Not a period" first, then "is the break" — otherwise a request for period
-  // 6 collects both messages and the second one is simply untrue.
-  .refine((value) => PERIOD_NUMBERS.includes(value), {
-    message: 'That is not a period of the college day.',
-  })
-  .refine((value) => !BREAK_PERIOD_NUMBERS.includes(value), {
-    message: 'That period is the college break and cannot be timetabled.',
-  })
+  .min(1, 'Choose a period.')
+  .max(MAX_PERIOD_NUMBER, 'That is not a period of the college day.')
+
+/** One row of the college's day, as the office edits it. */
+export const collegePeriodSchema = z.object({
+  period: z.coerce.number().int().min(1).max(MAX_PERIOD_NUMBER),
+  start: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use a time like 08:30.'),
+  end: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use a time like 09:00.'),
+})
+
+/** The whole day, sent and stored together. */
+export const collegePeriodsSchema = z.object({
+  periods: z
+    .array(collegePeriodSchema)
+    .min(1, 'A college day needs at least one period.')
+    .max(MAX_PERIOD_NUMBER, 'That is more periods than a college day has.'),
+})
+
+export type CollegePeriodsInput = z.infer<typeof collegePeriodsSchema>
 
 /* -------------------------------------------------------------------------- */
 /* A lesson                                                                   */
 /* -------------------------------------------------------------------------- */
 
-/**
- * `room` is free text — the college has no room table — and an empty box means
- * "not decided yet", which is allowed and clashes with nothing.
- */
 export const timetableSlotCreateSchema = z.object({
   /**
-   * Optional, and never authoritative. A lesson's session is its section's; if
-   * the caller sends one it is *checked against* the section rather than used,
-   * so a request that disagrees with the database is refused instead of
-   * quietly filed under the wrong year.
+   * Optional, and never authoritative. A lesson's session is its sections'; if
+   * the caller sends one it is *checked against* them rather than used, so a
+   * request that disagrees with the database is refused instead of quietly
+   * filed under the wrong year.
    */
   academicSessionId: uuid.optional(),
   /**

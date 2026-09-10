@@ -2,14 +2,14 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
-  PERIODS,
-  DEFAULT_BREAK_PERIOD,
-  TEACHING_PERIODS,
-  findPeriod,
-  isBreakPeriod,
-  isBreakPeriodFor,
-  isValidPeriodNumber,
-  teachingPeriodsFor,
+  DEFAULT_PERIODS,
+  MAX_PERIOD_NUMBER,
+  findPeriodIn,
+  inClockOrder,
+  isValidPeriodIn,
+  lengthOf,
+  minutesOf,
+  problemsWithGrid,
 } from '@/server/timetable/periods'
 import {
   type ProposedSlot,
@@ -282,100 +282,138 @@ describe('every clash is reported, not just the first', () => {
 /* Period eligibility                                                         */
 /* -------------------------------------------------------------------------- */
 
-describe('nothing may be timetabled in the break', () => {
-  it('allows every teaching period', () => {
-    for (const period of [1, 2, 3, 4, 5, 7, 8, 9]) {
-      expect(decidePeriodAllowed(period)).toEqual({ allowed: true })
+describe('every period of the day may be timetabled', () => {
+  it('allows every period the college has', () => {
+    for (const period of DEFAULT_PERIODS) {
+      expect(decidePeriodAllowed(period.period, DEFAULT_PERIODS)).toEqual({ allowed: true })
     }
   })
 
-  it('refuses period 6, the college break', () => {
-    const decision = decidePeriodAllowed(6)
-    expect(decision.allowed).toBe(false)
-    if (!decision.allowed) {
-      expect(decision.code).toBe('BREAK_PERIOD')
-      // The reason names the period and its clock times, so the office can see
-      // it is the break rather than a bug.
-      expect(decision.reason).toMatch(/11:10/)
-      expect(decision.reason).toMatch(/11:40/)
-    }
+  it('allows what used to be the break, because there is no break any more', () => {
+    // Period 6 was the college break and nothing could be put in it. The
+    // college asked for that to go: a break is an hour they choose not to
+    // fill, which needs no rule.
+    expect(decidePeriodAllowed(6, DEFAULT_PERIODS)).toEqual({ allowed: true })
   })
 
-  it('refuses a number that is not a period of the day', () => {
+  it('refuses a number the college’s own grid does not have', () => {
     for (const period of [0, -1, 10, 99]) {
-      const decision = decidePeriodAllowed(period)
+      const decision = decidePeriodAllowed(period, DEFAULT_PERIODS)
       expect(decision.allowed).toBe(false)
       if (!decision.allowed) expect(decision.code).toBe('NOT_A_PERIOD')
     }
   })
 
-  it('keeps the break out of the teaching periods it allows', () => {
-    const allowed = PERIODS.filter((p) => decidePeriodAllowed(p.period).allowed).map(
-      (p) => p.period,
+  it('follows the grid it is given rather than a fixed one', () => {
+    // A college that runs three periods has three, and a request for a fourth
+    // is refused however ordinary that number looks.
+    const short = [
+      { period: 1, start: '08:00', end: '09:00' },
+      { period: 2, start: '09:00', end: '10:00' },
+      { period: 3, start: '10:00', end: '11:00' },
+    ]
+    expect(decidePeriodAllowed(3, short)).toEqual({ allowed: true })
+    expect(decidePeriodAllowed(4, short).allowed).toBe(false)
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+/* C2. The college's own day                                                  */
+/* -------------------------------------------------------------------------- */
+
+describe('the grid the college keeps', () => {
+  const grid = (rows: { period: number; start: string; end: string }[]) => rows
+
+  it('accepts the day the college started with', () => {
+    expect(problemsWithGrid(DEFAULT_PERIODS)).toEqual([])
+  })
+
+  it('refuses a day with no periods at all', () => {
+    expect(problemsWithGrid([])).toHaveLength(1)
+  })
+
+  it('refuses a period that ends before it starts', () => {
+    const problems = problemsWithGrid(grid([{ period: 1, start: '10:00', end: '09:00' }]))
+    expect(problems.some((p) => /ends before it starts/.test(p))).toBe(true)
+  })
+
+  it('refuses a time that is not a time', () => {
+    expect(problemsWithGrid(grid([{ period: 1, start: '25:00', end: '26:00' }])).length).toBeGreaterThan(0)
+    expect(problemsWithGrid(grid([{ period: 1, start: '8am', end: '9am' }])).length).toBeGreaterThan(0)
+  })
+
+  it('refuses the same period number twice', () => {
+    const problems = problemsWithGrid(
+      grid([
+        { period: 1, start: '08:00', end: '09:00' },
+        { period: 1, start: '09:00', end: '10:00' },
+      ]),
     )
-    expect(allowed).toEqual(TEACHING_PERIODS.map((p) => p.period))
-  })
-})
-
-/* -------------------------------------------------------------------------- */
-/* C2. Two campuses that do not break together                                */
-/* -------------------------------------------------------------------------- */
-
-describe('each campus breaks in its own period', () => {
-  const GIRLS = { divisionName: 'Girls', breakPeriod: 6 }
-  const BOYS = { divisionName: 'Boys', breakPeriod: 7 }
-
-  it('lets the boys teach through the girls’ break', () => {
-    expect(decidePeriodAllowed(6, [BOYS])).toEqual({ allowed: true })
+    expect(problems.some((p) => /listed twice/.test(p))).toBe(true)
   })
 
-  it('lets the girls teach through the boys’ break', () => {
-    expect(decidePeriodAllowed(7, [GIRLS])).toEqual({ allowed: true })
+  it('refuses two periods that overlap', () => {
+    // This is the one that matters. Every clash rule compares period NUMBERS,
+    // so two periods sharing an hour would put a teacher in two lessons at
+    // once while every check reported the timetable as sound.
+    const problems = problemsWithGrid(
+      grid([
+        { period: 1, start: '08:00', end: '09:00' },
+        { period: 2, start: '08:30', end: '09:30' },
+      ]),
+    )
+    expect(problems.some((p) => /overlap/.test(p))).toBe(true)
   })
 
-  it('refuses a campus its own break, and says whose it is', () => {
-    const decision = decidePeriodAllowed(7, [BOYS])
-    expect(decision.allowed).toBe(false)
-    if (!decision.allowed) {
-      expect(decision.code).toBe('BREAK_PERIOD')
-      expect(decision.reason).toMatch(/Boys/)
-      expect(decision.reason).toMatch(/11:40/)
-    }
+  it('allows periods that merely touch, and gaps between them', () => {
+    expect(
+      problemsWithGrid(
+        grid([
+          { period: 1, start: '08:00', end: '09:00' },
+          { period: 2, start: '09:00', end: '10:00' },
+          { period: 3, start: '10:30', end: '11:00' },
+        ]),
+      ),
+    ).toEqual([])
   })
 
-  it('refuses a lesson across both campuses in either of their breaks', () => {
-    // A class taught to the girls and the boys together cannot sit in an hour
-    // one of them is at break, whichever one it is.
-    expect(decidePeriodAllowed(6, [GIRLS, BOYS]).allowed).toBe(false)
-    expect(decidePeriodAllowed(7, [GIRLS, BOYS]).allowed).toBe(false)
-    expect(decidePeriodAllowed(5, [GIRLS, BOYS])).toEqual({ allowed: true })
+  it('finds an overlap whatever order the periods were sent in', () => {
+    const problems = problemsWithGrid(
+      grid([
+        { period: 2, start: '08:30', end: '09:30' },
+        { period: 1, start: '08:00', end: '09:00' },
+      ]),
+    )
+    expect(problems.some((p) => /overlap/.test(p))).toBe(true)
   })
 
-  it('still refuses a number that is not a period at all', () => {
-    const decision = decidePeriodAllowed(99, [GIRLS])
-    expect(decision.allowed).toBe(false)
-    if (!decision.allowed) expect(decision.code).toBe('NOT_A_PERIOD')
+  it('refuses a period number outside what a college day could have', () => {
+    expect(problemsWithGrid(grid([{ period: 0, start: '08:00', end: '09:00' }])).length).toBeGreaterThan(0)
+    expect(
+      problemsWithGrid(grid([{ period: MAX_PERIOD_NUMBER + 1, start: '08:00', end: '09:00' }])).length,
+    ).toBeGreaterThan(0)
   })
 
-  it('falls back to the college break when a campus has not set one', () => {
-    expect(decidePeriodAllowed(6, [{ divisionName: 'Girls', breakPeriod: DEFAULT_BREAK_PERIOD }]).allowed).toBe(false)
-  })
-})
-
-describe('the teaching periods a campus actually has', () => {
-  it('drops that campus’s break and keeps every other period', () => {
-    expect(teachingPeriodsFor(7).map((p) => p.period)).toEqual([1, 2, 3, 4, 5, 6, 8, 9])
-    expect(teachingPeriodsFor(6).map((p) => p.period)).toEqual([1, 2, 3, 4, 5, 7, 8, 9])
-  })
-
-  it('uses the college break when the campus has not said', () => {
-    expect(teachingPeriodsFor(null).map((p) => p.period)).toEqual(TEACHING_PERIODS.map((p) => p.period))
+  it('puts a grid into the order the day actually runs', () => {
+    const ordered = inClockOrder(
+      grid([
+        { period: 9, start: '12:40', end: '13:20' },
+        { period: 1, start: '08:00', end: '08:30' },
+      ]),
+    )
+    expect(ordered.map((p) => p.period)).toEqual([1, 9])
   })
 
-  it('agrees with isBreakPeriodFor', () => {
-    expect(isBreakPeriodFor(7, 7)).toBe(true)
-    expect(isBreakPeriodFor(6, 7)).toBe(false)
-    expect(isBreakPeriodFor(99, 7)).toBe(false)
+  it('reads a period back by number, and says when there is none', () => {
+    expect(findPeriodIn(DEFAULT_PERIODS, 3)?.start).toBe('09:10')
+    expect(findPeriodIn(DEFAULT_PERIODS, 99)).toBeNull()
+    expect(isValidPeriodIn(DEFAULT_PERIODS, 3)).toBe(true)
+    expect(isValidPeriodIn(DEFAULT_PERIODS, 99)).toBe(false)
+  })
+
+  it('measures a period in minutes', () => {
+    expect(minutesOf('09:10')).toBe(550)
+    expect(lengthOf({ period: 3, start: '09:10', end: '10:00' })).toBe(50)
   })
 })
 
@@ -459,9 +497,9 @@ describe('only the assigned teacher may be timetabled', () => {
 /* The college's period grid                                                  */
 /* -------------------------------------------------------------------------- */
 
-describe('the college period grid', () => {
-  it('is the nine periods the college runs', () => {
-    expect(PERIODS.map((p) => [p.period, p.start, p.end])).toEqual([
+describe('the day the college starts with', () => {
+  it('is the nine periods it was running when the system was built', () => {
+    expect(DEFAULT_PERIODS.map((p) => [p.period, p.start, p.end])).toEqual([
       [1, '08:00', '08:30'],
       [2, '08:30', '09:00'],
       [3, '09:10', '10:00'],
@@ -474,41 +512,26 @@ describe('the college period grid', () => {
     ])
   })
 
-  it('marks period 6 as the break, and nothing else', () => {
-    expect(PERIODS.filter((p) => p.isBreak).map((p) => p.period)).toEqual([6])
-    expect(isBreakPeriod(6)).toBe(true)
-    expect(isBreakPeriod(5)).toBe(false)
-    expect(isBreakPeriod(7)).toBe(false)
-  })
-
-  it('offers the teaching periods without the break', () => {
-    expect(TEACHING_PERIODS.map((p) => p.period)).toEqual([1, 2, 3, 4, 5, 7, 8, 9])
-  })
-
-  it('finds a period by number, and refuses one outside the day', () => {
-    expect(findPeriod(3)?.start).toBe('09:10')
-    expect(findPeriod(0)).toBeNull()
-    expect(findPeriod(10)).toBeNull()
-    expect(isValidPeriodNumber(9)).toBe(true)
-    expect(isValidPeriodNumber(10)).toBe(false)
-    // A number that is not a period is not the break either.
-    expect(isBreakPeriod(99)).toBe(false)
+  it('marks none of them as a break, because there is no such thing now', () => {
+    for (const period of DEFAULT_PERIODS) {
+      expect('isBreak' in period).toBe(false)
+    }
   })
 
   it('states every time as a 24-hour HH:MM clock face, in order', () => {
-    for (const p of PERIODS) {
+    for (const p of DEFAULT_PERIODS) {
       expect(p.start).toMatch(/^([01]\d|2[0-3]):[0-5]\d$/)
       expect(p.end).toMatch(/^([01]\d|2[0-3]):[0-5]\d$/)
-      expect(p.start < p.end).toBe(true)
-    }
-    // Periods run forwards through the day and never overlap.
-    for (let i = 1; i < PERIODS.length; i += 1) {
-      expect(PERIODS[i]!.start >= PERIODS[i - 1]!.end).toBe(true)
+      expect(minutesOf(p.start) < minutesOf(p.end)).toBe(true)
     }
   })
 
-  it('numbers the periods 1..9 with no gaps, so a slot can only mean one of them', () => {
-    expect(PERIODS.map((p) => p.period)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9])
+  it('numbers them 1..9 with no gaps, so a lesson can only mean one of them', () => {
+    expect(DEFAULT_PERIODS.map((p) => p.period)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9])
+  })
+
+  it('survives its own rules, which is what the office starts from', () => {
+    expect(problemsWithGrid(DEFAULT_PERIODS)).toEqual([])
   })
 })
 
@@ -527,8 +550,11 @@ describe('period numbering stays aligned with the attendance register', () => {
     }
   })
 
-  it('keeps every configured period inside what that column can hold', () => {
-    for (const p of PERIODS) {
+  it('keeps every period number the college may set inside what that column can hold', () => {
+    // The office can edit the day now, so this checks the ceiling the code
+    // allows rather than only the nine periods it happens to start with.
+    expect(MAX_PERIOD_NUMBER).toBeLessThanOrEqual(32767)
+    for (const p of DEFAULT_PERIODS) {
       expect(Number.isInteger(p.period)).toBe(true)
       expect(p.period).toBeGreaterThan(0)
       expect(p.period).toBeLessThanOrEqual(32767)
@@ -537,7 +563,7 @@ describe('period numbering stays aligned with the attendance register', () => {
 
   it('starts at 1, which is what an unqualified register defaults to', () => {
     expect(modelBody('AttendanceSheet')).toMatch(/period\s+Int\s+@default\(1\)/)
-    expect(PERIODS[0]!.period).toBe(1)
+    expect(DEFAULT_PERIODS[0]!.period).toBe(1)
   })
 
   it('does not put clock times on the timetable row', () => {

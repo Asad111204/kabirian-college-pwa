@@ -16,7 +16,7 @@
  * write, not enforced afterwards by PostgreSQL.
  */
 import type { DayOfWeek } from '@/generated/prisma/enums'
-import { findPeriod } from './periods'
+import { findPeriodIn, type CollegePeriod } from './periods'
 
 /* -------------------------------------------------------------------------- */
 /* Shapes                                                                     */
@@ -56,12 +56,6 @@ export interface ProposedSlot {
 }
 
 export type ClashKind = 'SECTION' | 'TEACHER' | 'ROOM'
-
-/** One campus and the period it stops in, for the break rule below. */
-export interface CampusBreak {
-  divisionName: string
-  breakPeriod: number
-}
 
 export interface TimetableClash {
   kind: ClashKind
@@ -270,10 +264,8 @@ export interface TeacherAssignmentFacts {
  * The break is refused here, in the rules, precisely so nobody is tempted to
  * hold the cell with a made-up subject and a made-up teacher.
  */
-export function decidePeriodAllowed(period: number, breaks: readonly CampusBreak[] = []): TimetableDecision {
-  const configured = findPeriod(period)
-
-  if (configured === null) {
+export function decidePeriodAllowed(period: number, periods: readonly CollegePeriod[]): TimetableDecision {
+  if (findPeriodIn(periods, period) === null) {
     return {
       allowed: false,
       code: 'NOT_A_PERIOD',
@@ -281,27 +273,9 @@ export function decidePeriodAllowed(period: number, breaks: readonly CampusBreak
     }
   }
 
-  // Which campus breaks when is the campus's own business, so it is passed in
-  // rather than read from the grid: the girls stop at 11:10 and the boys teach
-  // through it. A lesson covering both campuses in a period one of them breaks
-  // in is refused, and the message says whose break it is.
-  const breaking = breaks.find((campus) => period === campus.breakPeriod)
-  if (breaking) {
-    return {
-      allowed: false,
-      code: 'BREAK_PERIOD',
-      reason: `Period ${configured.period} (${configured.start}–${configured.end}) is the ${breaking.divisionName} break and cannot be timetabled.`,
-    }
-  }
-
-  if (breaks.length === 0 && configured.isBreak) {
-    return {
-      allowed: false,
-      code: 'BREAK_PERIOD',
-      reason: `Period ${configured.period} is the college break (${configured.start}–${configured.end}) and cannot be timetabled.`,
-    }
-  }
-
+  // There is no break rule any more. The college asked for it to go: a break
+  // is simply a period they choose not to fill, which needs no flag and no
+  // refusal. Every period of the day may be timetabled.
   return { allowed: true }
 }
 

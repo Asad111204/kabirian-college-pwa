@@ -6,8 +6,8 @@ import userEvent from '@testing-library/user-event'
 /**
  * The timetable screens.
  *
- * Three things matter here beyond "does it render": the break is shown as the
- * break rather than as an empty cell or a made-up lesson; a teacher's own week
+ * Three things matter here beyond "does it render": every period of the day is
+ * offered, the break having been removed entirely; a teacher's own week
  * offers nothing that would change it; and no student-facing timetable exists
  * anywhere in the navigation.
  */
@@ -32,7 +32,7 @@ const { TimetableBuilder } = await import('@/features/timetable/timetable-builde
 const { TeacherTimetableGrid } = await import('@/features/timetable/teacher-timetable')
 const { TodayClassesCard } = await import('@/features/timetable/today-classes')
 const { NAVIGATION } = await import('@/components/layout/nav-config')
-const { PERIODS } = await import('@/server/timetable/periods')
+const { DEFAULT_PERIODS } = await import('@/server/timetable/periods')
 const { ApiError } = await import('@/lib/api-client')
 
 afterEach(() => {
@@ -71,7 +71,7 @@ const slot = (over: Record<string, unknown> = {}) => ({
 const timetable = (over: Record<string, unknown> = {}) =>
   ({
     section,
-    periods: PERIODS,
+    periods: DEFAULT_PERIODS,
     slots: [slot()],
     subjects: [
       {
@@ -205,30 +205,31 @@ describe('the master timetable builder', () => {
     expect(screen.getByText(/Pick a section above/i)).toBeTruthy()
   })
 
-  it('shows the college’s fixed periods, with their configured times', async () => {
+  it('shows the college’s own periods, with the times it has set', async () => {
     await openSection(user())
     const table = screen.getByRole('table')
-    for (const period of PERIODS) {
+    for (const period of DEFAULT_PERIODS) {
       expect(within(table).getByText(`Period ${period.period}`)).toBeTruthy()
       expect(within(table).getByText(`${period.start}–${period.end}`)).toBeTruthy()
     }
   })
 
-  it('marks the break in words and offers nothing in it', async () => {
+  it('offers every period, including the hour that used to be the break', async () => {
+    // The break is gone: it is an hour the college chooses not to fill, not a
+    // row the timetable refuses to let anybody into.
     await openSection(user())
-    const table = screen.getByRole('table')
-    const breakCell = within(table).getByText(/Break — no classes are scheduled/i)
-    expect(breakCell.getAttribute('aria-disabled')).toBe('true')
+    expect(screen.queryByText(/Break/i)).toBeNull()
 
-    for (const button of screen.getAllByRole('button', { name: /^Add a class on/i })) {
-      expect(button.getAttribute('aria-label')).not.toMatch(/period 6$/)
-    }
+    const labels = screen.getAllByRole('button', { name: /^Add a class on/i }).map((b) => b.getAttribute('aria-label'))
+    expect(labels.some((label) => label?.endsWith('period 6'))).toBe(true)
   })
 
   it('shows Add Class in an empty cell', async () => {
     await openSection(user())
     const adds = screen.getAllByRole('button', { name: /^Add a class on/i })
-    expect(adds.length).toBe(8 * 6 - 1) // eight teaching periods, six days, one filled
+    // Nine periods now rather than eight: what was the break is an ordinary
+    // period. Six days, minus the one cell that already holds a lesson.
+    expect(adds.length).toBe(9 * 6 - 1)
     expect(adds[0]?.textContent).toContain('Add Class')
   })
 
@@ -532,7 +533,7 @@ describe('a teacher’s own timetable', () => {
   const week = (over: Record<string, unknown> = {}) =>
     ({
       sessionName: '2026-27',
-      periods: PERIODS,
+      periods: DEFAULT_PERIODS,
       lessons: [lesson()],
       ...over,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -549,9 +550,12 @@ describe('a teacher’s own timetable', () => {
     expect(within(screen.getByRole('table')).getByText('09:10–10:00')).toBeTruthy()
   })
 
-  it('marks the break rather than leaving a blank line', () => {
+  it('draws every period as a period, with no break row', () => {
     render(<TeacherTimetableGrid timetable={week()} />)
-    expect(within(screen.getByRole('table')).getByText('Break')).toBeTruthy()
+    const table = within(screen.getByRole('table'))
+    expect(screen.queryByText('Break')).toBeNull()
+    // Period 6 is an ordinary row now, with its own times.
+    expect(table.getByText('11:10–11:40')).toBeTruthy()
   })
 
   it('offers nothing that would change the timetable', () => {
@@ -619,7 +623,7 @@ describe('a teacher’s own timetable', () => {
   it('shows every period with its number and its configured time', () => {
     render(<TeacherTimetableGrid timetable={week()} />)
     const table = screen.getByRole('table')
-    for (const period of PERIODS) {
+    for (const period of DEFAULT_PERIODS) {
       expect(within(table).getByText(`${period.start}–${period.end}`)).toBeTruthy()
       expect(within(table).getAllByText(String(period.period)).length).toBeGreaterThan(0)
     }

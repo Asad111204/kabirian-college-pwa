@@ -552,20 +552,13 @@ model Class {
 }
 
 model Division {
-  id          String   @id @default(uuid(7)) @db.Uuid
-  name        String   @unique @db.VarChar(60)
-  code        String   @unique @db.VarChar(10)
-  sortOrder   Int      @default(0) @map("sort_order")
-  isActive    Boolean  @default(true) @map("is_active")
-  /// Which period of the day this campus takes its break in.
-  ///
-  /// The college runs two campuses off one bell grid but they do not break
-  /// together: the girls stop at 11:10 and the boys teach through it and stop
-  /// at 11:40. Null means the college-wide default in periods.ts, which is
-  /// what a college with one break has.
-  breakPeriod Int?     @map("break_period") @db.SmallInt
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id        String   @id @default(uuid(7)) @db.Uuid
+  name      String   @unique @db.VarChar(60)
+  code      String   @unique @db.VarChar(10)
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   academicGroups AcademicGroup[]
   noticeTargets  NoticeTarget[]

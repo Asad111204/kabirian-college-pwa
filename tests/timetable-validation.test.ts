@@ -107,16 +107,19 @@ describe('the period a lesson may occupy', () => {
     }
   })
 
-  it('refuses the break', () => {
-    const result = teachingPeriod.safeParse(6)
-    expect(result.success).toBe(false)
-    if (!result.success) {
-      expect(result.error.issues[0]?.message).toMatch(/break/i)
-    }
+  it('accepts what used to be the break, because there is no break any more', () => {
+    expect(teachingPeriod.safeParse(6).success).toBe(true)
   })
 
-  it('refuses a period outside the college day', () => {
-    for (const period of [0, -1, 10, 100]) {
+  it('accepts a period beyond the nine the college started with', () => {
+    // The office can edit the day, so this schema only checks the shape of a
+    // period number. Whether the college HAS a period 12 is its own grid's
+    // business, checked by the service against the database.
+    expect(teachingPeriod.safeParse(12).success).toBe(true)
+  })
+
+  it('refuses a number no college day could have', () => {
+    for (const period of [0, -1, 100]) {
       expect(teachingPeriod.safeParse(period).success).toBe(false)
     }
   })

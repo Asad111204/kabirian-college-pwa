@@ -1,0 +1,24 @@
+-- Phase 32: there is no break.
+--
+-- The break was a flag on the college's period grid, and nothing could be
+-- timetabled in the period that carried it. Two days ago that flag moved onto
+-- the division, so the girls could stop at 11:10 while the boys taught through
+-- to 11:40.
+--
+-- The college has now asked for the break to go altogether, and for the period
+-- times to be theirs to edit. Both wishes turn out to be the same wish: once
+-- the office can say when each period runs, a break is simply an hour they
+-- choose not to fill. It needs no column, no rule and no explaining, and two
+-- campuses that break at different times are two grids rather than a special
+-- case.
+--
+-- So `divisions.break_period` is dropped. It was added on 2026-09-10 and never
+-- held a value: both divisions were still on the college-wide default. Nothing
+-- is lost with it.
+--
+-- The grid itself now lives in `settings` under `timetable.periods`, which is
+-- a row like any other setting and needs no schema change. A lesson still
+-- stores only a period NUMBER, so moving a bell moves every lesson in that
+-- period with it and rewrites nothing.
+
+ALTER TABLE "divisions" DROP COLUMN IF EXISTS "break_period";

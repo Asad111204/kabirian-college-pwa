@@ -94,28 +94,7 @@ export function TeacherTimetableGrid({ timetable }: { timetable: TeacherTimetabl
             </tr>
           </thead>
           <tbody>
-            {timetable.periods.map((period) =>
-              period.isBreak ? (
-                <tr key={period.period}>
-                  <th
-                    scope="row"
-                    className="border border-border bg-surface-muted px-2 py-2 text-left align-top"
-                  >
-                    <span className="block text-xs font-semibold text-foreground">
-                      {period.period}
-                    </span>
-                    <span className="block text-[11px] text-foreground-muted tabular-nums">
-                      {period.start}–{period.end}
-                    </span>
-                  </th>
-                  <td
-                    colSpan={TIMETABLE_DAYS.length}
-                    className="border border-border bg-surface-muted px-2 py-2 text-center text-xs font-medium tracking-wide text-foreground-muted uppercase"
-                  >
-                    Break
-                  </td>
-                </tr>
-              ) : (
+            {timetable.periods.map((period) => (
                 <tr key={period.period}>
                   <th
                     scope="row"

@@ -363,21 +363,21 @@ describe('a section may split between subjects in one period', () => {
   })
 })
 
-describe('each campus keeps its own break', () => {
-  it('records a break period against a division, and allows none', async () => {
-    await db.query(`UPDATE divisions SET break_period = 7 WHERE id = $1`, [ID.division])
-    const r = await db.query<{ break_period: number | null }>(
-      `SELECT break_period FROM divisions WHERE id = $1`,
-      [ID.division],
+describe('the break is gone from the schema entirely', () => {
+  it('no longer keeps a break period against a division', async () => {
+    // It was added and dropped the same day. Once the office could set the
+    // period times themselves, a break became an hour they simply do not
+    // fill — no column, no rule, no special case (ADR-182).
+    const r = await db.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM information_schema.columns
+       WHERE table_name = 'divisions' AND column_name = 'break_period'`,
     )
-    expect(r.rows[0]?.break_period).toBe(7)
+    expect(r.rows[0]?.count).toBe('0')
+  })
 
-    await db.query(`UPDATE divisions SET break_period = NULL WHERE id = $1`, [ID.division])
-    const cleared = await db.query<{ break_period: number | null }>(
-      `SELECT break_period FROM divisions WHERE id = $1`,
-      [ID.division],
-    )
-    expect(cleared.rows[0]?.break_period).toBeNull()
+  it('keeps the divisions themselves untouched', async () => {
+    const r = await db.query<{ count: string }>(`SELECT count(*)::text AS count FROM divisions`)
+    expect(Number(r.rows[0]?.count)).toBeGreaterThan(0)
   })
 })
 

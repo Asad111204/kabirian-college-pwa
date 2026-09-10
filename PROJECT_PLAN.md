@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | **Phase 28 complete: the fee is annual, made of optional heads, and paid in instalments.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Everything through Phase 29 is live on Neon (nineteen migrations, zero drift). The college charges one fee per student per year, built from tuition, annual funds, events, board registration, board admission, a tour and anything else, all optional and all set at admission; families pay whenever they can, and a printed voucher shows only what has been paid and what is left. Documents are attached at the counter, and a salary is recorded when staff are added. The college now has a printable **handbook** covering every part of the system, and the app finally shows the college's own logo rather than a placeholder. **The Phase 28 migration was applied to Neon on 2026-09-09.** The college's previous FoxPro system has been read into this one: **188 of its 192 enrolled students are live, each with a portal login**, every class counted back against the old file, and **its 2026-27 fee ledger with them**: 111 students charged Rs 3,449,930 for the year, Rs 273,200 already received, reconciled to the rupee. |
-| **Last updated** | 2026-09-10 (rev. 54 — a whole year of sections in one press) |
+| **Last updated** | 2026-09-10 (rev. 55 — no break, and an editable college day) |
 | **Companion docs** | [DECISIONS.md](DECISIONS.md) · [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) · [README.md](README.md) |
 
 ---
@@ -2097,6 +2097,20 @@ The college sent its printed timetable, and it does three things the system coul
 **Applied to Neon on 2026-09-10** (twenty-one migrations, zero drift). The census differed in exactly what it should: the new join table with four rows, one per existing lesson, and a table count of 51. Every lesson kept its section, its teacher and its active state; nothing was deleted, because there was nothing here to delete.
 
 **A bug the tests caught before the college did.** Deactivating a lesson left its section rows active, and those rows carry the partial unique index — so a lesson nobody taught any more would have held its cell for ever, which is precisely what a partial index exists to prevent.
+
+### 22.66 No break, and a day the college sets itself (2026-09-10)
+
+Two requests that turned out to be one: **remove the break from the timetable**, and **make the period times editable**.
+
+Granting the second grants the first. Once the office can say when each period runs, a break is simply an hour they choose not to fill — a gap between two periods, or a period with nothing in it. So `isBreak` is gone from the grid, nothing refuses a lesson in what used to be period 6, both timetable grids draw every period as an ordinary row, and `divisions.break_period` — added that same morning and never given a value — is dropped. ADR-182 has the reasoning, and supersedes the campus break in ADR-181.
+
+**Admin → Timetable** now carries the day itself below the week: the number of each period and the times it runs, with rows to add and remove. A lesson stores a period **number**, never a time, so moving a bell moves every lesson in that period with it and rewrites nothing.
+
+**Two rules the store keeps.** A period something already refers to cannot be removed — its number is on timetable rows and attendance registers, and the refusal says which period and what is still in it; its times may move as freely as the college likes. And a grid may not overlap itself: every clash rule compares period *numbers*, so two periods sharing an hour would put a teacher in two lessons at once while every check called the timetable sound.
+
+**The grid is a setting rather than a table.** Nine rows the office edits together, referred to by number rather than by a foreign key. `DEFAULT_PERIODS` stays in the code as what the college started with, and as what a stored grid falls back to if it is ever unreadable.
+
+**Verified through the production build (21 new checks)** and **1,582 tests**, including eight on the editor: the day it is running, no break in sight, nothing to save until something changes, the whole day sent rather than the one row that moved, adding and removing periods, undoing, and the server's refusal shown in its own words with the office's edit still on screen.
 
 ### 22.65 A whole year in one press (2026-09-10)
 

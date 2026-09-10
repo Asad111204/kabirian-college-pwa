@@ -34,7 +34,8 @@ import { authorize, type AuthContext } from '../auth/context'
 import { writeAuditLog } from '../audit/audit'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../api/errors'
 import { todayInCollegeTimezone, todaysCollegeWeekday } from '../time/college-date'
-import { DEFAULT_BREAK_PERIOD, PERIODS, type CollegePeriod } from '../timetable/periods'
+import { findPeriodIn, type CollegePeriod } from '../timetable/periods'
+import { getCollegePeriods } from '../timetable/period-settings'
 import {
   decidePeriodAllowed,
   decideSubjectAllowed,
@@ -191,8 +192,7 @@ type SectionWithGroup = {
     classId: string
     programId: string
     class: { name: string }
-    /** `breakPeriod` is which period this campus stops in; null is the default. */
-    division: { name: string; breakPeriod: number | null }
+    division: { name: string }
     program: { name: string }
     academicSession: { name: string }
   }
@@ -210,8 +210,16 @@ function toSectionSummary(section: SectionWithGroup): TimetableSectionSummary {
   }
 }
 
-const periodOf = (period: number): CollegePeriod | null =>
-  PERIODS.find((p) => p.period === period) ?? null
+/**
+ * The clock times for a period number.
+ *
+ * The grid is the college's own and editable, so it is read once per request
+ * and passed down rather than imported as a constant. A lesson whose period is
+ * no longer in the grid still displays; it simply shows no times, which is the
+ * truth about it.
+ */
+const periodOf = (periods: readonly CollegePeriod[], period: number): CollegePeriod | null =>
+  findPeriodIn(periods, period)
 
 /** Everything a listed lesson names, in one query. */
 const LIST_INCLUDE = {
@@ -269,8 +277,8 @@ interface ListedSlot {
   sections: ListedSection[]
 }
 
-function toListRow(slot: ListedSlot): TimetableListRow {
-  const period = periodOf(slot.period)
+function toListRow(slot: ListedSlot, periods: readonly CollegePeriod[]): TimetableListRow {
+  const period = periodOf(periods, slot.period)
   const sections = slot.sections.map((row) => listedSectionSummary(row.section))
   return {
     id: slot.id,
@@ -378,7 +386,8 @@ export async function listTimetable(
     orderBy: [{ dayOfWeek: 'asc' }, { period: 'asc' }],
   })
 
-  return slots.map(toListRow)
+  const periods = await getCollegePeriods()
+  return slots.map((slot) => toListRow(slot, periods))
 }
 
 /**
@@ -398,7 +407,7 @@ export async function getTimetableSlot(
     include: LIST_INCLUDE,
   })
   if (!slot) throw new NotFoundError('That lesson does not exist.')
-  return toListRow(slot)
+  return toListRow(slot, await getCollegePeriods())
 }
 
 async function loadSection(sectionId: string): Promise<SectionWithGroup> {
@@ -487,8 +496,8 @@ function toSlotRow(slot: {
   subject: { id: string; name: string }
   staff: { id: string; fullName: string; staffCode: string }
   sections: { sectionId: string }[]
-}): TimetableSlotRow {
-  const period = periodOf(slot.period)
+}, periods: readonly CollegePeriod[]): TimetableSlotRow {
+  const period = periodOf(periods, slot.period)
   return {
     id: slot.id,
     dayOfWeek: slot.dayOfWeek as DayOfWeekValue,
@@ -522,10 +531,11 @@ export async function getSectionTimetable(
     loadSubjectOptions(section),
   ])
 
+  const periods = await getCollegePeriods()
   return {
     section: toSectionSummary(section),
-    periods: PERIODS,
-    slots: slots.map(toSlotRow),
+    periods,
+    slots: slots.map((slot) => toSlotRow(slot, periods)),
     subjects,
   }
 }
@@ -605,16 +615,10 @@ async function assertLessonIsAllowed(
   proposed: ProposedSlot,
   subjectId: string,
 ): Promise<void> {
-  // Which period may be taught in is the campus's own business, and a lesson
-  // covering both campuses must satisfy both. The break each one takes is read
-  // from its division, so the refusal can say whose break it is.
-  const breaks = sections
-    .map((section) => ({
-      divisionName: section.academicGroup.division.name,
-      breakPeriod: section.academicGroup.division.breakPeriod ?? DEFAULT_BREAK_PERIOD,
-    }))
-    .filter((campus, at, all) => all.findIndex((other) => other.divisionName === campus.divisionName) === at)
-  assertAllowed(decidePeriodAllowed(proposed.period, breaks), 'period')
+  // The period must be one the college actually has. Which those are is the
+  // college's own editable grid, so it is read rather than assumed — and there
+  // is no break to refuse any more: a break is a period nobody fills.
+  assertAllowed(decidePeriodAllowed(proposed.period, await getCollegePeriods()), 'period')
 
   // Every section must study the subject, and the teacher must be assigned it
   // in every one of them. A class taught together is still each section's own
@@ -738,7 +742,7 @@ export async function createTimetableSlot(
     CLASH_FALLBACK,
   )
 
-  const row = toSlotRow(created)
+  const row = toSlotRow(created, await getCollegePeriods())
   const where = sections.map((section) => section.name).join(', ')
   await writeAuditLog(ctx, {
     action: 'timetable_slot.created',
@@ -789,7 +793,8 @@ export async function updateTimetableSlot(
   }
   await assertLessonIsAllowed(sections, proposed, input.subjectId)
 
-  const before = toSlotRow(existing)
+  const periods = await getCollegePeriods()
+  const before = toSlotRow(existing, periods)
   // Wrapped for the same reason a create is: moving a teacher or a room into a
   // cell another administrator is filling at that moment is the same race.
   //
@@ -825,7 +830,7 @@ export async function updateTimetableSlot(
     CLASH_FALLBACK,
   )
 
-  const after = toSlotRow(updated)
+  const after = toSlotRow(updated, periods)
 
   // Only the fields that actually moved. An audit trail that records a change
   // where nothing changed teaches the reader to ignore it.
@@ -885,7 +890,7 @@ export async function deactivateTimetableSlot(ctx: AuthContext, slotId: string):
     entityType: 'timetable_slot',
     entityId: slotId,
     entityLabel: `${existing.subject.name} · ${existing.dayOfWeek} period ${existing.period}`,
-    before: toSlotRow(existing),
+    before: toSlotRow(existing, await getCollegePeriods()),
   })
 }
 
@@ -937,8 +942,8 @@ function toTeacherLesson(slot: {
       academicGroup: { class: { name: string }; division: { name: string }; program: { name: string } }
     }
   }[]
-}): TeacherLesson {
-  const period = periodOf(slot.period)
+}, periods: readonly CollegePeriod[]): TeacherLesson {
+  const period = periodOf(periods, slot.period)
   return {
     id: slot.id,
     dayOfWeek: slot.dayOfWeek as DayOfWeekValue,
@@ -985,7 +990,7 @@ export async function getMyTimetable(
         select: { id: true, name: true },
       })
     : await currentSession()
-  if (!session) return { sessionName: null, periods: PERIODS, lessons: [] }
+  if (!session) return { sessionName: null, periods: await getCollegePeriods(), lessons: [] }
 
   const slots = await prisma.timetableSlot.findMany({
     where: {
@@ -998,10 +1003,11 @@ export async function getMyTimetable(
     orderBy: [{ dayOfWeek: 'asc' }, { period: 'asc' }],
   })
 
+  const periods = await getCollegePeriods()
   return {
     sessionName: session.name,
-    periods: PERIODS,
-    lessons: slots.map(toTeacherLesson),
+    periods,
+    lessons: slots.map((slot) => toTeacherLesson(slot, periods)),
   }
 }
 
@@ -1027,5 +1033,6 @@ export async function getMyClassesToday(ctx: AuthContext): Promise<TodayClasses>
     orderBy: { period: 'asc' },
   })
 
-  return { date, dayOfWeek, lessons: slots.map(toTeacherLesson) }
+  const periods = await getCollegePeriods()
+  return { date, dayOfWeek, lessons: slots.map((slot) => toTeacherLesson(slot, periods)) }
 }

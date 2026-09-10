@@ -3109,3 +3109,25 @@ That single change answers the first two at once. **A combined class is one row*
 **Consequences.** Everything that read a lesson's section now reads its sections: the office's grid draws several lessons in a cell and says when one is shared, and a teacher's week names every section in the room rather than one of them. Thirty-eight schema tests attack the new indexes on a real PostgreSQL, which is also how the migration is proved to replay cleanly on top of the nineteen before it.
 
 **A bug the tests caught before the college did.** Deactivating a lesson left its section rows active, and those rows carry the partial index — so a lesson nobody taught any more would have held its cell for ever, which is precisely what a partial index exists to prevent. They now go inactive together, in one transaction.
+
+---
+
+## ADR-182 · There is no break; the day belongs to the college
+
+**Status:** Accepted · 2026-09-10 · Phase 32 · supersedes the campus break in [ADR-181](#adr-181--a-lesson-covers-sections-it-does-not-belong-to-one)
+
+**Context.** The period grid was a constant in `periods.ts` — nine periods with their clock times, one of them flagged `isBreak`, and a rule refusing to timetable anything in it. Two days earlier that flag had been moved onto the division so the girls could stop at 11:10 while the boys taught through to 11:40.
+
+The college then asked for two things: **remove the break**, and **let the period times be edited**.
+
+**Decision.** They are the same request, and granting the second grants the first. Once the office can say when each period runs, **a break is simply an hour they choose not to fill** — leave a gap between two periods, or keep a period and put nothing in it. That needs no flag, no rule, no refusal and no explaining to anybody. Two campuses that break at different times stop being a special case: they are two grids, or one grid with a gap.
+
+So `isBreak` is gone from the shape, `decidePeriodAllowed` no longer refuses anything but a period the college does not have, both timetable grids draw every period as an ordinary row, and `divisions.break_period` — added on 2026-09-10 and never given a value — is dropped.
+
+**The grid is a setting, not a table.** It is a handful of rows the office edits together and reads as a whole, and a lesson refers to a period by *number* rather than by a foreign key, so there is nothing a table would enforce that a setting does not. `DEFAULT_PERIODS` stays in the code as what the college started with and what a stored grid falls back to if it is ever unreadable.
+
+**Two rules the store keeps.** *A period something already refers to cannot be removed* — its number is written on timetable rows and attendance registers, and taking it away would leave those pointing at an hour that no longer exists. Its times may move as freely as the college likes, which is the entire point. And *a grid may not overlap itself*: every clash rule in the system compares period **numbers**, so two periods sharing an hour would put a teacher in two lessons at once while every check reported the timetable as sound. That one is refused at the door rather than discovered later from a timetable that looks correct.
+
+**Alternatives.** *A `periods` table* — a foreign key from `timetable_slots` would then enforce the "cannot be removed" rule for free, but it would also mean a migration to renumber a day and a join on every read of every timetable, for nine rows. *Times on each lesson* — rejected when the timetable was first built and still wrong: moving a bell would be an UPDATE across the whole week.
+
+**Consequences.** Twenty-one checks through the production build: the office moves a bell and it stays moved; a day with no periods, one that overlaps itself, one that ends before it starts and one with a time that is not a time are each refused; a period with a lesson against it cannot be removed but can be retimed; a lesson may now be put in the hour that used to be the break; and neither a teacher nor a student may change the bells.
