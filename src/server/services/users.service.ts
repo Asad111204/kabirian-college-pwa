@@ -13,7 +13,7 @@ import { prisma } from '../db/prisma'
 import { authorize, type AuthContext } from '../auth/context'
 import { writeAuditLog } from '../audit/audit'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../api/errors'
-import { generateTemporaryPassword, hashPassword } from '../auth/password'
+import { hashPassword, newTemporaryPassword } from '../auth/password'
 import { invalidateAllUserSessions } from '../auth/session'
 import { decideCanSetAdminAccess } from '../auth/portals'
 import {
@@ -349,7 +349,7 @@ export async function createUser(
     }
   }
 
-  const temporaryPassword = generateTemporaryPassword()
+  const temporaryPassword = newTemporaryPassword()
   const passwordHash = await hashPassword(temporaryPassword)
 
   const created = await withUniqueConstraintHandling(
@@ -643,7 +643,7 @@ export async function resetUserPassword(
   const target = await loadUser(id)
   assertCanResetPassword(await safetyContext(ctx), toSafetySubject(target))
 
-  const temporaryPassword = generateTemporaryPassword()
+  const temporaryPassword = newTemporaryPassword()
   const passwordHash = await hashPassword(temporaryPassword)
 
   const sessionsRevoked = await prisma.session.count({ where: { userId: id } })

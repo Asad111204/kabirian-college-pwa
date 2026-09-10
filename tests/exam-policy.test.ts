@@ -300,9 +300,25 @@ describe('is the date sheet fit to publish', () => {
     expect(problems.some((p) => p.message.includes('no date'))).toBe(true)
   })
 
-  it('reports a paper with no start time', () => {
-    const problems = findDateSheetProblems([paper({ startTime: null })])
-    expect(problems.some((p) => p.message.includes('no start time'))).toBe(true)
+  it('publishes a paper that has a date but no time', () => {
+    // The college asked for the time to be optional: "Biology, 3rd October"
+    // is a date sheet. The hour is often decided later or announced
+    // separately, and a paper with no time clashes with nothing.
+    expect(findDateSheetProblems([paper({ startTime: null, endTime: null })])).toEqual([])
+  })
+
+  it('still refuses a paper with no date', () => {
+    const problems = findDateSheetProblems([paper({ examDate: null, startTime: null })])
+    expect(problems.some((p) => p.message.includes('no date'))).toBe(true)
+  })
+
+  it('leaves two untimed papers on one day alone, rather than calling them a clash', () => {
+    // A morning paper and an afternoon one, neither with an hour recorded yet.
+    const problems = findDateSheetProblems([
+      paper({ startTime: null, endTime: null }),
+      paper({ id: 'paper-2', subjectName: 'Chemistry', startTime: null, endTime: null }),
+    ])
+    expect(problems).toEqual([])
   })
 
   it('reports a paper that ends before it starts', () => {

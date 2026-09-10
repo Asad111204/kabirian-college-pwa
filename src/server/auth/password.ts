@@ -10,7 +10,6 @@
  */
 import 'server-only'
 import { type Algorithm, hash, verify } from '@node-rs/argon2'
-import { randomBytes } from 'node:crypto'
 
 export {
   checkPasswordPolicy,
@@ -51,13 +50,30 @@ export async function verifyPassword(storedHash: string, plainPassword: string):
 }
 
 /**
- * Generates a readable temporary password for a new account, e.g. "Kbr-7fq2-XM4t".
- * The admin gives it to the person once; they must change it at first login.
+ * The one temporary password every new account starts on.
+ *
+ * The college asked for this. Handing out a hundred and ninety different
+ * slips is a real burden on a small office, and one password everybody knows
+ * is one thing to say at assembly.
+ *
+ * **It is not a secret, and it is not meant to be.** Anyone who knows it can
+ * sign into any account that is still on it, so the only thing standing
+ * between it and a stranger is `mustChangePassword`, which forces the person
+ * to set their own the first time they sign in. That protects an account
+ * somebody has used; it does nothing for one nobody has touched yet. The
+ * office was told this plainly before it was set.
+ *
+ * A password changed by its owner is a real password and never this one.
  */
-export function generateTemporaryPassword(): string {
-  // Avoids characters that are easy to misread when written on paper: 0/O, 1/l/I.
-  const alphabet = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-  const bytes = randomBytes(12)
-  const chars = Array.from(bytes, (b) => alphabet[b % alphabet.length])
-  return `Kbr-${chars.slice(0, 4).join('')}-${chars.slice(4, 8).join('')}`
+export const TEMPORARY_PASSWORD = 'abcd@12345'
+
+/**
+ * The temporary password to put on a new or reset account.
+ *
+ * A function rather than the constant at every call site, so that the day the
+ * college wants to go back to one password per person, this is the only place
+ * that changes.
+ */
+export function newTemporaryPassword(): string {
+  return TEMPORARY_PASSWORD
 }

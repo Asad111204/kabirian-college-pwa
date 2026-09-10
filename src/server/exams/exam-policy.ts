@@ -239,9 +239,10 @@ export function findDateSheetProblems(papers: readonly ScheduledPaper[]): DateSh
     if (!paper.examDate) {
       problems.push({ paperId: paper.id, message: `${label} has no date.` })
     }
-    if (!paper.startTime) {
-      problems.push({ paperId: paper.id, message: `${label} has no start time.` })
-    }
+    // No start-time rule. The college asked for the time to be optional, and a
+    // date sheet that says "Biology, 3rd October" is a date sheet: the hour is
+    // often decided later, or announced separately. Papers without a time
+    // clash with nothing (see `timesOverlap`), so nothing else has to change.
     if (paper.startTime && paper.endTime && paper.endTime <= paper.startTime) {
       problems.push({ paperId: paper.id, message: `${label} ends before it starts.` })
     }

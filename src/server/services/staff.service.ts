@@ -18,7 +18,7 @@ import { currentPhotoIds } from './documents.service'
 import { authorize, type AuthContext } from '../auth/context'
 import { writeAuditLog } from '../audit/audit'
 import { ConflictError, NotFoundError, ValidationError } from '../api/errors'
-import { generateTemporaryPassword, hashPassword } from '../auth/password'
+import { hashPassword, newTemporaryPassword } from '../auth/password'
 import { nextCode } from './code-sequence'
 import { paginate, paginatedResult, withUniqueConstraintHandling, type PaginatedResult, assertAdminArea as assertAdminAreaFor } from './service-utils'
 import type {
@@ -456,7 +456,7 @@ export async function createStaff(
 
         let userId: string | null = null
         if (input.createAccount && input.username) {
-          const temporaryPassword = generateTemporaryPassword()
+          const temporaryPassword = newTemporaryPassword()
           const user = await tx.user.create({
             data: {
               username: input.username,
@@ -1145,7 +1145,7 @@ export async function linkStaffAccount(
       })
     }
 
-    const temporaryPassword = generateTemporaryPassword()
+    const temporaryPassword = newTemporaryPassword()
     const passwordHash = await hashPassword(temporaryPassword)
 
     await withUniqueConstraintHandling(

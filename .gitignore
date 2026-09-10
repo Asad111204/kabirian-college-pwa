@@ -83,3 +83,6 @@ Thumbs.db
 
 # the importer’s own transcript of a run — student names and amounts
 /fee-import-report.txt
+
+# the password reset transcript — account names, never a password
+/password-reset-report.txt
