@@ -146,19 +146,28 @@ r = await call('admin', 'POST', '/api/v1/timetable', {
   dayOfWeek: 'TUESDAY',
   period: clashPeriod,
 })
-check('Teacher A is given a Tuesday lesson in that same period', r.status === 201, `${r.status} ${r.error?.message ?? ''}`)
+check(
+  'Teacher A is given a Tuesday lesson in that same period',
+  r.status === 201,
+  `${r.status} period=${clashPeriod} ${r.error?.message ?? ''}`,
+)
 
-r = await copy('admin', { sectionId: ids.sec11A, fromDay: source, toDays: ['TUESDAY'], replace: false })
+// `replace` so the day is actually attempted: another verifier has already
+// put lessons on 11A's Tuesday, and without this the copy would simply leave
+// the day alone and prove nothing. Clearing 11A's own lessons does not free
+// Teacher A, who is teaching 12B in that period — which is the clash.
+r = await copy('admin', { sectionId: ids.sec11A, fromDay: source, toDays: ['TUESDAY'], replace: true })
 check(
   'the clash is reported by name rather than forced',
   r.status === 200 && (r.data?.skipped ?? []).length > 0,
-  JSON.stringify(r.data?.skipped ?? r.data),
+  JSON.stringify(r.data),
 )
 check(
   '...and the reason names the period and why',
   (r.data?.skipped ?? []).some((line) => /period \d/.test(line) && /teacher/i.test(line)),
   (r.data?.skipped ?? [])[0],
 )
+check('...and nothing was written for it', r.data?.copied === 0, String(r.data?.copied))
 
 console.log('\nWho may copy a day\n' + '-'.repeat(52))
 

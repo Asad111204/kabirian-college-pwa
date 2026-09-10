@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | **Phase 28 complete: the fee is annual, made of optional heads, and paid in instalments.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Everything through Phase 29 is live on Neon (nineteen migrations, zero drift). The college charges one fee per student per year, built from tuition, annual funds, events, board registration, board admission, a tour and anything else, all optional and all set at admission; families pay whenever they can, and a printed voucher shows only what has been paid and what is left. Documents are attached at the counter, and a salary is recorded when staff are added. The college now has a printable **handbook** covering every part of the system, and the app finally shows the college's own logo rather than a placeholder. **The Phase 28 migration was applied to Neon on 2026-09-09.** The college's previous FoxPro system has been read into this one: **188 of its 192 enrolled students are live, each with a portal login**, every class counted back against the old file, and **its 2026-27 fee ledger with them**: 111 students charged Rs 3,449,930 for the year, Rs 273,200 already received, reconciled to the rupee. |
-| **Last updated** | 2026-09-10 (rev. 55 — no break, and an editable college day) |
+| **Last updated** | 2026-09-10 (rev. 56 — copying a day of the week) |
 | **Companion docs** | [DECISIONS.md](DECISIONS.md) · [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) · [README.md](README.md) |
 
 ---
@@ -2097,6 +2097,22 @@ The college sent its printed timetable, and it does three things the system coul
 **Applied to Neon on 2026-09-10** (twenty-one migrations, zero drift). The census differed in exactly what it should: the new join table with four rows, one per existing lesson, and a table count of 51. Every lesson kept its section, its teacher and its active state; nothing was deleted, because there was nothing here to delete.
 
 **A bug the tests caught before the college did.** Deactivating a lesson left its section rows active, and those rows carry the partial unique index — so a lesson nobody taught any more would have held its cell for ever, which is precisely what a partial index exists to prevent.
+
+### 22.67 Copying a day of the week (2026-09-10)
+
+The college's point: *"in some cases the timetable for Monday is the same for Wednesday and Friday."* Typing it out three times is a chore and three chances to get it wrong.
+
+**Admin → Timetable → a section → Copy a day.** Choose the day to copy, tick the days to copy it on to, and it is written once. Three things it is careful about:
+
+**A day that already has lessons is left alone** unless the office ticks *replace what is already there*. Quietly discarding somebody's afternoon would be worse than making them press the button twice, so the reply names the days it did not touch.
+
+**Every copied lesson is checked like a hand-typed one.** A teacher already busy on Wednesday at that hour is reported by name — *"Tuesday, period 2: Biology with Sara Khan — This teacher is already taking another lesson in this period"* — and the rest of the day still copies. A half-copied day the office can see beats a refusal it has to unpick.
+
+**A lesson shared with other sections is copied whole**, because it is one lesson covering all of them. The dialogue says so before the button is pressed.
+
+**Verified through the production build (17 new checks)** and **1,592 tests**, nine of them on the dialogue.
+
+**Two checks of mine were passing for the wrong reason.** Both sent `room: null`, which the schema refuses outright — it takes a string or nothing — so the request never reached the logic being tested. One of them claimed to prove that a period the college does not have is refused; it was proving that `null` is not a string. Worth remembering: *a check that passes tells you nothing until you know why it passed.*
 
 ### 22.66 No break, and a day the college sets itself (2026-09-10)
 
