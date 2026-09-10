@@ -772,6 +772,10 @@ Everything else in §20 will proceed on the stated defaults.
 | 27 | ✅ Done (2026-09-11) | Notifications, complaint thread that refreshes itself, printable fee voucher, Payments first on the dashboard; live on Neon (eighteen migrations, zero drift) |
 | 28 | ✅ Done (2026-09-11) | Annual fee by head, set at admission with documents and a staff salary; live on Neon (nineteen migrations, zero drift) |
 | 29 | ✅ Done (2026-09-11) | A printable handbook covering the whole system, and the college's real logo throughout |
+| 30 | ✅ Done (2026-09-10) | The 188 enrolled students imported from the old system with their logins, and their fee ledger reconciled to the rupee (111 plans, 111 vouchers, 34 payments) |
+| 31 | ✅ Done (2026-09-10) | A lesson covers several sections — combined classes, elective splits and one teacher taking a subject across a year (ADR-181) |
+| 32 | ✅ Done (2026-09-10) | No break; the office sets its own period times, and a day can be copied on to other days (ADR-182) |
+| 33 | 🔄 In progress | Four changes the college asked for: an optional exam time (ADR-183), one temporary password (ADR-184) and the register taken by the first period's teacher (ADR-185) are done; every staff and student field editable by the office is next |
 
 **Live database:** the college's Neon PostgreSQL instance is connected and holds the real academic structure (2026-27, 20 groups, 20 sections). All **ten** migrations are applied to it, along with the reference data (12 designations, 10 departments, **8 document types**, and the confirmed **grading scale**).
 

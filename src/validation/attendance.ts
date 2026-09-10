@@ -8,7 +8,6 @@
  */
 import { z } from 'zod'
 import { isoDate, optionalText, uuid } from './common'
-import { PERIOD_MAX, PERIOD_MIN } from '@/server/attendance/attendance-policy'
 
 export const ATTENDANCE_STATUSES = ['PRESENT', 'ABSENT', 'LATE', 'LEAVE'] as const
 export const SHEET_STATUSES = ['DRAFT', 'SUBMITTED', 'CANCELLED'] as const
@@ -31,12 +30,6 @@ export const SHEET_STATUS_LABEL: Record<(typeof SHEET_STATUSES)[number], string>
   CANCELLED: 'Cancelled',
 }
 
-const period = z.coerce
-  .number({ error: 'Period must be a number.' })
-  .int('Period must be a whole number.')
-  .min(PERIOD_MIN, `Period must be ${PERIOD_MIN} or more.`)
-  .max(PERIOD_MAX, `Period must be ${PERIOD_MAX} or less.`)
-
 /**
  * Creating a register.
  *
@@ -44,13 +37,19 @@ const period = z.coerce
  * the server. Accepting it from the browser would invite a request that pairs a
  * section with someone else's session, and the server would then have to decide
  * which of the two to believe.
+ *
+ * `subjectId` and `period` are absent for a different reason. The college took
+ * attendance subject by subject; it does not any more. One register per section
+ * per day, taken by the teacher who has that section's first period. Leaving
+ * either field here would let a request open a second register for the day that
+ * no screen offers and no rule expects — the sort of gap that only shows up
+ * months later as a percentage nobody can explain. Registers taken under the
+ * old rule keep their subject and their period; they are simply history now,
+ * and the list and report filters below still find them.
  */
 export const attendanceSheetCreateSchema = z.object({
   sectionId: uuid,
-  /** Omit or send null for daily roll-call. */
-  subjectId: uuid.nullish(),
   date: isoDate,
-  period: period.default(1),
   /**
    * Which teacher took this register. **Administrators only** — the office
    * entering a paper register records the teacher who actually took it, rather

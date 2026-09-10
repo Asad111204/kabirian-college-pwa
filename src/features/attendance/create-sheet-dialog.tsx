@@ -9,18 +9,12 @@ import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog'
 import { Field, Input, Select } from '@/components/ui/field'
 import { Alert } from '@/components/ui/feedback'
 import { api, ApiError } from '@/lib/api-client'
-import { PERIOD_MAX, PERIOD_MIN } from '@/server/attendance/attendance-policy'
 import type { EnrollmentOptionGroup } from '@/server/services/students.service'
 
 export interface StaffOption {
   id: string
   fullName: string
   staffCode: string
-}
-
-interface CurriculumSubject {
-  subjectId: string
-  subjectName: string
 }
 
 /**
@@ -31,10 +25,8 @@ interface CurriculumSubject {
  * already here, and nothing about the college's structure is written into this
  * file.
  *
- * The subject list is fetched per section from the curriculum, because a
- * section's subjects come from its class and program. The server checks it
- * again; this only stops an administrator picking something that would be
- * refused.
+ * There is no subject and no period to choose. One register per section per
+ * day: the office picks the class, the date, and whose name goes on it.
  */
 export function CreateSheetDialog({
   open,
@@ -59,16 +51,9 @@ export function CreateSheetDialog({
   const [divisionId, setDivisionId] = React.useState('')
   const [programId, setProgramId] = React.useState('')
   const [sectionId, setSectionId] = React.useState('')
-  const [kind, setKind] = React.useState<'daily' | 'subject'>('subject')
-  const [subjectId, setSubjectId] = React.useState('')
   const [date, setDate] = React.useState(today)
-  const [period, setPeriod] = React.useState('1')
   const [markedByStaffId, setMarkedByStaffId] = React.useState('')
 
-  const [loadedSubjects, setLoadedSubjects] = React.useState<{
-    key: string
-    rows: CurriculumSubject[]
-  } | null>(null)
   const [submitting, setSubmitting] = React.useState(false)
   const [formError, setFormError] = React.useState<string | null>(null)
 
@@ -117,53 +102,14 @@ export function CreateSheetDialog({
   }, [groups, classId, divisionId, programId])
 
   const chosenSection = sections.find((s) => s.id === sectionId) ?? null
-  const canChooseSubject = Boolean(classId && programId && sessionId)
 
-  /**
-   * The curriculum for whichever class and program are currently chosen.
-   *
-   * `subjectKey` is null whenever a subject is not being chosen, and the loaded
-   * rows are stamped with the key they belong to. That means both "which
-   * subjects" and "are we still loading" are *derived* from state rather than
-   * assigned inside an effect, which is what keeps a stale list from flashing up
-   * against the wrong class.
-   */
-  const subjectKey =
-    kind === 'subject' && canChooseSubject ? `${sessionId}|${classId}|${programId}` : null
-  const subjects = loadedSubjects && loadedSubjects.key === subjectKey ? loadedSubjects.rows : null
-  const loadingSubjects = subjectKey !== null && subjects === null
-
-  React.useEffect(() => {
-    if (!subjectKey) return
-    const [sid, cid, pid] = subjectKey.split('|')
-
-    let cancelled = false
-    api
-      .get<CurriculumSubject[]>(
-        `/api/v1/academics/curriculum?sessionId=${sid}&classId=${cid}&programId=${pid}`,
-      )
-      .then((rows) => {
-        if (!cancelled) setLoadedSubjects({ key: subjectKey, rows })
-      })
-      .catch(() => {
-        // A failed lookup shows the "no subjects" state rather than a blank box.
-        if (!cancelled) setLoadedSubjects({ key: subjectKey, rows: [] })
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [subjectKey])
 
   function reset() {
     setClassId('')
     setDivisionId('')
     setProgramId('')
     setSectionId('')
-    setSubjectId('')
-    setKind('subject')
     setDate(today)
-    setPeriod('1')
     setMarkedByStaffId('')
     setFormError(null)
   }
@@ -173,16 +119,13 @@ export function CreateSheetDialog({
     setFormError(null)
 
     if (!sectionId) return setFormError('Choose a section.')
-    if (kind === 'subject' && !subjectId) return setFormError('Choose a subject.')
     if (!markedByStaffId) return setFormError('Choose who took this attendance.')
 
     setSubmitting(true)
     try {
       const sheet = await api.post<{ id: string }>('/api/v1/attendance/sheets', {
         sectionId,
-        subjectId: kind === 'subject' ? subjectId : null,
         date,
-        period: Number(period),
         markedByStaffId,
       })
       toast.success('Register opened. Mark the students, then submit.')
@@ -224,7 +167,6 @@ export function CreateSheetDialog({
                   setDivisionId('')
                   setProgramId('')
                   setSectionId('')
-                  setSubjectId('')
                 }}
               >
                 {sessions.map((s) => (
@@ -245,7 +187,6 @@ export function CreateSheetDialog({
                   setDivisionId('')
                   setProgramId('')
                   setSectionId('')
-                  setSubjectId('')
                 }}
               >
                 <option value="">Choose…</option>
@@ -285,7 +226,6 @@ export function CreateSheetDialog({
                 onChange={(e) => {
                   setProgramId(e.target.value)
                   setSectionId('')
-                  setSubjectId('')
                 }}
               >
                 <option value="">Choose…</option>
@@ -317,84 +257,22 @@ export function CreateSheetDialog({
                 ))}
               </Select>
             </Field>
-
-            <Field label="Attendance type" htmlFor="kind" required>
-              <Select
-                id="kind"
-                value={kind}
-                onChange={(e) => {
-                  setKind(e.target.value as 'daily' | 'subject')
-                  setSubjectId('')
-                }}
-              >
-                <option value="subject">Subject attendance</option>
-                <option value="daily">Daily roll call</option>
-              </Select>
-            </Field>
           </div>
 
-          {kind === 'subject' ? (
-            <Field
-              label="Subject"
-              htmlFor="subject"
-              required
-              hint="Only subjects in this class and program's curriculum."
-            >
-              {!canChooseSubject ? (
-                <p className="text-sm text-foreground-muted">
-                  Choose a class and program first.
-                </p>
-              ) : loadingSubjects ? (
-                <p className="text-sm text-foreground-muted">Loading subjects…</p>
-              ) : subjects && subjects.length === 0 ? (
-                <Alert variant="warning" title="No subjects in this curriculum">
-                  No subjects have been assigned to this class and program yet.{' '}
-                  <Link href="/admin/academics/curriculum">Set the curriculum</Link>, or take a
-                  daily roll call instead.
-                </Alert>
-              ) : (
-                <Select
-                  id="subject"
-                  value={subjectId}
-                  onChange={(e) => setSubjectId(e.target.value)}
-                >
-                  <option value="">Choose…</option>
-                  {(subjects ?? []).map((s) => (
-                    <option key={s.subjectId} value={s.subjectId}>
-                      {s.subjectName}
-                    </option>
-                  ))}
-                </Select>
-              )}
-            </Field>
-          ) : (
-            <Alert variant="info">
-              A daily roll call covers the whole section for the day, rather than one subject.
-            </Alert>
-          )}
+          <Alert variant="info">
+            One register per section per day. It is taken by the teacher who has that section&apos;s
+            first period, and covers the whole day rather than a single subject.
+          </Alert>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Date" htmlFor="date" required hint="Today, or an earlier date.">
-              <Input
-                id="date"
-                type="date"
-                value={date}
-                max={today}
-                onChange={(e) => setDate(e.target.value)}
-              />
-            </Field>
-
-            <Field label="Period" htmlFor="period" required hint={`${PERIOD_MIN}–${PERIOD_MAX}`}>
-              <Input
-                id="period"
-                type="number"
-                min={PERIOD_MIN}
-                max={PERIOD_MAX}
-                value={period}
-                onChange={(e) => setPeriod(e.target.value)}
-              />
-            </Field>
-          </div>
+          <Field label="Date" htmlFor="date" required hint="Today, or an earlier date.">
+            <Input
+              id="date"
+              type="date"
+              value={date}
+              max={today}
+              onChange={(e) => setDate(e.target.value)}
+            />
+          </Field>
 
           <Field
             label="Attendance taken by"

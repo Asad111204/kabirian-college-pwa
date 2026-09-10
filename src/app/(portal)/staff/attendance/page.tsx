@@ -14,9 +14,10 @@ export const dynamic = 'force-dynamic'
 /**
  * Staff Portal → Attendance.
  *
- * The list of what this teacher may mark is built on the server from their own
- * active assignments and in-charge records. Nothing is chosen by the browser, so
- * there is no section or subject id for anyone to substitute.
+ * One register per section per day, taken by the teacher who has that section's
+ * first period. The list is built on the server from the timetable and this
+ * teacher's own records; nothing is chosen by the browser, so there is no
+ * section id for anyone to substitute.
  *
  * "Today" is the college's own date (Asia/Karachi), decided on the server — not
  * whatever the phone's clock says.
@@ -52,17 +53,16 @@ export default async function StaffAttendancePage() {
 
       <TeacherAttendanceOptions
         options={options.map((option) => ({
-          kind: option.kind,
           sectionId: option.sectionId,
-          subjectId: option.subjectId,
-          subjectName: option.subjectName,
           sessionName: option.sessionName,
           className: option.className,
           divisionName: option.divisionName,
           programName: option.programName,
           sectionName: option.sectionName,
           studentCount: option.studentCount,
-          todaySheets: option.todaySheets,
+          reason: option.reason,
+          firstPeriod: option.firstPeriod,
+          todaySheet: option.todaySheet,
         }))}
         today={today}
         todayLabel={formatDate(today)}

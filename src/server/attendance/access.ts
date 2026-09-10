@@ -15,7 +15,7 @@ export type AttendanceDecision =
 
 export type AttendanceRefusal =
   | 'NO_PERMISSION'
-  | 'NOT_ASSIGNED'
+  | 'NOT_FIRST_PERIOD'
   | 'NOT_INCHARGE'
   | 'NOT_ADMIN_AREA'
   | 'SHEET_SUBMITTED'
@@ -33,32 +33,43 @@ export interface AttendanceViewer {
   canUpdateSubmitted: boolean
 }
 
-/** What the service has looked up about the section and subject being marked. */
+/** What the service has looked up about the section and the day being marked. */
 export interface MarkingContext {
-  /** Subject-wise when set, daily roll-call when null. */
-  subjectId: string | null
-  /** An ACTIVE TeacherAssignment exists for this staff + section + subject. */
-  hasActiveAssignment: boolean
+  /**
+   * This person teaches the first lesson the section has that day.
+   *
+   * "First" is the lowest period number on the timetable for that weekday. If
+   * two lessons share it — an elective split — either teacher counts, because
+   * both are standing in front of the room at the same hour.
+   */
+  takesFirstPeriod: boolean
+  /**
+   * The section has nothing timetabled that day at all.
+   *
+   * Without this the college would be locked out of its own registers: a
+   * section whose week has not been built yet has no first period, so nobody
+   * would qualify. In that case the in-charge may take it, as they always did.
+   */
+  noLessonsThatDay: boolean
   /** An ACTIVE SectionIncharge exists for this staff + section. */
   isActiveIncharge: boolean
 }
 
 /**
- * May this person create or mark a register for this section and subject?
+ * May this person take this section's register for this day?
  *
- * The two kinds of attendance have deliberately different gates:
+ * **The teacher who takes the first period takes the register.** The college
+ * asked for it that way: whoever is standing in front of the room at the start
+ * of the day is the one who can see who is missing, and the register belongs
+ * to the day rather than to a subject. Attendance is no longer taken
+ * subject by subject.
  *
- *   - **Subject-wise** (`subjectId` set) needs an ACTIVE `TeacherAssignment`
- *     for that exact section *and* subject. This is the rule that stops the
- *     Biology teacher marking Chemistry in a section they already teach —
- *     section-level scope alone would allow it, which is why
- *     `getScopedSectionIds()` is not sufficient on its own here.
+ * The one exception exists so the college is never locked out: a section with
+ * nothing timetabled that day has no first period, and there the in-charge may
+ * take it. That covers a week that has not been built yet and a day the
+ * section does not attend.
  *
- *   - **Daily roll-call** (`subjectId` null) needs an ACTIVE `SectionIncharge`.
- *     Taking the whole section's attendance is the class teacher's job, not
- *     something every subject teacher may do.
- *
- * An administrator may do both, subject to holding the permission.
+ * An administrator may always mark, subject to holding the permission.
  */
 export function decideCanMarkAttendance(
   viewer: AttendanceViewer,
@@ -82,24 +93,25 @@ export function decideCanMarkAttendance(
     }
   }
 
-  if (context.subjectId === null) {
+  if (context.takesFirstPeriod) return { allowed: true }
+
+  if (context.noLessonsThatDay) {
     return context.isActiveIncharge
       ? { allowed: true }
       : {
           allowed: false,
           code: 'NOT_INCHARGE',
           reason:
-            'Daily attendance is taken by the section in-charge. You are not the in-charge of this section.',
+            'This section has no lessons timetabled that day, so its register is the in-charge’s to take. You are not the in-charge of this section.',
         }
   }
 
-  return context.hasActiveAssignment
-    ? { allowed: true }
-    : {
-        allowed: false,
-        code: 'NOT_ASSIGNED',
-        reason: 'You are not assigned to teach this subject in this section.',
-      }
+  return {
+    allowed: false,
+    code: 'NOT_FIRST_PERIOD',
+    reason:
+      'The register is taken by the teacher who has this section’s first period that day. You do not.',
+  }
 }
 
 /** The office's rule for how long a teacher may correct a submitted register. */

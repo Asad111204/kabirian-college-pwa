@@ -4,37 +4,40 @@ import * as React from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { BookOpen, ClipboardCheck, Users } from 'lucide-react'
+import { ClipboardCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { Select } from '@/components/ui/field'
 import { Alert, EmptyState } from '@/components/ui/feedback'
 import { api, ApiError } from '@/lib/api-client'
-import { PERIOD_MAX, PERIOD_MIN } from '@/server/attendance/attendance-policy'
 import { SheetStatusBadge } from './shared'
 import type { SheetStatusValue } from './shared'
 
 export interface TeacherMarkingOption {
-  kind: 'subject' | 'daily'
   sectionId: string
-  subjectId: string | null
-  subjectName: string | null
   sessionName: string
   className: string
   divisionName: string
   programName: string
   sectionName: string
   studentCount: number
-  todaySheets: Array<{ id: string; period: number; status: SheetStatusValue }>
+  /** Why this register is theirs today. */
+  reason: 'FIRST_PERIOD' | 'NO_LESSONS'
+  /** The period their claim rests on, or null when the day is empty. */
+  firstPeriod: number | null
+  /** The register for this section today, if one has been opened. */
+  todaySheet: { id: string; status: SheetStatusValue } | null
 }
 
 /**
  * The teacher's attendance home.
  *
- * Only what this teacher may actually mark: subjects they hold an active
- * assignment for, and the sections they are in charge of. The list comes from
- * the server, built from their own records — there is no section picker, no
- * subject picker and nothing to type, so there is nothing to tamper with either.
+ * One card per section, because there is one register per section per day. A
+ * section is here because this teacher has its first period today — or, when
+ * the section has no lessons at all today, because they are its in-charge.
+ *
+ * The list is built on the server from the timetable and this teacher's own
+ * records. There is no section picker, no subject picker, no period box and
+ * nothing to type, so there is nothing to tamper with either.
  */
 export function TeacherAttendanceOptions({
   options,
@@ -47,18 +50,15 @@ export function TeacherAttendanceOptions({
   todayLabel: string
   canCreate: boolean
 }) {
-  const subjects = options.filter((o) => o.kind === 'subject')
-  const daily = options.filter((o) => o.kind === 'daily')
-
   if (options.length === 0) {
     return (
       <EmptyState
         icon={ClipboardCheck}
-        title="No attendance assignments yet"
-        description="Ask the administrator to assign your subjects, or to make you the in-charge of a section."
+        title="No register is yours today"
+        description="The register belongs to the teacher who has the section's first period that day. Nothing on today's timetable starts with you."
         action={
           <Button variant="secondary" asChild>
-            <Link href="/staff/assignments">View my assignments</Link>
+            <Link href="/staff/timetable">View my timetable</Link>
           </Button>
         }
       />
@@ -66,46 +66,16 @@ export function TeacherAttendanceOptions({
   }
 
   return (
-    <div className="space-y-6">
-      {daily.length > 0 ? (
-        <section>
-          <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-            <Users className="h-4 w-4" aria-hidden />
-            Daily roll call
-          </h2>
-          <div className="space-y-2">
-            {daily.map((option) => (
-              <OptionCard
-                key={`daily-${option.sectionId}`}
-                option={option}
-                today={today}
-                todayLabel={todayLabel}
-                canCreate={canCreate}
-              />
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {subjects.length > 0 ? (
-        <section>
-          <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-            <BookOpen className="h-4 w-4" aria-hidden />
-            Subjects
-          </h2>
-          <div className="space-y-2">
-            {subjects.map((option) => (
-              <OptionCard
-                key={`subject-${option.sectionId}-${option.subjectId}`}
-                option={option}
-                today={today}
-                todayLabel={todayLabel}
-                canCreate={canCreate}
-              />
-            ))}
-          </div>
-        </section>
-      ) : null}
+    <div className="space-y-2">
+      {options.map((option) => (
+        <OptionCard
+          key={option.sectionId}
+          option={option}
+          today={today}
+          todayLabel={todayLabel}
+          canCreate={canCreate}
+        />
+      ))}
     </div>
   )
 }
@@ -122,12 +92,9 @@ function OptionCard({
   canCreate: boolean
 }) {
   const router = useRouter()
-  const [period, setPeriod] = React.useState('1')
   const [starting, setStarting] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
 
-  const usedPeriods = new Set(option.todaySheets.map((s) => s.period))
-  const title = option.kind === 'daily' ? 'Daily roll call' : (option.subjectName ?? 'Subject')
   const noStudents = option.studentCount === 0
 
   async function start() {
@@ -136,16 +103,14 @@ function OptionCard({
     try {
       const sheet = await api.post<{ id: string }>('/api/v1/attendance/sheets', {
         sectionId: option.sectionId,
-        subjectId: option.subjectId,
         date: today,
-        period: Number(period),
       })
       router.push(`/staff/attendance/${sheet.id}`)
     } catch (err) {
       const message =
         err instanceof ApiError
           ? err.status === 409
-            ? 'Attendance for this period has already been opened.'
+            ? 'This section’s register for today has already been started.'
             : err.message
           : 'Unable to start attendance. Please check your connection.'
       setError(message)
@@ -158,40 +123,24 @@ function OptionCard({
     <Card className="p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="font-medium">{title}</p>
-          <p className="mt-0.5 text-sm text-foreground-muted">
+          <p className="font-medium">
             {option.className} · {option.divisionName} · {option.programName} · Section{' '}
             {option.sectionName}
+          </p>
+          <p className="mt-0.5 text-sm text-foreground-muted">
+            {option.reason === 'FIRST_PERIOD'
+              ? `Your period ${option.firstPeriod} — the first lesson of their day`
+              : 'Nothing timetabled today, so it falls to you as in-charge'}
           </p>
           <p className="mt-0.5 text-xs text-foreground-subtle">
             {option.studentCount} student{option.studentCount === 1 ? '' : 's'} · {todayLabel}
           </p>
         </div>
 
-        {option.todaySheets.length === 0 && canCreate && !noStudents ? (
-          <div className="flex items-center gap-2">
-            <label htmlFor={`period-${option.sectionId}-${option.subjectId ?? 'daily'}`} className="text-xs text-foreground-muted">
-              Period
-            </label>
-            <Select
-              id={`period-${option.sectionId}-${option.subjectId ?? 'daily'}`}
-              value={period}
-              onChange={(e) => setPeriod(e.target.value)}
-              className="h-10 w-20"
-            >
-              {Array.from({ length: PERIOD_MAX - PERIOD_MIN + 1 }, (_, i) => i + PERIOD_MIN).map(
-                (n) => (
-                  <option key={n} value={n} disabled={usedPeriods.has(n)}>
-                    {n}
-                    {usedPeriods.has(n) ? ' · done' : ''}
-                  </option>
-                ),
-              )}
-            </Select>
-            <Button onClick={start} loading={starting}>
-              Start attendance
-            </Button>
-          </div>
+        {option.todaySheet === null && canCreate && !noStudents ? (
+          <Button onClick={start} loading={starting}>
+            Start attendance
+          </Button>
         ) : null}
       </div>
 
@@ -207,56 +156,21 @@ function OptionCard({
         </Alert>
       ) : null}
 
-      {option.todaySheets.length > 0 ? (
-        <div className="mt-3 space-y-2 border-t border-border pt-3">
-          <p className="text-xs font-medium text-foreground-muted">Attendance already recorded</p>
-          {option.todaySheets.map((sheet) => (
-            <div key={sheet.id} className="flex flex-wrap items-center justify-between gap-2">
-              <span className="flex items-center gap-2 text-sm">
-                Period {sheet.period}
-                <SheetStatusBadge status={sheet.status} />
-              </span>
-              <Button variant="secondary" size="sm" asChild>
-                <Link href={`/staff/attendance/${sheet.id}`}>
-                  {sheet.status === 'DRAFT'
-                    ? 'Continue draft'
-                    : sheet.status === 'SUBMITTED'
-                      ? 'View register'
-                      : 'View'}
-                </Link>
-              </Button>
-            </div>
-          ))}
-
-          {canCreate && !noStudents ? (
-            <div className="flex flex-wrap items-center gap-2 pt-1">
-              <span className="text-xs text-foreground-muted">Another period?</span>
-              <Select
-                value={period}
-                onChange={(e) => setPeriod(e.target.value)}
-                className="h-9 w-20"
-                aria-label="Period for a new register"
-              >
-                {Array.from({ length: PERIOD_MAX - PERIOD_MIN + 1 }, (_, i) => i + PERIOD_MIN).map(
-                  (n) => (
-                    <option key={n} value={n} disabled={usedPeriods.has(n)}>
-                      {n}
-                      {usedPeriods.has(n) ? ' · done' : ''}
-                    </option>
-                  ),
-                )}
-              </Select>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={start}
-                loading={starting}
-                disabled={usedPeriods.has(Number(period))}
-              >
-                Start
-              </Button>
-            </div>
-          ) : null}
+      {option.todaySheet ? (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
+          <span className="flex items-center gap-2 text-sm">
+            Attendance already recorded
+            <SheetStatusBadge status={option.todaySheet.status} />
+          </span>
+          <Button variant="secondary" size="sm" asChild>
+            <Link href={`/staff/attendance/${option.todaySheet.id}`}>
+              {option.todaySheet.status === 'DRAFT'
+                ? 'Continue draft'
+                : option.todaySheet.status === 'SUBMITTED'
+                  ? 'View register'
+                  : 'View'}
+            </Link>
+          </Button>
         </div>
       ) : null}
     </Card>

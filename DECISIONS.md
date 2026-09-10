@@ -211,7 +211,7 @@ Recommendation: `service_account` if the college has or can obtain Workspace (Ed
 
 ## ADR-015 · Attendance modelled as sheets + entries, per subject period
 
-**Status:** Proposed (Q2)
+**Status:** Proposed (Q2) · **the per-subject part is Superseded by [ADR-185](#adr-185--the-register-belongs-to-the-first-period)** — the sheets-and-entries shape stands, and the `subject_id` and `period` columns remain for the registers taken under the old rule
 
 **Context.** Requirement: teacher selects class → section → subject → date, marks students, submits; duplicates must be prevented; corrections audited.
 
@@ -1278,7 +1278,7 @@ Pakistan is UTC+5. A server running in UTC — the default nearly anywhere this 
 
 ## ADR-083 · Marking rights are subject-level, not section-level
 
-**Status:** Accepted · 2026-08-30 · extends ADR-062
+**Status:** Accepted · 2026-08-30 · extends ADR-062 · **Superseded by [ADR-185](#adr-185--the-register-belongs-to-the-first-period)** — the right to take a register now comes from the timetable's first period, not from the assignment list
 
 **Context.** Phase 5 answers "which sections may this teacher see?" with one function, `getScopedSectionIds()`. Attendance asks a narrower question. A teacher who takes Biology in Section A can see that section — but must not be able to file a Chemistry register for it, and must not take the whole section's daily roll-call unless they are the class teacher.
 
@@ -3131,3 +3131,67 @@ So `isBreak` is gone from the shape, `decidePeriodAllowed` no longer refuses any
 **Alternatives.** *A `periods` table* — a foreign key from `timetable_slots` would then enforce the "cannot be removed" rule for free, but it would also mean a migration to renumber a day and a join on every read of every timetable, for nine rows. *Times on each lesson* — rejected when the timetable was first built and still wrong: moving a bell would be an UPDATE across the whole week.
 
 **Consequences.** Twenty-one checks through the production build: the office moves a bell and it stays moved; a day with no periods, one that overlaps itself, one that ends before it starts and one with a time that is not a time are each refused; a period with a lesson against it cannot be removed but can be retimed; a lesson may now be put in the hour that used to be the break; and neither a teacher nor a student may change the bells.
+
+---
+
+## ADR-183 · An exam time is optional; the date is not
+
+**Status:** Accepted · 2026-09-10 · Phase 33
+
+**Context.** A date sheet could be saved with papers that had no start time, but it could not be **published** with them: `findDateSheetProblems` refused any paper missing `startTime`, and an unpublished date sheet is invisible to students. So the rule was not "a paper needs a time" — it was "the college may not tell anyone about the exam until it has decided the hour".
+
+That is not how the college works. "Biology, 3rd October" is a date sheet. The hour is often settled later, or announced separately at assembly, and students need the dates as soon as the dates exist.
+
+**Decision.** The start-time requirement is removed from publishing. The **date** is still required — a paper with no date is not scheduled at all — and every other rule is untouched.
+
+Nothing else had to move, because `timesOverlap` already treated a paper with no time as clashing with nothing: two papers on the same day, one at 9am and one with no hour yet, were never a conflict, and are not one now. A paper that later gets a time is checked against the day's other papers then.
+
+**Alternatives.** *Require a time only for the papers within the next week* — a rule that changes its mind depending on the calendar, which is the kind of thing nobody can predict from the screen. *Publish with a placeholder time* — a printed date sheet saying 8:00am when the college has not decided is worse than one saying nothing.
+
+**Consequences.** A date sheet can now go out the day the dates are fixed. The exam-day screens already showed "Time to be announced" for a paper with no hour, so nothing needed a new empty state.
+
+---
+
+## ADR-184 · One temporary password for the whole college
+
+**Status:** Accepted · 2026-09-10 · Phase 33
+
+**Context.** Every new account got its own generated temporary password, which the office then had to get to that person — a printed slip each, and 198 of them waiting after the student import. The college asked for one password instead: `abcd@12345`, said once at assembly.
+
+**Decision.** Granted, as a single named constant — `TEMPORARY_PASSWORD` in `src/server/auth/password.ts` — and the college was told plainly what it costs before it was built.
+
+**It is not a secret, and nothing pretends otherwise.** Anyone who knows it can sign into any account still on it. The only thing standing in the way is `mustChangePassword`: each person must set their own the first time they sign in, which protects an account somebody has used and does **nothing** for one nobody has touched. An account nobody signs into stays open until they do.
+
+That trade is the college's to make, and it is a real one: the alternative they were living with was 198 slips, some of which would be photographed, left on desks, or handed to the wrong person. A password everybody knows and everybody is forced to change beats a password on a piece of paper that nobody changes.
+
+**One line to undo.** `newTemporaryPassword()` still exists and is still what every caller uses. The day the college wants per-person passwords back, that function generates them again and nothing else changes.
+
+**`scripts/reset-temporary-passwords.ts`** puts the accounts already waiting on to it. Dry run by default; only accounts **already** on a temporary password are touched, so nobody who has chosen their own loses it; and every reset goes through `POST /api/v1/users/:id/reset-password` — the endpoint the office's own button uses — so all of them are in the audit log under the administrator who ran it.
+
+**Consequences.** The office hands out one password. Anyone still on it after the first week has never signed in, which is now something the office can see and chase rather than guess at.
+
+---
+
+## ADR-185 · The register belongs to the first period
+
+**Status:** Accepted · 2026-09-10 · Phase 33 · supersedes [ADR-015](#adr-015--attendance-modelled-as-sheets--entries-per-subject-period) and [ADR-083](#adr-083--marking-rights-are-subject-level-not-section-level)
+
+**Context.** Attendance was taken twice over. A **subject register** needed an active teaching assignment for that exact section and subject, and there could be one per period; a **daily roll-call** needed to be the section's in-charge. A teacher with four lessons opened four registers, and a student's percentage was assembled from a mixture of the two.
+
+The college asked for one thing: **the teacher taking the first period of the day takes the register**, and subject-wise attendance goes away.
+
+**Decision.** One register per section per day, and the right to take it is read from the **timetable**, not from the assignment list:
+
+- the teacher of the section's **lowest-numbered lesson that day** may take it. If two lessons share that period — an elective split — either teacher counts, because both are standing in front of the room at that hour;
+- a section with **nothing timetabled that day** has no first period, and there its **in-charge** may take it. Without this the college would be locked out of a section whose week has not been built yet;
+- an administrator may always mark, as before.
+
+`decideCanMarkAttendance` takes three facts — `takesFirstPeriod`, `noLessonsThatDay`, `isActiveIncharge` — and nothing else. The refusal code `NOT_ASSIGNED` is replaced by `NOT_FIRST_PERIOD`, and it says so in words: *"The register is taken by the teacher who has this section's first period that day. You do not."*
+
+**The subject and the period are gone from the request, not just from the screen.** `attendanceSheetCreateSchema` no longer has `subjectId` or `period`. Leaving them there would let a request open a second register for a day that no screen offers and no rule expects — the sort of gap that surfaces months later as a percentage nobody can explain. The **columns** stay: registers taken under the old rule still carry a real subject and a real period, the list and report filters still find them, and rewriting history to tidy a column is not worth doing.
+
+**Marking now implies reading.** `assertCanViewSection` counted teaching assignments and in-charge records. Since the timetable now decides who *must* take a register, a lesson on the timetable counts there too — otherwise a teacher could be obliged to take a register and then refused sight of it.
+
+**Alternatives.** *Keep subject registers alongside the daily one* — what the college has now, and what it asked to stop: two numbers for the same student and no rule for which one counts. *Let the in-charge take every register* — simpler, and wrong for exactly the reason the college raised it: the in-charge is often not in the room at 8am, and the person who is can see who is missing. *Read the first period from the assignment list rather than the timetable* — the assignment list says who teaches what, never when.
+
+**Consequences.** The teacher's attendance screen is one card per section with a single button; there is no subject to choose, no period box and no section picker, so there is nothing to tamper with either. The office's "open a register" dialog loses its Period field for the same reason. A register from a term whose timetable has since changed can no longer be corrected by the teacher who took it — the timetable being read is today's — and that falls to the office, which is where a stale correction belongs anyway.

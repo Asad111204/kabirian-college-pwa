@@ -31,14 +31,17 @@ import {
   isValidCollegeDate,
   storageToCollegeDate,
   todayInCollegeTimezone,
+  weekdayOfCollegeDate,
+  type CollegeDate,
+  type CollegeWeekday,
 } from '../time/college-date'
 import {
   COUNTED_SHEET_STATUS,
+  DAILY_REGISTER_PERIOD,
   EMPTY_COUNTS,
   checkAttendanceDate,
   countStatuses,
   countsFromGroups,
-  isValidPeriod,
   summarise,
   type AttendanceCounts,
   type AttendanceSummary,
@@ -121,7 +124,6 @@ export interface AttendanceSheetDetail extends AttendanceSheetListItem {
 export interface ResolvedMarkingTarget {
   sectionId: string
   academicSessionId: string
-  subjectId: string | null
   sectionName: string
   classId: string
   programId: string
@@ -137,9 +139,77 @@ function viewerOf(ctx: AuthContext): AttendanceViewer {
   }
 }
 
+/** The first lesson of a section's day, and who is standing in front of it. */
+interface FirstLesson {
+  /** The lowest period the section has on that weekday. */
+  period: number
+  /**
+   * Every teacher taking a lesson in that period. Usually one; two when the
+   * section splits for electives, and then either of them counts, because both
+   * are in the room at that hour.
+   */
+  staffIds: Set<string>
+}
+
 /**
- * Loads the section, validates the subject against the curriculum, and works out
- * whether this person may mark it.
+ * The first lesson of the day for each of these sections.
+ *
+ * A section with nothing timetabled that day is simply absent from the map —
+ * which is the case the register rules have to treat specially, so it is worth
+ * being able to tell apart from "no first period found".
+ */
+async function firstLessonBySection(
+  sectionIds: string[],
+  dayOfWeek: CollegeWeekday,
+): Promise<Map<string, FirstLesson>> {
+  if (sectionIds.length === 0) return new Map()
+
+  const lessons = await prisma.timetableSlotSection.findMany({
+    where: {
+      sectionId: { in: sectionIds },
+      dayOfWeek,
+      isActive: true,
+      slot: { isActive: true },
+    },
+    select: { sectionId: true, period: true, slot: { select: { staffId: true } } },
+    orderBy: { period: 'asc' },
+  })
+
+  // Ordered by period, so the first row seen for a section is its first lesson.
+  const first = new Map<string, FirstLesson>()
+  for (const lesson of lessons) {
+    const known = first.get(lesson.sectionId)
+    if (!known) {
+      first.set(lesson.sectionId, { period: lesson.period, staffIds: new Set([lesson.slot.staffId]) })
+    } else if (lesson.period === known.period) {
+      known.staffIds.add(lesson.slot.staffId)
+    }
+  }
+  return first
+}
+
+/**
+ * Whether this person takes the section's first lesson on a given day, and
+ * whether the section has any lessons that day at all.
+ */
+async function firstPeriodFacts(
+  staffId: string | null,
+  sectionId: string,
+  date: CollegeDate,
+): Promise<{ takesFirstPeriod: boolean; noLessonsThatDay: boolean }> {
+  const first = (await firstLessonBySection([sectionId], weekdayOfCollegeDate(date))).get(sectionId)
+
+  if (!first) return { takesFirstPeriod: false, noLessonsThatDay: true }
+
+  return {
+    takesFirstPeriod: staffId !== null && first.staffIds.has(staffId),
+    noLessonsThatDay: false,
+  }
+}
+
+/**
+ * Loads the section and works out whether this person may take its register on
+ * the given day.
  *
  * The academic session is taken from the **section**, never from the request.
  * A section belongs to exactly one session, so there is nothing for the browser
@@ -148,7 +218,7 @@ function viewerOf(ctx: AuthContext): AttendanceViewer {
 async function resolveMarkingTarget(
   ctx: AuthContext,
   sectionId: string,
-  subjectId: string | null,
+  date: CollegeDate,
 ): Promise<{ target: ResolvedMarkingTarget; context: MarkingContext }> {
   const section = await prisma.section.findUnique({
     where: { id: sectionId },
@@ -172,79 +242,41 @@ async function resolveMarkingTarget(
     throw new ValidationError('That section is no longer active, so attendance cannot be marked for it.')
   }
 
-  // A subject must actually be taught to this class and program.
-  if (subjectId) {
-    const subject = await prisma.subject.findUnique({
-      where: { id: subjectId },
-      select: { id: true, name: true, isActive: true },
-    })
-    if (!subject) throw new NotFoundError('subject')
-    if (!subject.isActive) {
-      throw new ValidationError(`${subject.name} is no longer taught.`)
-    }
-
-    const inCurriculum = await prisma.curriculumSubject.findFirst({
-      where: {
-        academicSessionId: section.academicSessionId,
-        classId: section.academicGroup.classId,
-        programId: section.academicGroup.programId,
-        subjectId,
-      },
-      select: { id: true },
-    })
-    if (!inCurriculum) {
-      throw new ValidationError(
-        `${subject.name} is not part of this section's curriculum. Add it on the Curriculum screen first.`,
-      )
-    }
-  }
-
   // Only look up the teacher's own records — never anything sent in the request.
-  let hasActiveAssignment = false
-  let isActiveIncharge = false
+  const { takesFirstPeriod, noLessonsThatDay } = await firstPeriodFacts(ctx.staffId, sectionId, date)
 
-  if (ctx.staffId) {
-    if (subjectId) {
-      hasActiveAssignment =
-        (await prisma.teacherAssignment.findFirst({
-          where: { staffId: ctx.staffId, sectionId, subjectId, isActive: true },
-          select: { id: true },
-        })) !== null
-    } else {
-      isActiveIncharge =
-        (await prisma.sectionIncharge.findFirst({
+  const isActiveIncharge =
+    ctx.staffId === null
+      ? false
+      : (await prisma.sectionIncharge.findFirst({
           where: { staffId: ctx.staffId, sectionId, isActive: true },
           select: { id: true },
         })) !== null
-    }
-  }
 
   return {
     target: {
       sectionId: section.id,
       academicSessionId: section.academicSessionId,
-      subjectId,
       sectionName: section.name,
       classId: section.academicGroup.classId,
       programId: section.academicGroup.programId,
     },
-    context: { subjectId, hasActiveAssignment, isActiveIncharge },
+    context: { takesFirstPeriod, noLessonsThatDay, isActiveIncharge },
   }
 }
 
 /**
  * The reusable check the whole attendance feature is built on.
  *
- * Subject-wise marking needs an ACTIVE teaching assignment for that exact
- * section **and** subject; daily roll-call needs to be the section's ACTIVE
- * in-charge. Section-level scope is not enough on its own, which is why this
- * does not simply call `getScopedSectionIds()` — that answers "which sections",
- * not "which subject".
+ * The register belongs to the teacher who has the section's first period that
+ * day, read from the timetable. Being assigned to the section is not enough,
+ * and neither is section-level scope — which is why this does not simply call
+ * `getScopedSectionIds()`: that answers "which sections", not "whose hour".
  */
 export async function assertCanMarkAttendance(
   ctx: AuthContext,
   sectionId: string,
-  subjectId: string | null,
+  date: CollegeDate,
 ): Promise<ResolvedMarkingTarget> {
   /**
    * Refuse anyone who could never mark attendance *before* looking anything up.
@@ -263,7 +295,7 @@ export async function assertCanMarkAttendance(
     })
   }
 
-  const { target, context } = await resolveMarkingTarget(ctx, sectionId, subjectId)
+  const { target, context } = await resolveMarkingTarget(ctx, sectionId, date)
 
   const decision = decideCanMarkAttendance(viewerOf(ctx), context)
   if (!decision.allowed) {
@@ -287,7 +319,12 @@ async function assertCanViewSection(ctx: AuthContext, sectionId: string): Promis
     // A teacher may read any register for a section they teach in or run, even
     // one somebody else marked — they need to see what was recorded for their
     // own class. Marking it is the narrower right, checked separately.
-    const [assignment, incharge] = await Promise.all([
+    //
+    // The timetable counts here as well as the assignment list. Since the
+    // register belongs to whoever has the first period, a teacher can be the
+    // one who *must* take it; being unable to read it back afterwards would be
+    // absurd.
+    const [assignment, incharge, lesson] = await Promise.all([
       prisma.teacherAssignment.findFirst({
         where: { staffId: ctx.staffId, sectionId, isActive: true },
         select: { id: true },
@@ -296,8 +333,12 @@ async function assertCanViewSection(ctx: AuthContext, sectionId: string): Promis
         where: { staffId: ctx.staffId, sectionId, isActive: true },
         select: { id: true },
       }),
+      prisma.timetableSlotSection.findFirst({
+        where: { sectionId, isActive: true, slot: { staffId: ctx.staffId, isActive: true } },
+        select: { id: true },
+      }),
     ])
-    if (assignment || incharge) return
+    if (assignment || incharge || lesson) return
   }
 
   throw new ForbiddenError('You can only see attendance for your own sections.', {
@@ -359,15 +400,10 @@ export async function createAttendanceSheet(
   input: AttendanceSheetCreateInput,
   request?: { ipAddress?: string | null; userAgent?: string | null },
 ): Promise<AttendanceSheetDetail> {
-  const subjectId = input.subjectId ?? null
-
-  const target = await assertCanMarkAttendance(ctx, input.sectionId, subjectId)
-
+  // Checked before it is used: who may take a register depends on the day, so
+  // a date that is not a date must not reach that decision.
   if (!isValidCollegeDate(input.date)) {
     throw new ValidationError('That is not a real calendar date.')
-  }
-  if (!isValidPeriod(input.period)) {
-    throw new ValidationError('That period number is not valid.')
   }
 
   const dateRule = checkAttendanceDate({
@@ -376,6 +412,8 @@ export async function createAttendanceSheet(
     isAdmin: ctx.role === 'ADMIN',
   })
   if (!dateRule.allowed) throw new ValidationError(dateRule.reason)
+
+  const target = await assertCanMarkAttendance(ctx, input.sectionId, input.date)
 
   const roster = await loadRoster(target.sectionId, target.academicSessionId)
   if (roster.length === 0) {
@@ -404,9 +442,12 @@ export async function createAttendanceSheet(
           data: {
             sectionId: target.sectionId,
             academicSessionId: target.academicSessionId,
-            subjectId,
+            // One whole-day register per section, so neither of these is a
+            // choice any more. The columns stay because the registers taken
+            // under the old subject-wise rule still carry them.
+            subjectId: null,
             date: storedDate,
-            period: input.period,
+            period: DAILY_REGISTER_PERIOD,
             markedByStaffId,
             status: 'DRAFT',
             createdByUserId: ctx.userId,
@@ -433,11 +474,9 @@ export async function createAttendanceSheet(
             action: 'attendance.sheet_created',
             entityType: 'attendance_sheet',
             entityId: sheet.id,
-            entityLabel: `${target.sectionName} · ${input.date} · period ${input.period}`,
+            entityLabel: `${target.sectionName} · ${input.date}`,
             after: {
               date: input.date,
-              period: input.period,
-              subjectId,
               studentCount: roster.length,
               prefilled: supplied.size === 0,
             },
@@ -450,7 +489,7 @@ export async function createAttendanceSheet(
       }),
     {
       // The index name contains these column names.
-      section_id: 'Attendance for this section, subject, date and period has already been started.',
+      section_id: 'This section’s register for that day has already been started.',
     },
     'Attendance for this class has already been started.',
   )
@@ -532,31 +571,21 @@ async function loadSheet(sheetId: string): Promise<LoadedSheet> {
 
 /** Resolves the marking facts for an existing sheet, for an edit check. */
 async function markingContextFor(ctx: AuthContext, sheet: LoadedSheet): Promise<MarkingContext> {
-  let hasActiveAssignment = false
-  let isActiveIncharge = false
+  const { takesFirstPeriod, noLessonsThatDay } = await firstPeriodFacts(
+    ctx.staffId,
+    sheet.sectionId,
+    storageToCollegeDate(sheet.date),
+  )
 
-  if (ctx.staffId) {
-    if (sheet.subjectId) {
-      hasActiveAssignment =
-        (await prisma.teacherAssignment.findFirst({
-          where: {
-            staffId: ctx.staffId,
-            sectionId: sheet.sectionId,
-            subjectId: sheet.subjectId,
-            isActive: true,
-          },
-          select: { id: true },
-        })) !== null
-    } else {
-      isActiveIncharge =
-        (await prisma.sectionIncharge.findFirst({
+  const isActiveIncharge =
+    ctx.staffId === null
+      ? false
+      : (await prisma.sectionIncharge.findFirst({
           where: { staffId: ctx.staffId, sectionId: sheet.sectionId, isActive: true },
           select: { id: true },
         })) !== null
-    }
-  }
 
-  return { subjectId: sheet.subjectId, hasActiveAssignment, isActiveIncharge }
+  return { takesFirstPeriod, noLessonsThatDay, isActiveIncharge }
 }
 
 /** The office's rule for teacher corrections, read once per decision. */
@@ -1396,8 +1425,6 @@ export async function getMyAttendance(
 }
 
 export interface MarkingOption {
-  /** Subject-wise, or the section in-charge's daily roll-call. */
-  kind: 'subject' | 'daily'
   sectionId: string
   academicSessionId: string
   sessionName: string
@@ -1405,21 +1432,33 @@ export interface MarkingOption {
   divisionName: string
   programName: string
   sectionName: string
-  subjectId: string | null
-  subjectName: string | null
   studentCount: number
-  /** Registers already opened for this option on the chosen date. */
-  todaySheets: Array<{ id: string; period: number; status: SheetStatus }>
+  /**
+   * Why this section's register is theirs today.
+   *
+   * `FIRST_PERIOD` — they take the section's first lesson of the day.
+   * `NO_LESSONS` — the section has nothing timetabled, so it falls to the
+   * in-charge. Worth telling apart on screen: the first is the ordinary rule,
+   * the second is the college covering a gap.
+   */
+  reason: 'FIRST_PERIOD' | 'NO_LESSONS'
+  /** The period their claim rests on, or null when the day is empty. */
+  firstPeriod: number | null
+  /** The register for this section on that date, if one has been opened. */
+  todaySheet: { id: string; status: SheetStatus } | null
 }
 
 /**
- * Everything the signed-in teacher is allowed to mark, and what already exists
- * for the date in question.
+ * The registers the signed-in teacher may take on a given date.
  *
- * Built from the teacher's own ACTIVE records — `teacher_assignments` for
- * subjects, `section_incharges` for daily roll-call — resolved from
- * `ctx.staffId`, which comes from the session. A teacher cannot ask for
- * somebody else's options because there is no parameter for whose they are.
+ * One entry per section, because there is one register per section per day.
+ * A section is on this list when the teacher has its **first period** that day,
+ * or when the section has no lessons at all that day and they are its
+ * in-charge — the same two rules `decideCanMarkAttendance` enforces, read from
+ * the same timetable.
+ *
+ * Everything comes from `ctx.staffId`, which comes from the session. There is
+ * no parameter for whose options these are, so there is nothing to substitute.
  *
  * This decides what the *screen offers*. It is not the security boundary:
  * `assertCanMarkAttendance` checks the same facts again when a register is
@@ -1440,99 +1479,96 @@ export async function getMyMarkingOptions(
 
   const staffId = ctx.staffId
   const on = collegeDateToStorage(date)
+  const dayOfWeek = weekdayOfCollegeDate(date as CollegeDate)
 
-  const sectionSelect = {
-    name: true,
-    academicGroup: {
-      select: {
-        academicSession: { select: { id: true, name: true } },
-        class: { select: { name: true, displayName: true } },
-        division: { select: { name: true } },
-        program: { select: { name: true } },
-      },
-    },
-    _count: { select: { enrollments: { where: { status: 'ACTIVE' as const } } } },
-  }
-
-  const [assignments, incharges] = await Promise.all([
-    prisma.teacherAssignment.findMany({
-      where: { staffId, isActive: true },
-      orderBy: [{ assignedAt: 'desc' }],
-      select: {
-        sectionId: true,
-        academicSessionId: true,
-        subject: { select: { id: true, name: true } },
-        section: { select: sectionSelect },
-      },
+  // The two ways a section can reach this list: a lesson of theirs that day,
+  // and a section they are in charge of. Which of them actually qualifies is
+  // settled below, against the whole section's day.
+  const [taught, incharges] = await Promise.all([
+    prisma.timetableSlotSection.findMany({
+      where: { dayOfWeek, isActive: true, slot: { staffId, isActive: true } },
+      select: { sectionId: true },
+      distinct: ['sectionId'],
     }),
     prisma.sectionIncharge.findMany({
       where: { staffId, isActive: true },
-      orderBy: [{ assignedAt: 'desc' }],
-      select: {
-        sectionId: true,
-        academicSessionId: true,
-        section: { select: sectionSelect },
-      },
+      select: { sectionId: true },
     }),
   ])
 
-  // One query for every register this teacher could already have opened today,
-  // rather than one per option.
-  const sectionIds = [
-    ...new Set([...assignments.map((a) => a.sectionId), ...incharges.map((i) => i.sectionId)]),
+  const candidates = [
+    ...new Set([...taught.map((t) => t.sectionId), ...incharges.map((i) => i.sectionId)]),
   ]
-  const existing =
-    sectionIds.length === 0
-      ? []
-      : await prisma.attendanceSheet.findMany({
-          where: { sectionId: { in: sectionIds }, date: on },
-          orderBy: [{ period: 'asc' }],
-          select: { id: true, sectionId: true, subjectId: true, period: true, status: true },
-        })
+  if (candidates.length === 0) return []
 
-  const sheetsFor = (sectionId: string, subjectId: string | null) =>
-    existing
-      .filter((sheet) => sheet.sectionId === sectionId && sheet.subjectId === subjectId)
-      .map((sheet) => ({ id: sheet.id, period: sheet.period, status: sheet.status }))
+  const inchargeOf = new Set(incharges.map((i) => i.sectionId))
+  const firstLessons = await firstLessonBySection(candidates, dayOfWeek)
 
-  const describe = (section: {
-    name: string
-    academicGroup: {
-      academicSession: { id: string; name: string }
-      class: { name: string; displayName: string | null }
-      division: { name: string }
-      program: { name: string }
+  const mine: Array<{ sectionId: string; reason: 'FIRST_PERIOD' | 'NO_LESSONS'; firstPeriod: number | null }> = []
+  for (const sectionId of candidates) {
+    const first = firstLessons.get(sectionId)
+    if (first) {
+      if (first.staffIds.has(staffId)) {
+        mine.push({ sectionId, reason: 'FIRST_PERIOD', firstPeriod: first.period })
+      }
+      continue
     }
-    _count: { enrollments: number }
-  }) => ({
-    sessionName: section.academicGroup.academicSession.name,
-    className: section.academicGroup.class.displayName ?? section.academicGroup.class.name,
-    divisionName: section.academicGroup.division.name,
-    programName: section.academicGroup.program.name,
-    sectionName: section.name,
-    studentCount: section._count.enrollments,
+    // Nothing timetabled: the in-charge takes it, so the college is never
+    // locked out of a section whose week has not been built yet.
+    if (inchargeOf.has(sectionId)) {
+      mine.push({ sectionId, reason: 'NO_LESSONS', firstPeriod: null })
+    }
+  }
+
+  if (mine.length === 0) return []
+
+  const sectionIds = mine.map((row) => row.sectionId)
+
+  const [sections, existing] = await Promise.all([
+    prisma.section.findMany({
+      where: { id: { in: sectionIds } },
+      select: {
+        id: true,
+        name: true,
+        academicSessionId: true,
+        academicGroup: {
+          select: {
+            academicSession: { select: { name: true } },
+            class: { select: { name: true, displayName: true } },
+            division: { select: { name: true } },
+            program: { select: { name: true } },
+          },
+        },
+        _count: { select: { enrollments: { where: { status: 'ACTIVE' as const } } } },
+      },
+    }),
+    prisma.attendanceSheet.findMany({
+      where: { sectionId: { in: sectionIds }, date: on },
+      orderBy: [{ period: 'asc' }],
+      select: { id: true, sectionId: true, status: true },
+    }),
+  ])
+
+  const byId = new Map(sections.map((section) => [section.id, section]))
+
+  return mine.flatMap((row) => {
+    const section = byId.get(row.sectionId)
+    if (!section) return []
+    const sheet = existing.find((s) => s.sectionId === row.sectionId) ?? null
+    return [
+      {
+        sectionId: section.id,
+        academicSessionId: section.academicSessionId,
+        sessionName: section.academicGroup.academicSession.name,
+        className: section.academicGroup.class.displayName ?? section.academicGroup.class.name,
+        divisionName: section.academicGroup.division.name,
+        programName: section.academicGroup.program.name,
+        sectionName: section.name,
+        studentCount: section._count.enrollments,
+        reason: row.reason,
+        firstPeriod: row.firstPeriod,
+        todaySheet: sheet ? { id: sheet.id, status: sheet.status } : null,
+      },
+    ]
   })
-
-  const options: MarkingOption[] = [
-    ...assignments.map((assignment) => ({
-      kind: 'subject' as const,
-      sectionId: assignment.sectionId,
-      academicSessionId: assignment.academicSessionId,
-      subjectId: assignment.subject.id,
-      subjectName: assignment.subject.name,
-      ...describe(assignment.section),
-      todaySheets: sheetsFor(assignment.sectionId, assignment.subject.id),
-    })),
-    ...incharges.map((incharge) => ({
-      kind: 'daily' as const,
-      sectionId: incharge.sectionId,
-      academicSessionId: incharge.academicSessionId,
-      subjectId: null,
-      subjectName: null,
-      ...describe(incharge.section),
-      todaySheets: sheetsFor(incharge.sectionId, null),
-    })),
-  ]
-
-  return options
 }

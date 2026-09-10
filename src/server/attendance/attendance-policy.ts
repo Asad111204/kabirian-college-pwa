@@ -27,6 +27,18 @@ export function isValidPeriod(period: number): boolean {
   return Number.isInteger(period) && period >= PERIOD_MIN && period <= PERIOD_MAX
 }
 
+/**
+ * The period every new register is filed under.
+ *
+ * The college used to take attendance subject by subject, so a register said
+ * which class of the day it belonged to. It is now one register for the whole
+ * day, taken by the teacher who has the first period — so there is nothing left
+ * for this number to distinguish, and it is fixed. The column stays because the
+ * registers taken under the old rule still carry a real period, and rewriting
+ * history to tidy a column is not worth doing.
+ */
+export const DAILY_REGISTER_PERIOD = PERIOD_MIN
+
 /* -------------------------------------------------------------------------- */
 /* Which dates may be marked                                                  */
 /* -------------------------------------------------------------------------- */

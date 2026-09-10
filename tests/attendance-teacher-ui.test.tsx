@@ -43,25 +43,30 @@ afterEach(() => {
 /* What a teacher is offered                                                  */
 /* -------------------------------------------------------------------------- */
 
-const subjectOption = {
-  kind: 'subject' as const,
+/**
+ * One register per section per day, taken by whoever has that section's first
+ * period. The screen offers no subject, no period and no section picker, so
+ * these check that what it does offer matches that rule — and that a register
+ * somebody has already opened is never offered a second time.
+ */
+const firstPeriodOption = {
   sectionId: 'sec-1',
-  subjectId: 'bio',
-  subjectName: 'Biology',
   sessionName: '2026-27',
   className: '1st Year',
   divisionName: 'Boys',
   programName: 'Pre-Medical',
   sectionName: 'A',
   studentCount: 30,
-  todaySheets: [],
+  reason: 'FIRST_PERIOD' as const,
+  firstPeriod: 2,
+  todaySheet: null,
 }
 
-const dailyOption = {
-  ...subjectOption,
-  kind: 'daily' as const,
-  subjectId: null,
-  subjectName: null,
+const inchargeOption = {
+  ...firstPeriodOption,
+  sectionId: 'sec-2',
+  reason: 'NO_LESSONS' as const,
+  firstPeriod: null,
 }
 
 function renderOptions(options: unknown[], canCreate = true) {
@@ -75,105 +80,89 @@ function renderOptions(options: unknown[], canCreate = true) {
   )
 }
 
-describe('a teacher with no assignments', () => {
-  it('is told what to do rather than shown an empty list', () => {
+describe('a teacher with no register today', () => {
+  it('is told why rather than shown an empty list', () => {
     renderOptions([])
-    expect(screen.getByText('No attendance assignments yet')).toBeTruthy()
-    expect(screen.getByText(/Ask the administrator/)).toBeTruthy()
+    expect(screen.getByText('No register is yours today')).toBeTruthy()
+    expect(screen.getByText(/first period/)).toBeTruthy()
   })
 })
 
-describe('the list of what a teacher may mark', () => {
-  it('shows a subject assignment under Subjects, with its class', () => {
-    renderOptions([subjectOption])
-    expect(screen.getByText('Subjects')).toBeTruthy()
-    expect(screen.getByText('Biology')).toBeTruthy()
+describe('the list of registers a teacher may take', () => {
+  it('names the class and says which period the register rests on', () => {
+    renderOptions([firstPeriodOption])
     expect(screen.getByText(/1st Year · Boys · Pre-Medical · Section A/)).toBeTruthy()
+    expect(screen.getByText(/Your period 2/)).toBeTruthy()
   })
 
-  it('shows an in-charge section under Daily roll call, with no subject', () => {
-    renderOptions([dailyOption])
-    expect(screen.getByRole('heading', { name: /Daily roll call/ })).toBeTruthy()
-    expect(screen.queryByText('Biology')).toBeNull()
+  it('explains an in-charge register on a day with nothing timetabled', () => {
+    renderOptions([inchargeOption])
+    expect(screen.getByText(/Nothing timetabled today/)).toBeTruthy()
+    expect(screen.queryByText(/Your period/)).toBeNull()
   })
 
-  it('separates the two kinds', () => {
-    renderOptions([subjectOption, dailyOption])
-    expect(screen.getByRole('heading', { name: 'Subjects' })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: /Daily roll call/ })).toBeTruthy()
-    // Biology sits under Subjects, and the in-charge card under Daily roll call.
-    expect(screen.getByText('Biology')).toBeTruthy()
+  it('offers no subject and no period to choose', () => {
+    renderOptions([firstPeriodOption])
+    expect(screen.queryByRole('combobox')).toBeNull()
+    expect(screen.queryByRole('spinbutton')).toBeNull()
+    expect(screen.queryByLabelText(/Period/)).toBeNull()
   })
 
   it('offers Start attendance when nothing has been recorded yet', () => {
-    renderOptions([subjectOption])
+    renderOptions([firstPeriodOption])
     expect(screen.getByRole('button', { name: /Start attendance/ })).toBeTruthy()
   })
 
-  it('starts a register for the chosen section, subject and date', async () => {
+  it('starts a whole-day register: the section and the date, nothing else', async () => {
     post.mockResolvedValueOnce({ id: 'sheet-9' })
-    renderOptions([subjectOption])
+    renderOptions([firstPeriodOption])
     await userEvent.click(screen.getByRole('button', { name: /Start attendance/ }))
 
     expect(post).toHaveBeenCalledWith('/api/v1/attendance/sheets', {
       sectionId: 'sec-1',
-      subjectId: 'bio',
       date: '2026-08-30',
-      period: 1,
     })
     expect(push).toHaveBeenCalledWith('/staff/attendance/sheet-9')
   })
 
-  it('sends subjectId null for a daily roll call, never a fake subject', async () => {
-    post.mockResolvedValueOnce({ id: 'sheet-10' })
-    renderOptions([dailyOption])
-    await userEvent.click(screen.getByRole('button', { name: /Start attendance/ }))
-    expect(post.mock.calls[0]?.[1]).toMatchObject({ subjectId: null })
-  })
-
   it('refuses to start for a section with no students', () => {
-    renderOptions([{ ...subjectOption, studentCount: 0 }])
+    renderOptions([{ ...firstPeriodOption, studentCount: 0 }])
     expect(screen.getByText('No active students are enrolled in this section.')).toBeTruthy()
     expect(screen.queryByRole('button', { name: /Start attendance/ })).toBeNull()
   })
 
   it('hides Start attendance without the create permission', () => {
-    renderOptions([subjectOption], false)
+    renderOptions([firstPeriodOption], false)
     expect(screen.queryByRole('button', { name: /Start attendance/ })).toBeNull()
   })
 
   it('explains a duplicate register in plain words', async () => {
     const { ApiError } = await import('@/lib/api-client')
     post.mockRejectedValueOnce(new ApiError('conflict', 409, 'CONFLICT'))
-    renderOptions([subjectOption])
+    renderOptions([firstPeriodOption])
     await userEvent.click(screen.getByRole('button', { name: /Start attendance/ }))
     expect(
-      await screen.findByText('Attendance for this period has already been opened.'),
+      await screen.findByText('This section’s register for today has already been started.'),
     ).toBeTruthy()
   })
 })
 
 describe('when today is already recorded', () => {
   it('offers to continue a draft rather than start again', () => {
-    renderOptions([
-      { ...subjectOption, todaySheets: [{ id: 's1', period: 1, status: 'DRAFT' }] },
-    ])
-    expect(screen.getByText('Attendance already recorded')).toBeTruthy()
+    renderOptions([{ ...firstPeriodOption, todaySheet: { id: 's1', status: 'DRAFT' } }])
+    expect(screen.getByText(/Attendance already recorded/)).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Continue draft' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Start attendance/ })).toBeNull()
   })
 
   it('offers to view a submitted register', () => {
-    renderOptions([
-      { ...subjectOption, todaySheets: [{ id: 's1', period: 1, status: 'SUBMITTED' }] },
-    ])
+    renderOptions([{ ...firstPeriodOption, todaySheet: { id: 's1', status: 'SUBMITTED' } }])
     expect(screen.getByText('Submitted')).toBeTruthy()
     expect(screen.getByRole('link', { name: 'View register' })).toBeTruthy()
   })
 
   it('shows a cancelled register as cancelled', () => {
-    renderOptions([
-      { ...subjectOption, todaySheets: [{ id: 's1', period: 1, status: 'CANCELLED' }] },
-    ])
+    renderOptions([{ ...firstPeriodOption, todaySheet: { id: 's1', status: 'CANCELLED' } }])
     expect(screen.getByText('Cancelled')).toBeTruthy()
   })
 })
