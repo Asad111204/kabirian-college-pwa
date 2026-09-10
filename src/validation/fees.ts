@@ -87,6 +87,15 @@ export const voucherRunSchema = z.object({
   classId: z.preprocess((v) => (v === '' ? undefined : v), uuid.optional()),
   /** Says what would happen without issuing anything. */
   dryRun: z.preprocess((v) => v === true || v === 'true' || v === '1', z.boolean()).default(false),
+  /**
+   * At most this many vouchers in one call.
+   *
+   * A hosted request has a wall clock: a whole class at once was being stopped
+   * part way through and answering 500. A caller that would rather come back
+   * than be cut off bounds the work and repeats until nothing is left. The
+   * office's own button sends nothing here and is unaffected.
+   */
+  limit: z.coerce.number().int().min(1).max(500).optional(),
 })
 
 export const voucherCancelSchema = z.object({

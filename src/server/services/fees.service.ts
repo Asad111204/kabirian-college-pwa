@@ -155,6 +155,11 @@ export interface VoucherRunResult {
   /** No fee set for the year, so there is nothing to bill. */
   skippedNoFee: number
   totalBilledPaisa: number
+  /**
+   * Still to issue after this call, when the caller asked for a bounded run.
+   * Zero means the session is fully billed; anything else means come back.
+   */
+  remaining: number
   /** A few examples, so the office can see it did the right thing. */
   sample: { studentName: string; studentCode: string; netPayablePaisa: number }[]
 }
@@ -604,6 +609,7 @@ export async function runVouchers(ctx: AuthContext, input: VoucherRunInput): Pro
     skippedExisting: 0,
     skippedNoFee: 0,
     totalBilledPaisa: 0,
+    remaining: 0,
     sample: [],
   }
 
@@ -638,13 +644,30 @@ export async function runVouchers(ctx: AuthContext, input: VoucherRunInput): Pro
       discount,
       lines: student.feeLines.map((l) => ({ head: l.head, label: l.label, amountPaisa: l.amountPaisa })),
     })
-    result.totalBilledPaisa += Math.max(0, gross - discount)
   }
 
-  result.issued = toIssue.length
-  result.sample = toIssue.slice(0, 5).map((v) => ({ studentName: v.studentName, studentCode: v.studentCode, netPayablePaisa: Math.max(0, v.gross - v.discount) }))
+  /*
+   * How many of them this call will actually do.
+   *
+   * A request has a wall clock as well as a transaction: hosted, a serverless
+   * invocation is stopped after a fixed number of seconds whatever it is in
+   * the middle of, and the college found the edge of it — sections of eleven
+   * students went through and sections of seventeen, twenty and twenty-nine
+   * came back as 500s. Batching inside one transaction did not help, because
+   * the *request* was the thing running out of time.
+   *
+   * So the caller may bound the work and come back for the rest. `remaining`
+   * tells them there is more; issuing again skips whoever now has a voucher,
+   * so calling until it reports nothing left is safe by construction. Left
+   * unset — which is what the office's own button sends — nothing changes.
+   */
+  const doNow = input.limit ? toIssue.slice(0, input.limit) : toIssue
+  result.issued = doNow.length
+  result.remaining = toIssue.length - doNow.length
+  result.totalBilledPaisa = doNow.reduce((running, v) => running + Math.max(0, v.gross - v.discount), 0)
+  result.sample = doNow.slice(0, 5).map((v) => ({ studentName: v.studentName, studentCode: v.studentCode, netPayablePaisa: Math.max(0, v.gross - v.discount) }))
 
-  if (input.dryRun || toIssue.length === 0) return result
+  if (input.dryRun || doNow.length === 0) return result
 
   const created: { userId: string | null; voucherId: string; voucherNumber: string }[] = []
 
@@ -658,8 +681,8 @@ export async function runVouchers(ctx: AuthContext, input: VoucherRunInput): Pro
   // rather than billing anybody twice.
   const BATCH = 25
 
-  for (let at = 0; at < toIssue.length; at += BATCH) {
-    const batch = toIssue.slice(at, at + BATCH)
+  for (let at = 0; at < doNow.length; at += BATCH) {
+    const batch = doNow.slice(at, at + BATCH)
 
     await prisma.$transaction(async (tx) => {
       let billedPaisa = 0

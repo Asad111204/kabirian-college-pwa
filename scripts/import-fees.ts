@@ -245,32 +245,49 @@ async function main() {
   /* ------------------------------------------------------------- vouchers */
 
   if (apply && !skipVouchers && plansOk > 0) {
-    // One section at a time, then a sweep for anybody the sections missed.
+    // A few students per request, section by section, until nothing is left.
     //
-    // A whole college in one request is a great many vouchers inside a single
-    // transaction, and against a hosted database that runs past its deadline
-    // and issues nothing — which is exactly what happened the first time this
-    // was run for real. A section is a few dozen students at most, and a
-    // student who already has a voucher is skipped, so the sweep at the end
-    // costs almost nothing and still catches anyone not in a section.
+    // A hosted request has a wall clock, and a whole class at once runs past
+    // it: the college's own sections of eleven went through while those of
+    // seventeen, twenty and twenty-nine came back as 500s having issued
+    // nothing. So each call is bounded, and the reply says how many are still
+    // waiting. Anyone who already has a voucher is skipped, so asking again
+    // simply continues — there is no way to bill a student twice by repeating
+    // this. The sweep at the end catches anyone not in a section at all.
+    const AT_A_TIME = 10
     const groups = await get<OptionGroup[]>(`/api/v1/students/enrollment-options?sessionId=${current.id}`)
     const sectionIds = groups.flatMap((group) => group.sections.map((section) => section.id))
 
     let issued = 0
     let billed = 0
-    const issueVouchers = async (body: Record<string, unknown>, what: string) => {
-      const res = await fetch(`${url}/api/v1/fees/run`, { method: 'POST', headers, body: JSON.stringify(body) })
-      const json = (await res.json()) as { data?: { issued: number; totalBilledPaisa: number }; error?: { message?: string } }
-      if (!res.ok) {
-        problems.push(`vouchers for ${what}: ${json.error?.message ?? res.status}`)
-        return
+
+    /** Keeps asking for the same scope until the server says nothing is left. */
+    const issueVouchers = async (scope: Record<string, unknown>, what: string) => {
+      // A ceiling on the rounds, so a server that always reports work left
+      // cannot spin here for ever.
+      for (let round = 0; round < 60; round += 1) {
+        const res = await fetch(`${url}/api/v1/fees/run`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ ...scope, academicSessionId: current.id, limit: AT_A_TIME }),
+        })
+        const json = (await res.json()) as {
+          data?: { issued: number; totalBilledPaisa: number; remaining: number }
+          error?: { message?: string }
+        }
+        if (!res.ok) {
+          problems.push(`vouchers for ${what}: ${json.error?.message ?? res.status}`)
+          return
+        }
+        issued += json.data?.issued ?? 0
+        billed += json.data?.totalBilledPaisa ?? 0
+        if ((json.data?.remaining ?? 0) === 0) return
       }
-      issued += json.data?.issued ?? 0
-      billed += json.data?.totalBilledPaisa ?? 0
+      problems.push(`vouchers for ${what}: still not finished after 60 rounds`)
     }
 
-    for (const [at, sectionId] of sectionIds.entries()) await issueVouchers({ academicSessionId: current.id, sectionId }, `section ${at + 1}`)
-    await issueVouchers({ academicSessionId: current.id }, 'the rest of the session')
+    for (const [at, sectionId] of sectionIds.entries()) await issueVouchers({ sectionId }, `section ${at + 1}`)
+    await issueVouchers({}, 'the rest of the session')
 
     say(`  Issued ${issued} voucher${issued === 1 ? '' : 's'} — ${rupees(billed)} billed.`)
   } else if (!apply) {

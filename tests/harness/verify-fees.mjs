@@ -107,8 +107,17 @@ check('…adding the year up: 34,500 + 30,000', r.data?.totalBilledPaisa === RS(
 r = await get('admin', `/api/v1/fees/vouchers?academicSessionId=${ids.session}`)
 check('…so there is still nothing there', r.status === 200 && r.data.total === 0, `${r.data?.total}`)
 
+// A caller that would rather come back than be cut off part way asks for a
+// few at a time. The college's own migration needed this: a whole class in one
+// request ran past the hosting's wall clock and answered 500 having issued
+// nothing.
+r = await call('admin', 'POST', '/api/v1/fees/run', { academicSessionId: ids.session, limit: 1 })
+check('a bounded run issues only as many as it was asked for', r.status === 200 && r.data.issued === 1, `${r.status} ${r.data?.issued}`)
+check('…and says how many are still waiting', r.data?.remaining === 1, String(r.data?.remaining))
+
 r = await call('admin', 'POST', '/api/v1/fees/run', { academicSessionId: ids.session })
-check('the run issues one voucher each', r.status === 200 && r.data.issued === 2 && r.data.dryRun === false, `${r.status} ${r.data?.issued}`)
+check('the rest of the run issues the other', r.status === 200 && r.data.issued === 1 && r.data.dryRun === false, `${r.status} ${r.data?.issued}`)
+check('…with nothing left over', r.data?.remaining === 0, String(r.data?.remaining))
 check('…with no due date, because families pay as they can', r.data?.dueDate === null, String(r.data?.dueDate))
 r = await call('admin', 'POST', '/api/v1/fees/run', { academicSessionId: ids.session })
 check('running it again bills nobody twice', r.status === 200 && r.data.issued === 0 && r.data.skippedExisting === 2, JSON.stringify({ i: r.data?.issued, s: r.data?.skippedExisting }))
