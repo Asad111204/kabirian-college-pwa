@@ -131,17 +131,32 @@ check('a section id that is not an id is refused', r.status === 400, String(r.st
 
 console.log('\nWhen the new day cannot take a lesson\n' + '-'.repeat(52))
 
-// Teacher A already teaches 12B on the source day. Copying 11A's day onto that
-// same day for another section would put them in two places at once.
-r = await copy('admin', { sectionId: ids.sec12B, fromDay: source, toDays: ['SUNDAY'], replace: false })
+// A clash has to be the same teacher in the same PERIOD, so one is built:
+// Teacher A takes 12B on Tuesday in the very period 11A's day would land in.
+const clashPeriod = (
+  await call('admin', 'GET', `/api/v1/timetable?academicSessionId=${ids.session}&sectionId=${ids.sec11A}&dayOfWeek=${source}`)
+).data?.[0]?.period
+
+// No `room` key at all: the schema takes a string or nothing, and `null` is
+// neither — sending it would fail validation and prove nothing about periods.
+r = await call('admin', 'POST', '/api/v1/timetable', {
+  sectionIds: [ids.sec12B],
+  subjectId: ids.biology,
+  staffId: ids.staffA,
+  dayOfWeek: 'TUESDAY',
+  period: clashPeriod,
+})
+check('Teacher A is given a Tuesday lesson in that same period', r.status === 201, `${r.status} ${r.error?.message ?? ''}`)
+
+r = await copy('admin', { sectionId: ids.sec11A, fromDay: source, toDays: ['TUESDAY'], replace: false })
 check(
   'the clash is reported by name rather than forced',
   r.status === 200 && (r.data?.skipped ?? []).length > 0,
   JSON.stringify(r.data?.skipped ?? r.data),
 )
 check(
-  '...and the reason names the teacher and the period',
-  (r.data?.skipped ?? []).some((line) => /period \d/.test(line)),
+  '...and the reason names the period and why',
+  (r.data?.skipped ?? []).some((line) => /period \d/.test(line) && /teacher/i.test(line)),
   (r.data?.skipped ?? [])[0],
 )
 

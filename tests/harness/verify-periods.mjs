@@ -139,13 +139,15 @@ r = await call('admin', 'POST', '/api/v1/timetable', {
 })
 check('a lesson may now be put in period 6', r.status === 201, `${r.status} ${r.error?.message ?? ''}`)
 
+// `room` is left out rather than sent as null: the schema takes a string or
+// nothing, so a null would fail validation and this check would pass without
+// ever testing the period at all.
 r = await call('admin', 'POST', '/api/v1/timetable', {
   sectionIds: [ids.sec12B],
   subjectId: ids.biology,
   staffId: ids.staffA,
   dayOfWeek: 'SATURDAY',
   period: 44,
-  room: null,
 })
 check(
   'a period the college does not have is still refused',
