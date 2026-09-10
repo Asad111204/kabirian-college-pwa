@@ -762,14 +762,18 @@ export interface AssignmentBulkResult {
 }
 
 /**
- * Assigns a teacher to every pairing of the chosen sections and subjects.
+ * Assigns a teacher to the subjects the office named for each section.
  *
  * One dialogue instead of a dozen: a teacher who takes English across six
- * columns of the college timetable is six ticks and one save. The sections may
- * span classes, divisions and programs, so each pairing is checked on its own
- * against that section's own curriculum — Biology offered to an ICS section is
- * reported and skipped, and every other pairing is still made. A pairing the
- * teacher already holds is left exactly as it is.
+ * columns of the college timetable is six ticks and one save. Each section
+ * carries its own list of subjects, because a teacher's subjects are not the
+ * same in every class — English and Urdu in 1st Year Bio Boys, English alone
+ * in 1st Year Bio Girls where Urdu belongs to somebody else.
+ *
+ * The sections may span classes, divisions and programs, so each pairing is
+ * checked on its own against that section's curriculum — Biology offered to an
+ * ICS section is reported and skipped, and every other pairing is still made.
+ * A pairing the teacher already holds is left exactly as it is.
  */
 export async function createAssignments(
   ctx: AuthContext,
@@ -789,12 +793,18 @@ export async function createAssignments(
     )
   }
 
+  // Each section brings its own list of subjects, because a teacher's subjects
+  // are not the same in every class: English and Urdu in one, English alone in
+  // the next, where Urdu belongs to somebody else.
+  const sectionIds = [...new Set(input.sections.map((entry) => entry.sectionId))]
+  const subjectIds = [...new Set(input.sections.flatMap((entry) => entry.subjectIds))]
+
   const sections = await prisma.section.findMany({
-    where: { id: { in: input.sectionIds }, isActive: true },
+    where: { id: { in: sectionIds }, isActive: true },
     include: { academicGroup: { include: { class: true, division: true, program: true } } },
   })
 
-  const missing = input.sectionIds.filter((id) => !sections.some((section) => section.id === id))
+  const missing = sectionIds.filter((id) => !sections.some((section) => section.id === id))
   if (missing.length > 0) throw new NotFoundError('section')
 
   // The session comes from the sections themselves; one from another year
@@ -802,12 +812,12 @@ export async function createAssignments(
   const wrongSession = sections.find((section) => section.academicSessionId !== input.academicSessionId)
   if (wrongSession) {
     throw new ValidationError('One of those sections is not in the session you chose. Please choose again.', {
-      sectionIds: ['This section belongs to a different academic session.'],
+      sections: ['This section belongs to a different academic session.'],
     })
   }
 
-  const subjects = await prisma.subject.findMany({ where: { id: { in: input.subjectIds } } })
-  if (subjects.length !== input.subjectIds.length) throw new NotFoundError('subject')
+  const subjects = await prisma.subject.findMany({ where: { id: { in: subjectIds } } })
+  if (subjects.length !== subjectIds.length) throw new NotFoundError('subject')
 
   const [curriculum, held] = await Promise.all([
     prisma.curriculumSubject.findMany({
@@ -815,12 +825,12 @@ export async function createAssignments(
         academicSessionId: input.academicSessionId,
         classId: { in: sections.map((section) => section.academicGroup.classId) },
         programId: { in: sections.map((section) => section.academicGroup.programId) },
-        subjectId: { in: input.subjectIds },
+        subjectId: { in: subjectIds },
       },
       select: { classId: true, programId: true, subjectId: true },
     }),
     prisma.teacherAssignment.findMany({
-      where: { staffId, isActive: true, sectionId: { in: input.sectionIds }, subjectId: { in: input.subjectIds } },
+      where: { staffId, isActive: true, sectionId: { in: sectionIds }, subjectId: { in: subjectIds } },
       select: { sectionId: true, subjectId: true },
     }),
   ])
@@ -831,11 +841,15 @@ export async function createAssignments(
   const result: AssignmentBulkResult = { staff: null as unknown as StaffDetail, created: [], alreadyHeld: [], refused: [] }
   const toCreate: { sectionId: string; subjectId: string; academicSessionId: string; label: string }[] = []
 
-  for (const section of sections) {
+  // Only the pairings the office actually asked for — this section with these
+  // subjects — rather than every combination of the two lists.
+  for (const entry of input.sections) {
+    const section = sections.find((candidate) => candidate.id === entry.sectionId)!
     const group = section.academicGroup
     const place = `${group.class.name} · ${group.division.name} · ${group.program.name} · Section ${section.name}`
 
-    for (const subject of subjects) {
+    for (const subjectId of new Set(entry.subjectIds)) {
+      const subject = subjects.find((candidate) => candidate.id === subjectId)!
       const label = `${place} · ${subject.name}`
 
       if (alreadyThere.has(`${section.id}|${subject.id}`)) {
@@ -852,7 +866,7 @@ export async function createAssignments(
 
   if (toCreate.length === 0 && result.refused.length > 0 && result.alreadyHeld.length === 0) {
     throw new ConflictError('None of those subjects are in the curriculum for the sections you chose.', {
-      subjectIds: result.refused,
+      sections: result.refused,
     })
   }
 

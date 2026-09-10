@@ -16,9 +16,9 @@ function check<S extends z.ZodType>(schema: S, body: unknown): z.infer<S> {
  * Assigns a teacher to subjects in sections.
  *
  * Two shapes, because the office does two different things. Ticking several
- * sections and several subjects sends `sectionIds` and `subjectIds`, and every
- * pairing of the two is made. The older single-pairing shape still works, so
- * anything that sends one section and one subject is unaffected.
+ * sections sends `sections`, each naming its own subjects, and every pairing
+ * named is made. The older single-pairing shape still works, so anything that
+ * sends one section and one subject is unaffected.
  *
  * The body is read once here rather than through `parseJsonBody`, because a
  * request's body can only be read once and which schema applies depends on
@@ -32,7 +32,7 @@ export const POST = withAuth<AssignmentBulkResult | StaffDetail>(async ({ reques
     throw new ValidationError('The request body was not valid JSON.')
   }
 
-  if (body && typeof body === 'object' && 'sectionIds' in body) {
+  if (body && typeof body === 'object' && 'sections' in body) {
     return jsonOk(await createAssignments(ctx, params.id!, check(assignmentBulkCreateSchema, body)), 201)
   }
 

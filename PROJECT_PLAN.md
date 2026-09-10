@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | **Phase 28 complete: the fee is annual, made of optional heads, and paid in instalments.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Everything through Phase 29 is live on Neon (nineteen migrations, zero drift). The college charges one fee per student per year, built from tuition, annual funds, events, board registration, board admission, a tour and anything else, all optional and all set at admission; families pay whenever they can, and a printed voucher shows only what has been paid and what is left. Documents are attached at the counter, and a salary is recorded when staff are added. The college now has a printable **handbook** covering every part of the system, and the app finally shows the college's own logo rather than a placeholder. **The Phase 28 migration was applied to Neon on 2026-09-09.** The college's previous FoxPro system has been read into this one: **188 of its 192 enrolled students are live, each with a portal login**, every class counted back against the old file, and **its 2026-27 fee ledger with them**: 111 students charged Rs 3,449,930 for the year, Rs 273,200 already received, reconciled to the rupee. |
-| **Last updated** | 2026-09-10 (rev. 52 — the old system's fee ledger reconciled onto Neon) |
+| **Last updated** | 2026-09-10 (rev. 53 — combined classes, elective splits, per-campus breaks) |
 | **Companion docs** | [DECISIONS.md](DECISIONS.md) · [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) · [README.md](README.md) |
 
 ---
@@ -2081,6 +2081,32 @@ The college looked at the finished fee module and corrected the assumption under
 **Verified through the production build (65 fee checks, all passing, alongside the rest — 731 in total)**: a fee set from three heads adding to the year with the concession off, keeping the office's own words for the "Others" line; another student charged tuition alone; a head the college does not charge, a line of nothing and an amount with an extra zero each refused, with the fee unchanged after every refusal; a dry run that wrote nothing, then a run issuing one voucher each with no due date, then the same run issuing nothing; the fee changed afterwards without rewriting the voucher already issued; two instalments, the first leaving exactly 24,500 and reporting 29% collected, the second settling it; a void putting it back to part paid; a voucher with no due date carrying no fine and never overdue; a cancelled voucher reissued; a family seeing only their own; the admission form offering every head and the document checklist; and the staff form asking for a salary.
 
 **Tests: 1,497 across 85 files.** The fee policy, validation and screens were reworked rather than added to, because the model underneath them changed.
+
+### 22.63 The timetable the college actually runs (2026-09-10)
+
+The college sent its printed timetable, and it does three things the system could not hold.
+
+**Its columns are combinations.** "1st Year Girls Bio/Math" is one column, one teacher, one room — and two of this system's sections sitting together. Written the only way the old shape allowed, as two lessons, the teacher's own unique index called it a clash, quite rightly: one teacher cannot be in two places.
+
+**Its cells are sometimes several lessons at once.** "Ch / Comp / Isl(E) — Sir Hassan / Miss Arooj / Miss Huma" is three teachers taking one room of students split by what each takes. The section's index refused that outright.
+
+**Its two campuses do not break together.** The girls stop at 11:10; the boys teach through it and stop at 11:40. The break was a property of one college-wide grid.
+
+**A lesson now covers sections rather than belonging to one** (ADR-181). That single change answers the first two at once: a combined class is ONE row, which is both the truth and what makes the teacher's index work again; a split is two rows over one section, which the new index allows as long as the subjects differ. The break moved to the campus — `divisions.break_period`, null meaning the college default — and a lesson covering both campuses in either of their breaks is refused with the message naming whose break it is.
+
+**Applied to Neon on 2026-09-10** (twenty-one migrations, zero drift). The census differed in exactly what it should: the new join table with four rows, one per existing lesson, and a table count of 51. Every lesson kept its section, its teacher and its active state; nothing was deleted, because there was nothing here to delete.
+
+**A bug the tests caught before the college did.** Deactivating a lesson left its section rows active, and those rows carry the partial unique index — so a lesson nobody taught any more would have held its cell for ever, which is precisely what a partial index exists to prevent.
+
+### 22.64 A teacher's subjects need not be the same in every class (2026-09-10)
+
+The college's words: *"a teacher may be teaching English and Urdu in 1st Year Biology Boys, while in 1st Year Biology Girls, the same teacher teaches only English, and Urdu is taught by another teacher."*
+
+The database always allowed that — an assignment is one row of *(teacher, section, subject)*. **The dialogue built the day before did not.** It ticked sections and subjects and made every pairing of the two, so ticking both classes and both subjects gave Urdu to the girls as well. The office could have saved twice and got it right, but a screen that implies something false about the college's own data is how data gets entered wrong.
+
+So the subjects are chosen **per section**. Each ticked section gets its own list, drawn from its own curriculum, and **"same as the first"** copies one down when they genuinely are the same — the common case stays one click, and the uncommon one is possible at all. The request now names explicit pairings rather than two lists to multiply, so nothing can be created that was not ticked.
+
+**Tests: the college's own case is one of them** — two subjects in one class and one in another, asserting both the request body and that the second class did not quietly acquire the extra subject.
 
 ### 22.62 The old system's fee ledger, brought across (2026-09-10)
 

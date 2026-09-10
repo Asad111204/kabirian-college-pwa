@@ -223,18 +223,36 @@ const OTHER_SUBJECT = '018f4d3e-9a1b-7c2d-8e3f-4a5b6c7d8eb2'
 
 const validBulk = {
   academicSessionId: SESSION,
-  sectionIds: [SECTION, OTHER_SECTION],
-  subjectIds: [SUBJECT, OTHER_SUBJECT],
+  sections: [
+    { sectionId: SECTION, subjectIds: [SUBJECT, OTHER_SUBJECT] },
+    { sectionId: OTHER_SECTION, subjectIds: [SUBJECT] },
+  ],
 }
 
-describe('assigning several sections and subjects at once', () => {
-  it('takes a list of each', () => {
+describe('assigning several sections at once, each with its own subjects', () => {
+  it('takes a list of sections, each naming its own subjects', () => {
     expect(assignmentBulkCreateSchema.safeParse(validBulk).success).toBe(true)
   })
 
-  it('asks for at least one of each, because an empty save means nothing', () => {
-    expect(assignmentBulkCreateSchema.safeParse({ ...validBulk, sectionIds: [] }).success).toBe(false)
-    expect(assignmentBulkCreateSchema.safeParse({ ...validBulk, subjectIds: [] }).success).toBe(false)
+  it('lets a teacher take two subjects in one class and one in another', () => {
+    // The college's own case: English and Urdu in 1st Year Bio Boys, English
+    // alone in 1st Year Bio Girls, where Urdu belongs to somebody else.
+    const parsed = assignmentBulkCreateSchema.safeParse(validBulk)
+    expect(parsed.success).toBe(true)
+    if (parsed.success) {
+      expect(parsed.data.sections[0]!.subjectIds).toHaveLength(2)
+      expect(parsed.data.sections[1]!.subjectIds).toHaveLength(1)
+    }
+  })
+
+  it('asks for at least one section, and at least one subject in each', () => {
+    expect(assignmentBulkCreateSchema.safeParse({ ...validBulk, sections: [] }).success).toBe(false)
+    expect(
+      assignmentBulkCreateSchema.safeParse({
+        ...validBulk,
+        sections: [{ sectionId: SECTION, subjectIds: [] }],
+      }).success,
+    ).toBe(false)
   })
 
   it('does not ask for a class, division or program: the sections may span several', () => {
@@ -247,14 +265,26 @@ describe('assigning several sections and subjects at once', () => {
   })
 
   it('still rejects names instead of ids', () => {
-    expect(assignmentBulkCreateSchema.safeParse({ ...validBulk, subjectIds: ['Biology'] }).success).toBe(false)
-    expect(assignmentBulkCreateSchema.safeParse({ ...validBulk, sectionIds: ['Section A'] }).success).toBe(false)
+    expect(
+      assignmentBulkCreateSchema.safeParse({
+        ...validBulk,
+        sections: [{ sectionId: SECTION, subjectIds: ['Biology'] }],
+      }).success,
+    ).toBe(false)
+    expect(
+      assignmentBulkCreateSchema.safeParse({
+        ...validBulk,
+        sections: [{ sectionId: 'Section A', subjectIds: [SUBJECT] }],
+      }).success,
+    ).toBe(false)
   })
 
   it('refuses a list longer than the college could possibly mean', () => {
-    const many = (n: number) => Array.from({ length: n }, () => SECTION)
-    expect(assignmentBulkCreateSchema.safeParse({ ...validBulk, sectionIds: many(61) }).success).toBe(false)
-    expect(assignmentBulkCreateSchema.safeParse({ ...validBulk, subjectIds: many(21) }).success).toBe(false)
+    const manySections = Array.from({ length: 61 }, () => ({ sectionId: SECTION, subjectIds: [SUBJECT] }))
+    expect(assignmentBulkCreateSchema.safeParse({ ...validBulk, sections: manySections }).success).toBe(false)
+
+    const manySubjects = [{ sectionId: SECTION, subjectIds: Array.from({ length: 21 }, () => SUBJECT) }]
+    expect(assignmentBulkCreateSchema.safeParse({ ...validBulk, sections: manySubjects }).success).toBe(false)
   })
 })
 

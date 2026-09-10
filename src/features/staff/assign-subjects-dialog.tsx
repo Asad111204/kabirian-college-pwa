@@ -54,7 +54,16 @@ export function AssignSubjectsDialog({
   // "loading" without having to blank it out from inside the effect.
   const [loaded, setLoaded] = React.useState<{ sessionId: string; groups: AssignmentOptionGroup[] } | null>(null)
   const [sectionIds, setSectionIds] = React.useState<string[]>([])
-  const [subjectIds, setSubjectIds] = React.useState<string[]>([])
+  /**
+   * The subjects chosen for each section, kept separately.
+   *
+   * A teacher's subjects are not the same in every class — English and Urdu in
+   * 1st Year Bio Boys, English alone in 1st Year Bio Girls where Urdu belongs
+   * to somebody else — so this is a list per section rather than one list for
+   * all of them. "Same as the first" fills the rest in one click, which is
+   * still the common case.
+   */
+  const [subjectsBySection, setSubjectsBySection] = React.useState<Record<string, string[]>>({})
   const [busy, setBusy] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [result, setResult] = React.useState<AssignmentBulkResult | null>(null)
@@ -77,29 +86,52 @@ export function AssignSubjectsDialog({
 
   const groups = loaded?.sessionId === sessionId ? loaded.groups : null
 
-  const chosenGroups = React.useMemo(
-    () => (groups ?? []).filter((group) => group.sections.some((section) => sectionIds.includes(section.id))),
-    [groups, sectionIds],
-  )
+  /** Every ticked section, in the order the college lists them, with its group. */
+  const chosen = React.useMemo(() => {
+    const rows: { section: { id: string; name: string }; group: AssignmentOptionGroup }[] = []
+    for (const group of groups ?? []) {
+      for (const section of group.sections) {
+        if (sectionIds.includes(section.id)) rows.push({ section, group })
+      }
+    }
+    return rows
+  }, [groups, sectionIds])
 
-  // The union of what the chosen sections are taught. Two programs together
-  // offer both curricula; the server skips a pairing that does not apply.
-  const subjects = React.useMemo(() => {
-    const seen = new Map<string, string>()
-    for (const group of chosenGroups) for (const subject of group.subjects) seen.set(subject.id, subject.name)
-    return [...seen.entries()].sort((a, b) => a[1].localeCompare(b[1]))
-  }, [chosenGroups])
+  /** What one section may be given: its own curriculum, and nothing else. */
+  const subjectsFor = (group: AssignmentOptionGroup) =>
+    [...group.subjects].sort((a, b) => a.name.localeCompare(b.name))
 
-  // A subject stops being offered when the last section teaching it is
-  // unticked. Its tick is narrowed here rather than erased, so putting that
-  // section back brings the subject back ticked as it was.
-  const chosenSubjectIds = React.useMemo(
-    () => subjectIds.filter((id) => subjects.some(([subjectId]) => subjectId === id)),
-    [subjectIds, subjects],
+  // A section that has been unticked keeps nothing, and a subject that is not
+  // on a section's curriculum is dropped rather than sent to be refused.
+  const payload = React.useMemo(
+    () =>
+      chosen
+        .map(({ section, group }) => ({
+          sectionId: section.id,
+          subjectIds: (subjectsBySection[section.id] ?? []).filter((id) =>
+            group.subjects.some((subject) => subject.id === id),
+          ),
+        }))
+        .filter((entry) => entry.subjectIds.length > 0),
+    [chosen, subjectsBySection],
   )
 
   const toggle = (list: string[], id: string) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id])
-  const pairs = sectionIds.length * chosenSubjectIds.length
+  const pairs = payload.reduce((running, entry) => running + entry.subjectIds.length, 0)
+
+  /** Copies the first ticked section's subjects onto every other one. */
+  function copyFromFirst() {
+    const first = chosen[0]
+    if (!first) return
+    const wanted = subjectsBySection[first.section.id] ?? []
+    setSubjectsBySection((current) => {
+      const next = { ...current }
+      for (const { section, group } of chosen) {
+        next[section.id] = wanted.filter((id) => group.subjects.some((subject) => subject.id === id))
+      }
+      return next
+    })
+  }
 
   async function save() {
     setBusy(true)
@@ -107,8 +139,7 @@ export function AssignSubjectsDialog({
     try {
       const response = await api.post<AssignmentBulkResult>(`/api/v1/staff/${staffId}/assignments`, {
         academicSessionId: sessionId,
-        sectionIds,
-        subjectIds: chosenSubjectIds,
+        sections: payload,
       })
       setResult(response)
       if (response.created.length > 0) {
@@ -147,7 +178,7 @@ export function AssignSubjectsDialog({
                 onChange={(e) => {
                   setSessionId(e.target.value)
                   setSectionIds([])
-                  setSubjectIds([])
+                  setSubjectsBySection({})
                 }}
                 disabled={busy}
               >
@@ -216,29 +247,56 @@ export function AssignSubjectsDialog({
               </section>
 
               <section>
-                <h3 className="text-sm font-semibold">Subjects</h3>
+                <div className="flex items-baseline justify-between gap-2">
+                  <h3 className="text-sm font-semibold">Subjects, section by section</h3>
+                  {chosen.length > 1 ? (
+                    <button type="button" className="text-xs underline" disabled={busy} onClick={copyFromFirst}>
+                      same as the first
+                    </button>
+                  ) : null}
+                </div>
                 <p className="mb-2 text-xs text-foreground-muted">
-                  {sectionIds.length === 0
+                  {chosen.length === 0
                     ? 'Choose sections first — the subjects are theirs.'
-                    : chosenSubjectIds.length === 0
-                      ? 'Tick every subject this teacher takes there.'
-                      : `${chosenSubjectIds.length} chosen`}
+                    : 'They need not be the same everywhere: a teacher can take two subjects in one class and one in another.'}
                 </p>
-                <div className="max-h-72 space-y-1 overflow-y-auto rounded-lg border border-border p-3">
-                  {subjects.length === 0 ? (
-                    <p className="text-xs text-foreground-muted">
-                      {sectionIds.length === 0 ? 'Nothing to show yet.' : 'These sections have no curriculum yet.'}
-                    </p>
+                <div className="max-h-72 space-y-3 overflow-y-auto rounded-lg border border-border p-3">
+                  {chosen.length === 0 ? (
+                    <p className="text-xs text-foreground-muted">Nothing to show yet.</p>
                   ) : (
-                    subjects.map(([id, name]) => (
-                      <Checkbox
-                        key={id}
-                        label={name}
-                        checked={chosenSubjectIds.includes(id)}
-                        disabled={busy}
-                        onChange={() => setSubjectIds((chosen) => toggle(chosen, id))}
-                      />
-                    ))
+                    chosen.map(({ section, group }) => {
+                      const available = subjectsFor(group)
+                      const picked = subjectsBySection[section.id] ?? []
+                      return (
+                        <div key={section.id}>
+                          <p className="text-xs font-semibold text-foreground-muted">
+                            {group.className} · {group.divisionName} · {group.programName} · Section {section.name}
+                          </p>
+                          {available.length === 0 ? (
+                            <p className="mt-1 pl-1 text-xs text-foreground-muted">
+                              This class has no curriculum yet.
+                            </p>
+                          ) : (
+                            <div className="mt-1 space-y-1 pl-1">
+                              {available.map((subject) => (
+                                <Checkbox
+                                  key={subject.id}
+                                  label={subject.name}
+                                  checked={picked.includes(subject.id)}
+                                  disabled={busy}
+                                  onChange={() =>
+                                    setSubjectsBySection((current) => ({
+                                      ...current,
+                                      [section.id]: toggle(current[section.id] ?? [], subject.id),
+                                    }))
+                                  }
+                                />
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })
                   )}
                 </div>
               </section>

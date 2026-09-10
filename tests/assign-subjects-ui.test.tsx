@@ -104,7 +104,7 @@ describe('assigning subjects to a teacher', () => {
     expect(screen.queryByRole('checkbox', { name: 'Biology' })).toBeNull()
   })
 
-  it('offers the union of the curricula when sections from two programs are ticked', async () => {
+  it('offers each ticked section its own curriculum, separately', async () => {
     const user = userEvent.setup()
     open()
     await screen.findByText('1st Year · Girls · Pre-Medical')
@@ -114,9 +114,52 @@ describe('assigning subjects to a teacher', () => {
     expect(screen.queryByRole('checkbox', { name: 'Computer' })).toBeNull()
 
     await user.click(screen.getAllByRole('checkbox', { name: /Section A/ })[1]!)
-    expect(tick('Computer')).toBeTruthy()
-    // English is on both curricula and must appear once, not twice.
-    expect(screen.getAllByRole('checkbox', { name: 'English' })).toHaveLength(1)
+    // English is on both curricula, so it appears once under each section
+    // rather than once for the pair — the subjects are chosen per section.
+    expect(screen.getAllByRole('checkbox', { name: 'English' })).toHaveLength(2)
+    expect(screen.getAllByRole('checkbox', { name: 'Computer' })).toHaveLength(1)
+  })
+
+  it('lets a teacher take two subjects in one class and one in another', async () => {
+    // The college's own case: English and Urdu in one class, English alone in
+    // the next, where the other subject belongs to somebody else.
+    const user = userEvent.setup()
+    post.mockResolvedValue({ created: [], alreadyHeld: [], refused: [] })
+    open()
+    await screen.findByText('1st Year · Girls · Pre-Medical')
+
+    for (const box of screen.getAllByRole('checkbox', { name: /Section A/ })) await user.click(box)
+
+    const [bio] = screen.getAllByRole('checkbox', { name: 'Biology' })
+    const [firstEnglish, secondEnglish] = screen.getAllByRole('checkbox', { name: 'English' })
+    await user.click(bio!)
+    await user.click(firstEnglish!)
+    await user.click(secondEnglish!)
+
+    expect(screen.getByText('3 assignments will be made.')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Assign' }))
+
+    await waitFor(() => expect(post).toHaveBeenCalled())
+    expect(post.mock.calls[0]![1]).toEqual({
+      academicSessionId: 'session-1',
+      sections: [
+        { sectionId: 's1', subjectIds: ['sub-bio', 'sub-eng'] },
+        { sectionId: 's2', subjectIds: ['sub-eng'] },
+      ],
+    })
+  })
+
+  it('copies the first section’s subjects onto the rest when asked', async () => {
+    const user = userEvent.setup()
+    open()
+    await screen.findByText('1st Year · Girls · Pre-Medical')
+
+    for (const box of screen.getAllByRole('checkbox', { name: /Section A/ })) await user.click(box)
+    await user.click(screen.getAllByRole('checkbox', { name: 'English' })[0]!)
+    expect(screen.getByText('1 assignment will be made.')).toBeTruthy()
+
+    await user.click(screen.getByRole('button', { name: 'same as the first' }))
+    expect(screen.getByText('2 assignments will be made.')).toBeTruthy()
   })
 
   it('says how many assignments the save will make before making them', async () => {
@@ -125,12 +168,12 @@ describe('assigning subjects to a teacher', () => {
     await screen.findByText('1st Year · Girls · Pre-Medical')
     expect(screen.getByText('Nothing chosen yet.')).toBeTruthy()
 
-    for (const box of screen.getAllByRole('checkbox', { name: /Section A/ })) await user.click(box)
+    await user.click(screen.getAllByRole('checkbox', { name: /Section A/ })[0]!)
     await user.click(tick('English'))
-    expect(screen.getByText('2 assignments will be made.')).toBeTruthy()
+    expect(screen.getByText('1 assignment will be made.')).toBeTruthy()
 
     await user.click(tick('Biology'))
-    expect(screen.getByText('4 assignments will be made.')).toBeTruthy()
+    expect(screen.getByText('2 assignments will be made.')).toBeTruthy()
   })
 
   it('cannot be saved with nothing chosen', async () => {
@@ -139,7 +182,7 @@ describe('assigning subjects to a teacher', () => {
     expect(screen.getByRole('button', { name: 'Assign' }).hasAttribute('disabled')).toBe(true)
   })
 
-  it('sends the ticked sections and subjects, and nothing else', async () => {
+  it('sends only the pairings that were ticked, and nothing else', async () => {
     const user = userEvent.setup()
     post.mockResolvedValue({ created: ['1st Year · Girls · Pre-Medical · Section A · Biology'], alreadyHeld: [], refused: [] })
     open()
@@ -153,8 +196,7 @@ describe('assigning subjects to a teacher', () => {
     expect(post.mock.calls[0]![0]).toBe('/api/v1/staff/staff-1/assignments')
     expect(post.mock.calls[0]![1]).toEqual({
       academicSessionId: 'session-1',
-      sectionIds: ['s1'],
-      subjectIds: ['sub-bio'],
+      sections: [{ sectionId: 's1', subjectIds: ['sub-bio'] }],
     })
   })
 
