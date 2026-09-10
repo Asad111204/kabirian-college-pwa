@@ -145,6 +145,36 @@ export const timetableSlotUpdateSchema = z.object({
 export type TimetableSlotUpdateInput = z.infer<typeof timetableSlotUpdateSchema>
 
 /**
+ * Copying one day of the week onto others.
+ *
+ * A college week repeats: Monday, Wednesday and Friday are often the same day
+ * three times over, and typing it out three times is both a chore and three
+ * chances to get it wrong.
+ *
+ * `replace` is deliberate rather than assumed. Copying onto a day that already
+ * has lessons is refused unless the office says to overwrite it, because
+ * quietly discarding somebody's afternoon would be worse than making them
+ * press the button twice.
+ */
+export const timetableCopyDaySchema = z
+  .object({
+    sectionId: uuid,
+    fromDay: dayOfWeek,
+    toDays: z
+      .array(dayOfWeek)
+      .min(1, 'Choose at least one day to copy on to.')
+      .max(TIMETABLE_DAYS.length, 'That is more days than the college week has.'),
+    /** Clear each target day first. Without it, a day with lessons is refused. */
+    replace: z.boolean().default(false),
+  })
+  .refine((data) => !data.toDays.includes(data.fromDay), {
+    message: 'A day cannot be copied onto itself.',
+    path: ['toDays'],
+  })
+
+export type TimetableCopyDayInput = z.infer<typeof timetableCopyDaySchema>
+
+/**
  * What the office is looking at.
  *
  * The session is required: a timetable only means anything inside one. Section

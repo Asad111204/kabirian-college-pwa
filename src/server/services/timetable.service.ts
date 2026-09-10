@@ -45,9 +45,11 @@ import {
   type TimetableSlotFacts,
 } from '../timetable/timetable-policy'
 import { assertAdminArea, withUniqueConstraintHandling } from './service-utils'
+import { DAY_LABEL } from '@/validation/timetable'
 import type {
   DayOfWeekValue,
   MyTimetableQuery,
+  TimetableCopyDayInput,
   TimetableListQuery,
   TimetableSlotCreateInput,
   TimetableSlotUpdateInput,
@@ -861,6 +863,162 @@ export async function updateTimetableSlot(
  * — and because the section's uniqueness index only counts ACTIVE rows, the
  * cell is genuinely free again afterwards.
  */
+/** What one copy of a day did, day by day. */
+export interface CopyDayResult {
+  /** Lessons written, across every target day. */
+  copied: number
+  /** Lessons removed to make room, when the office asked to replace. */
+  cleared: number
+  /** A line for each lesson that could not be copied, and why. */
+  skipped: string[]
+  /** Target days that already had lessons and were left alone. */
+  occupied: DayOfWeekValue[]
+}
+
+/**
+ * Copies one day of a section's week onto other days.
+ *
+ * A college week repeats — Monday, Wednesday and Friday are often the same day
+ * three times — and typing it out three times is a chore and three chances to
+ * get it wrong.
+ *
+ * Three things worth knowing about what this does:
+ *
+ *   - **A lesson shared with other sections is copied whole.** It is one
+ *     lesson covering several sections, so the copy covers them too. Copying
+ *     Monday for 1st Year Girls Bio also gives Wednesday to whoever sits with
+ *     them, because that is what the lesson says.
+ *   - **Every copy is checked like any other lesson.** The teacher may already
+ *     be busy on Wednesday, or the room taken. Those are reported by name and
+ *     the rest of the day is still copied — a half-copied day the office can
+ *     see is better than a refusal it has to unpick.
+ *   - **A day with lessons in it is left alone** unless the office asked to
+ *     replace it. Quietly discarding somebody's afternoon would be worse than
+ *     making them press the button twice.
+ */
+export async function copyTimetableDay(ctx: AuthContext, input: TimetableCopyDayInput): Promise<CopyDayResult> {
+  requireTimetableAdmin(ctx, 'timetable.manage')
+
+  const section = await loadSection(input.sectionId)
+  const result: CopyDayResult = { copied: 0, cleared: 0, skipped: [], occupied: [] }
+
+  const source = await prisma.timetableSlot.findMany({
+    where: {
+      academicSessionId: section.academicSessionId,
+      dayOfWeek: input.fromDay,
+      isActive: true,
+      sections: { some: { sectionId: section.id, isActive: true } },
+    },
+    include: SLOT_INCLUDE,
+    orderBy: { period: 'asc' },
+  })
+
+  if (source.length === 0) {
+    throw new ConflictError(`There is nothing on ${DAY_LABEL[input.fromDay]} to copy.`, {
+      fromDay: ['This day has no lessons in it.'],
+    })
+  }
+
+  const periods = await getCollegePeriods()
+
+  for (const day of input.toDays) {
+    const existing = await prisma.timetableSlot.findMany({
+      where: {
+        academicSessionId: section.academicSessionId,
+        dayOfWeek: day,
+        isActive: true,
+        sections: { some: { sectionId: section.id, isActive: true } },
+      },
+      select: { id: true },
+    })
+
+    if (existing.length > 0 && !input.replace) {
+      result.occupied.push(day)
+      continue
+    }
+
+    // Cleared the same way a lesson is removed by hand: the slot and its
+    // section rows together, or the dead rows go on holding the cell.
+    if (existing.length > 0) {
+      const ids = existing.map((slot) => slot.id)
+      await prisma.$transaction([
+        prisma.timetableSlotSection.updateMany({ where: { slotId: { in: ids } }, data: { isActive: false } }),
+        prisma.timetableSlot.updateMany({
+          where: { id: { in: ids } },
+          data: { isActive: false, updatedByUserId: ctx.userId },
+        }),
+      ])
+      result.cleared += ids.length
+    }
+
+    for (const lesson of source) {
+      const sectionIds = lesson.sections.map((row) => row.sectionId)
+      const sections = await loadSections(sectionIds)
+
+      const proposed: ProposedSlot = {
+        academicSessionId: lesson.academicSessionId,
+        sectionIds,
+        subjectId: lesson.subjectId,
+        staffId: lesson.staffId,
+        room: lesson.room,
+        dayOfWeek: day,
+        period: lesson.period,
+      }
+
+      try {
+        await assertLessonIsAllowed(sections, proposed, lesson.subjectId)
+      } catch (error) {
+        const why = error instanceof Error ? error.message : 'it could not be placed'
+        result.skipped.push(
+          `${DAY_LABEL[day]}, period ${lesson.period}: ${lesson.subject.name} with ${lesson.staff.fullName} — ${why}`,
+        )
+        continue
+      }
+
+      await prisma.timetableSlot.create({
+        data: {
+          academicSessionId: lesson.academicSessionId,
+          subjectId: lesson.subjectId,
+          staffId: lesson.staffId,
+          dayOfWeek: day,
+          period: lesson.period,
+          room: lesson.room,
+          createdByUserId: ctx.userId,
+          updatedByUserId: ctx.userId,
+          sections: {
+            create: sections.map((each) => ({
+              sectionId: each.id,
+              academicSessionId: each.academicSessionId,
+              subjectId: lesson.subjectId,
+              dayOfWeek: day,
+              period: lesson.period,
+            })),
+          },
+        },
+      })
+      result.copied += 1
+    }
+  }
+
+  if (result.copied > 0 || result.cleared > 0) {
+    await writeAuditLog(ctx, {
+      action: 'timetable_day.copied',
+      entityType: 'timetable_slot',
+      entityLabel: `${toSectionSummary(section).sectionName} · ${DAY_LABEL[input.fromDay]} → ${input.toDays.map((day) => DAY_LABEL[day]).join(', ')}`,
+      metadata: {
+        fromDay: input.fromDay,
+        toDays: input.toDays,
+        copied: result.copied,
+        cleared: result.cleared,
+        skipped: result.skipped.length,
+        periods: periods.length,
+      },
+    })
+  }
+
+  return result
+}
+
 export async function deactivateTimetableSlot(ctx: AuthContext, slotId: string): Promise<void> {
   requireTimetableAdmin(ctx, 'timetable.manage')
 

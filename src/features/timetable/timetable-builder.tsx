@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { CalendarDays, Pencil, Plus, Trash2 } from 'lucide-react'
+import { CalendarDays, Copy as CopyIcon, Pencil, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -15,6 +15,7 @@ import type {
 } from '@/server/services/timetable.service'
 import { DAY_LABEL, TIMETABLE_DAYS, type DayOfWeekValue } from '@/validation/timetable'
 import { DeactivateSlotDialog } from './deactivate-slot-dialog'
+import { CopyDayDialog } from './copy-day-dialog'
 import { SlotFormDialog, type SlotTarget } from './slot-form-dialog'
 
 /**
@@ -43,6 +44,7 @@ export function TimetableBuilder({ initialOptions }: { initialOptions: Timetable
   const [loadingTimetable, setLoadingTimetable] = React.useState(false)
   const [loadError, setLoadError] = React.useState<string | null>(null)
 
+  const [copying, setCopying] = React.useState(false)
   const [formTarget, setFormTarget] = React.useState<SlotTarget | null>(null)
   const [toDeactivate, setToDeactivate] = React.useState<{
     slot: TimetableSlotRow
@@ -205,6 +207,15 @@ export function TimetableBuilder({ initialOptions }: { initialOptions: Timetable
             </Alert>
           ) : null}
 
+          {/* A college week repeats, so one day can be written once and put
+              on the others rather than typed out three times. */}
+          <div className="mb-3 flex justify-end">
+            <Button variant="secondary" size="sm" onClick={() => setCopying(true)}>
+              <CopyIcon className="h-4 w-4" aria-hidden />
+              Copy a day
+            </Button>
+          </div>
+
           <div className="scroll-x overflow-x-auto">
             <table className="w-full min-w-[56rem] border-collapse text-sm">
               <caption className="sr-only">
@@ -336,6 +347,14 @@ export function TimetableBuilder({ initialOptions }: { initialOptions: Timetable
               </tbody>
             </table>
           </div>
+
+          <CopyDayDialog
+            open={copying}
+            onOpenChange={setCopying}
+            sectionId={timetable.section.sectionId}
+            sectionLabel={`${timetable.section.className} · ${timetable.section.divisionName} · ${timetable.section.programName} · Section ${timetable.section.sectionName}`}
+            onCopied={refresh}
+          />
 
           <SlotFormDialog
             open={formTarget !== null}
