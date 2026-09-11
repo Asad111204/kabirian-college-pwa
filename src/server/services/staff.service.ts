@@ -734,6 +734,13 @@ export async function setStaffStatus(
  * Checks, in order: the staff member exists and is active; they are teaching
  * staff; the section really belongs to the chosen class, division, program and
  * session; and the subject is actually part of that group's curriculum.
+ *
+ * **Staff type is not one of the checks.** It used to be — only TEACHING staff
+ * could hold a subject — and the college ran straight into the case it was
+ * wrong for: a member of staff who runs the office *and* teaches two classes.
+ * Relabelling her as Teaching to get past the rule would have made the staff
+ * list say something untrue about her job. The type is a description of what
+ * somebody does, not a permission, so it no longer decides this.
  */
 export async function createAssignment(
   ctx: AuthContext,
@@ -746,12 +753,6 @@ export async function createAssignment(
   const staff = await prisma.staff.findFirst({ where: { id: staffId, deletedAt: null } })
   if (!staff) throw new NotFoundError('staff member')
   assertEmployable(staff)
-
-  if (staff.staffType !== 'TEACHING') {
-    throw new ConflictError(
-      `${staff.fullName} is recorded as ${staff.staffType.toLowerCase()} staff. Change their staff type to Teaching before assigning subjects.`,
-    )
-  }
 
   const section = await resolveSection(input)
   const group = section.academicGroup
@@ -858,12 +859,6 @@ export async function createAssignments(
   const staff = await prisma.staff.findFirst({ where: { id: staffId, deletedAt: null } })
   if (!staff) throw new NotFoundError('staff member')
   assertEmployable(staff)
-
-  if (staff.staffType !== 'TEACHING') {
-    throw new ConflictError(
-      `${staff.fullName} is recorded as ${staff.staffType.toLowerCase()} staff. Change their staff type to Teaching before assigning subjects.`,
-    )
-  }
 
   // Each section brings its own list of subjects, because a teacher's subjects
   // are not the same in every class: English and Urdu in one, English alone in

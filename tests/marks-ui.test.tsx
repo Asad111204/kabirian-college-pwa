@@ -183,9 +183,60 @@ describe('the teacher’s paper list', () => {
     render(<MyPapers papers={[paper()]} />)
     expect(screen.getByText('First Term Examination 2026')).toBeTruthy()
     expect(screen.getByText('Biology')).toBeTruthy()
-    expect(screen.getByText(/1st Year · Boys · A/)).toBeTruthy()
+    expect(screen.getByText(/1st Year · Boys · Pre-Medical · Section A/)).toBeTruthy()
     expect(screen.getByText('Not started')).toBeTruthy()
     expect(screen.getByText('30 students')).toBeTruthy()
+  })
+
+  it('names the program, so two sections that differ only by it can be told apart', () => {
+    render(
+      <MyPapers
+        papers={[
+          paper({ sectionId: 'section-1', sectionName: 'A', programName: 'Pre-Medical' }),
+          paper({ sectionId: 'section-2', sectionName: 'A', programName: 'ICS', examPaperId: 'paper-2' }),
+        ]}
+      />,
+    )
+    expect(screen.getByText(/Pre-Medical · Section A/)).toBeTruthy()
+    expect(screen.getByText(/ICS · Section A/)).toBeTruthy()
+  })
+
+  it('leaves out a section with no students, and says how many it left out', () => {
+    render(
+      <MyPapers
+        papers={[
+          paper({ sectionId: 'section-1', sectionName: 'A', studentCount: 30 }),
+          paper({ sectionId: 'section-2', sectionName: 'B', studentCount: 0, examPaperId: 'paper-2' }),
+        ]}
+      />,
+    )
+    expect(screen.getByText(/Section A/)).toBeTruthy()
+    expect(screen.queryByText(/Section B/)).toBeNull()
+    expect(screen.getByText(/1 section you teach has no students enrolled/)).toBeTruthy()
+  })
+
+  it('counts a section once however many of its papers are empty', () => {
+    render(
+      <MyPapers
+        papers={[
+          paper({ sectionId: 'section-1', studentCount: 30 }),
+          paper({ sectionId: 'section-9', studentCount: 0, examPaperId: 'p1', subjectName: 'Biology' }),
+          paper({ sectionId: 'section-9', studentCount: 0, examPaperId: 'p2', subjectName: 'Chemistry' }),
+        ]}
+      />,
+    )
+    expect(screen.getByText(/1 section you teach has no students/)).toBeTruthy()
+  })
+
+  it('says nothing about empty sections when every section has students', () => {
+    render(<MyPapers papers={[paper()]} />)
+    expect(screen.queryByText(/no students enrolled/)).toBeNull()
+  })
+
+  it('explains an empty list differently when it is empty because nobody is enrolled', () => {
+    render(<MyPapers papers={[paper({ studentCount: 0 })]} />)
+    expect(screen.getByText('No papers to mark')).toBeTruthy()
+    expect(screen.getByText(/no students enrolled, so there is nothing to mark/)).toBeTruthy()
   })
 
   it('offers to continue a draft and only to view a submitted sheet', () => {

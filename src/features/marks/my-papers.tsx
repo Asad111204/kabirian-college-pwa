@@ -20,6 +20,13 @@ import { MarkSheetStatusBadge, progressLabel } from './shared'
  * teach it in. Nothing else appears: the list is built from their own ACTIVE
  * teaching assignments, and the server checks the same assignment again when a
  * sheet is opened, so the screen is a convenience rather than the boundary.
+ *
+ * **A section with nobody in it is left out.** There is no mark sheet to fill
+ * for a section with no active enrolments, and the college's structure carries
+ * several sections that exist on paper and hold no students — which read as
+ * duplicates of the ones that do. They are counted and the count is said out
+ * loud, so a teacher looking for a missing class is told why rather than left
+ * to wonder.
  */
 export function MyPapers({ papers }: { papers: MyPaperOption[] }) {
   const router = useRouter()
@@ -43,13 +50,22 @@ export function MyPapers({ papers }: { papers: MyPaperOption[] }) {
     }
   }
 
-  if (papers.length === 0) {
+  const markable = papers.filter((paper) => paper.studentCount > 0)
+  const emptySections = new Set(
+    papers.filter((paper) => paper.studentCount === 0).map((paper) => paper.sectionId),
+  ).size
+
+  if (markable.length === 0) {
     return (
       <Card>
         <EmptyState
           icon={BookOpen}
           title="No papers to mark"
-          description="Papers appear here once the office publishes a date sheet for an exam covering a subject you teach. If you think one is missing, ask the office to check your teaching assignments."
+          description={
+            emptySections > 0
+              ? 'The papers you teach are all for sections with no students enrolled, so there is nothing to mark. Ask the office to check the enrolments.'
+              : 'Papers appear here once the office publishes a date sheet for an exam covering a subject you teach. If you think one is missing, ask the office to check your teaching assignments.'
+          }
         />
       </Card>
     )
@@ -58,7 +74,7 @@ export function MyPapers({ papers }: { papers: MyPaperOption[] }) {
   // Grouped by exam, because a teacher thinks in terms of "First Term", not a
   // flat list of papers.
   const byExam = new Map<string, MyPaperOption[]>()
-  for (const paper of papers) {
+  for (const paper of markable) {
     const list = byExam.get(paper.examId) ?? []
     list.push(paper)
     byExam.set(paper.examId, list)
@@ -100,7 +116,9 @@ export function MyPapers({ papers }: { papers: MyPaperOption[] }) {
                       <TR key={key}>
                         <TD className="font-medium">{paper.subjectName}</TD>
                         <TD>
-                          {paper.className} · {paper.divisionName} · {paper.sectionName}
+                          {paper.className} · {paper.divisionName}
+                          {paper.programName ? ` · ${paper.programName}` : ''} · Section{' '}
+                          {paper.sectionName}
                           <span className="block text-xs text-foreground-muted sm:hidden">
                             {formatExamDate(paper.examDate)}
                           </span>
@@ -150,6 +168,14 @@ export function MyPapers({ papers }: { papers: MyPaperOption[] }) {
           </Card>
         )
       })}
+
+      {emptySections > 0 ? (
+        <p className="px-1 text-xs text-foreground-subtle">
+          {emptySections} section{emptySections === 1 ? '' : 's'} you teach{' '}
+          {emptySections === 1 ? 'has' : 'have'} no students enrolled, so{' '}
+          {emptySections === 1 ? 'it is' : 'they are'} not listed here.
+        </p>
+      ) : null}
     </div>
   )
 }

@@ -137,7 +137,12 @@ check('…including the "Others" line, in the office’s words', r.data?.lines?.
 r = await call('admin', 'PUT', `/api/v1/students/${ids.student}/fee-plan`, { academicSessionId: ids.session, lines: [{ head: 'TUITION', amountPaisa: '1000' }] })
 check('changing the fee afterwards is allowed', r.status === 200, String(r.status))
 r = await get('admin', `/api/v1/fees/vouchers/${voucher.id}`)
-check('…and does not rewrite the voucher already issued', r.status === 200 && r.data.grossPaisa === RS(37000) && r.data.lines.length === 3, `${r.data?.grossPaisa}`)
+check(
+  '…and the voucher already issued follows it, head for head',
+  r.status === 200 && r.data.grossPaisa === RS(1000) && r.data.lines.length === 1,
+  `${r.data?.grossPaisa} lines=${r.data?.lines?.length}`,
+)
+check('…keeping the number the family quotes', r.data?.voucherNumber === voucher.voucherNumber, r.data?.voucherNumber)
 await call('admin', 'PUT', `/api/v1/students/${ids.student}/fee-plan`, {
   academicSessionId: ids.session,
   lines: [
@@ -231,6 +236,83 @@ for (const who of ['teacher', 'student', 'nobody']) {
   r = await get(who, '/admin/fees')
   check(`${who} is sent away from the office’s fee page`, r.status === 307, String(r.status))
 }
+
+/*
+ * Adding a fund to a student who has already been billed and has already paid.
+ *
+ * This is the college's own case: the intake was migrated with its vouchers
+ * already issued, and a fund decided afterwards has to reach the bill the
+ * family is handed or it is never collected. Last in the file, so nothing
+ * above has to be reasoned about twice.
+ */
+console.log('\nA fund added after the voucher went out\n' + '-'.repeat(52))
+
+r = await get('admin', `/api/v1/fees/vouchers/${voucher.id}`)
+const beforeAdd = {
+  number: r.data?.voucherNumber,
+  gross: r.data?.grossPaisa,
+  paid: r.data?.paidPaisa,
+  outstanding: r.data?.outstandingPaisa,
+  payments: (r.data?.payments ?? []).length,
+}
+check(
+  'the student has a voucher with money already against it',
+  beforeAdd.paid === RS(24500) && beforeAdd.outstanding === RS(10000),
+  JSON.stringify(beforeAdd),
+)
+
+r = await call('admin', 'PUT', `/api/v1/students/${ids.student}/fee-plan`, {
+  academicSessionId: ids.session,
+  lines: [
+    { head: 'TUITION', amountPaisa: '30000' },
+    { head: 'ANNUAL_FUNDS', amountPaisa: '5000' },
+    { head: 'OTHER', label: 'Hostel', amountPaisa: '2000' },
+    { head: 'EVENTS_FUNDS', amountPaisa: '1200' },
+  ],
+  feeDiscountPaisa: '2500',
+})
+check('the office adds an events fund to the year', r.status === 200 && r.data?.totalPaisa === RS(38200), `${r.status} ${r.data?.totalPaisa}`)
+
+r = await get('admin', `/api/v1/fees/vouchers/${voucher.id}`)
+check('the fund is on the voucher', r.status === 200 && r.data.lines.length === 4 && r.data.lines.some((l) => l.head === 'EVENTS_FUNDS'), `${r.data?.lines?.length}`)
+check('…the year charged is 38,200 less the 2,500 concession', r.data?.grossPaisa === RS(38200) && r.data?.netPayablePaisa === RS(35700), JSON.stringify({ g: r.data?.grossPaisa, n: r.data?.netPayablePaisa }))
+check('…what was paid is untouched', r.data?.paidPaisa === beforeAdd.paid && (r.data?.payments ?? []).length === beforeAdd.payments, JSON.stringify({ p: r.data?.paidPaisa, n: r.data?.payments?.length }))
+check('…what is left has gone up by the fund, to the rupee', r.data?.outstandingPaisa === RS(11200), String(r.data?.outstandingPaisa))
+check('…and the number the family quotes has not changed', r.data?.voucherNumber === beforeAdd.number, r.data?.voucherNumber)
+check('…and it is still part paid rather than settled', r.data?.status === 'PARTIALLY_PAID', r.data?.status)
+
+r = await get('admin', `/api/v1/fees/vouchers/${voucher.id}`)
+check('the new head is named as the office reads it', r.data?.lines?.some((l) => l.name === 'Events funds'), JSON.stringify(r.data?.lines?.map((l) => l.name)))
+
+r = await get('student', `/api/v1/fees/vouchers/${voucher.id}`)
+check('the family sees the new amount on their own voucher', r.status === 200 && r.data?.outstandingPaisa === RS(11200), `${r.status} ${r.data?.outstandingPaisa}`)
+
+r = await get('admin', '/api/v1/audit?action=fee_voucher.rebilled')
+check('the change to the voucher is audited', r.status === 200 && (r.data?.total ?? 0) >= 1, String(r.data?.total))
+r = await get('admin', `/api/v1/audit/${r.data?.items?.[0]?.id}`)
+check(
+  '…naming what was charged before and after',
+  (r.data?.changes ?? []).some((c) => /gross/i.test(c.field)),
+  JSON.stringify((r.data?.changes ?? []).map((c) => c.field)),
+)
+
+// Taking a head away again works the same way, so the office can undo a
+// mistake without cancelling a voucher that has money on it.
+r = await call('admin', 'PUT', `/api/v1/students/${ids.student}/fee-plan`, {
+  academicSessionId: ids.session,
+  lines: [
+    { head: 'TUITION', amountPaisa: '30000' },
+    { head: 'ANNUAL_FUNDS', amountPaisa: '5000' },
+    { head: 'OTHER', label: 'Hostel', amountPaisa: '2000' },
+  ],
+  feeDiscountPaisa: '2500',
+})
+r = await get('admin', `/api/v1/fees/vouchers/${voucher.id}`)
+check('removing it again puts the voucher back', r.data?.grossPaisa === RS(37000) && r.data?.lines?.length === 3, JSON.stringify({ g: r.data?.grossPaisa, l: r.data?.lines?.length }))
+check('…with the payments still on it', r.data?.paidPaisa === beforeAdd.paid && r.data?.outstandingPaisa === RS(10000), JSON.stringify({ p: r.data?.paidPaisa, o: r.data?.outstandingPaisa }))
+
+r = await call('admin', 'POST', `/api/v1/fees/vouchers/${voucher.id}/cancel`, { reason: 'To prove a withdrawn voucher is left alone' })
+check('a voucher with money on it still cannot be cancelled', r.status === 409, String(r.status))
 
 console.log(`\n${pass} passed, ${fail} failed`)
 if (fail) {

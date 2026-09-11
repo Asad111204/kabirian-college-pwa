@@ -327,6 +327,7 @@ const ACTION_DESCRIPTIONS: Record<string, string> = {
   'fee_package.updated': 'changed the fee package',
   'student.fee_plan_set': 'set the fee plan for',
   'fee_voucher.issued': 'issued fee vouchers for',
+  'fee_voucher.rebilled': 'changed the voucher to match the year’s fee for',
   'fee_voucher.cancelled': 'cancelled the voucher',
   'fee_payment.recorded': 'recorded a fee payment for',
   'fee_payment.voided': 'voided a fee payment for',

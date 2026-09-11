@@ -226,6 +226,54 @@ r = await assign('admin', ids.staffA, {
 })
 check('one section and one subject is still accepted', r.status === 201, `${r.status} ${r.error?.message ?? ''}`)
 
+/*
+ * Staff type does not decide who may hold a subject.
+ *
+ * The college has a member of staff who runs the office and teaches two
+ * classes. She was recorded as administrative — which is true — and the rule
+ * then refused to give her any subjects. Relabelling her as teaching to get
+ * past it would have made the staff list say something false about her job.
+ */
+console.log('\nAn administrator who also teaches\n' + '-'.repeat(52))
+
+r = await call('admin', 'GET', `/api/v1/staff/${ids.staffB}`)
+const wasType = r.data?.staffType
+const restore = {
+  fullName: r.data?.fullName,
+  designationId: r.data?.designationId,
+  staffType: wasType,
+  joiningDate: String(r.data?.joiningDate ?? '').slice(0, 10),
+}
+
+r = await call('admin', 'PUT', `/api/v1/staff/${ids.staffB}`, { ...restore, staffType: 'ADMINISTRATIVE' })
+check('the office records them as administrative staff', r.status === 200 && r.data?.staffType === 'ADMINISTRATIVE', `${r.status} ${r.data?.staffType}`)
+
+// A pairing they do not already hold, so this is a real creation rather than
+// an "already held" that would pass without proving anything.
+r = await assign('admin', ids.staffB, {
+  academicSessionId: ids.session,
+  sections: [{ sectionId: ids.sec12B, subjectIds: [ids.chemistry] }],
+})
+check(
+  '…and they may still be given a subject to teach',
+  r.status === 201 && (r.data?.created ?? []).length === 1 && (r.data?.refused ?? []).length === 0,
+  `${r.status} ${r.error?.message ?? JSON.stringify(r.data?.refused ?? r.data?.created)}`,
+)
+check(
+  '…with no complaint about their staff type',
+  !/staff type/i.test(JSON.stringify({ d: r.data, e: r.error })),
+  r.error?.message ?? 'no refusal',
+)
+check(
+  '…and it is on their record',
+  (r.data?.staff?.assignments ?? []).some((a) => a.sectionId === ids.sec12B && a.isActive),
+  String((r.data?.staff?.assignments ?? []).length),
+)
+
+// Put them back, so everything after this sees the staff member it expects.
+r = await call('admin', 'PUT', `/api/v1/staff/${ids.staffB}`, restore)
+check('their type is put back for the rest of the harness', r.status === 200 && r.data?.staffType === wasType, `${r.status} ${r.data?.staffType}`)
+
 /* -------------------------------------------------------------------------- */
 
 console.log(`\n${pass} passed, ${fail} failed`)

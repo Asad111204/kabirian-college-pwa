@@ -247,9 +247,15 @@ describe('the fee on a student’s record', () => {
     expect(body.lines.map((line) => line.head)).toEqual(['TUITION', 'OTHER'])
   })
 
-  it('warns that a voucher already issued keeps what it charged', () => {
+  it('says that saving updates the voucher already issued, and keeps the payments', () => {
     render(<StudentFeePlanCard plan={{ ...plan, billed: true }} canManage />)
-    expect(screen.getByText(/frozen on it/)).toBeTruthy()
+    expect(screen.getByText(/Saving here updates it/)).toBeTruthy()
+    expect(screen.getByText(/keeps its number and every payment already recorded/)).toBeTruthy()
+  })
+
+  it('says nothing about a voucher when none has been issued yet', () => {
+    render(<StudentFeePlanCard plan={{ ...plan, billed: false }} canManage />)
+    expect(screen.queryByText(/Saving here updates it/)).toBeNull()
   })
 
   it('offers nothing to change to a reader who may only look', () => {

@@ -776,6 +776,7 @@ Everything else in §20 will proceed on the stated defaults.
 | 31 | ✅ Done (2026-09-10) | A lesson covers several sections — combined classes, elective splits and one teacher taking a subject across a year (ADR-181) |
 | 32 | ✅ Done (2026-09-10) | No break; the office sets its own period times, and a day can be copied on to other days (ADR-182) |
 | 33 | ✅ Done (2026-09-11) | Four changes the college asked for: an optional exam time (ADR-183), one temporary password (ADR-184), the register taken by the first period's teacher (ADR-185), and every student and staff detail correctable by the office (ADR-186) |
+| 34 | ✅ Done (2026-09-11) | Three more as the college uses it: the voucher follows the year's fee (ADR-187), staff type no longer decides who may teach (ADR-188), and a teacher's exam list stops repeating itself (ADR-189) |
 
 **Live database:** the college's Neon PostgreSQL instance is connected and holds the real academic structure (2026-27, 20 groups, 20 sections). All **ten** migrations are applied to it, along with the reference data (12 designations, 10 departments, **8 document types**, and the confirmed **grading scale**).
 

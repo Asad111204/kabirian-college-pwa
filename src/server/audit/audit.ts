@@ -179,6 +179,8 @@ export type AuditAction =
   | 'fee_package.updated'
   | 'student.fee_plan_set'
   | 'fee_voucher.issued'
+  /// The year's fee changed, so the voucher already issued for it was changed to match.
+  | 'fee_voucher.rebilled'
   | 'fee_voucher.cancelled'
   | 'fee_payment.recorded'
   | 'fee_payment.voided'

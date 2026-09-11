@@ -18,8 +18,10 @@ import { FeeLinesEditor, feeLinesPayload, type FeeLineDraft } from './fee-lines-
  * head, and their own concession on top.
  *
  * The college charges by the year and a family pays in instalments, so these
- * are annual amounts. Changing them does not touch a voucher already issued:
- * what that charged is frozen on it.
+ * are annual amounts — and the year's voucher follows them. Adding a fund to a
+ * student who has already been billed adds it to the bill the family is
+ * handed; the voucher keeps its number, its due date and every payment already
+ * recorded against it.
  */
 export function StudentFeePlanCard({ plan, canManage }: { plan: StudentFeePlanView; canManage: boolean }) {
   const router = useRouter()
@@ -82,8 +84,9 @@ export function StudentFeePlanCard({ plan, canManage }: { plan: StudentFeePlanVi
       <CardContent>
         {plan.billed ? (
           <Alert variant="info" className="mb-4">
-            A voucher has already been issued for {plan.academicSessionName}. Changing these amounts does not change it — what it charged is
-            frozen on it. Cancel and reissue the voucher if the year&apos;s fee is genuinely wrong.
+            A voucher has already been issued for {plan.academicSessionName}. Saving here updates it:
+            the voucher keeps its number and every payment already recorded, and what is left to pay
+            is worked out again. Nothing that has been received is lost.
           </Alert>
         ) : null}
 

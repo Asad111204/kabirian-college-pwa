@@ -3229,3 +3229,65 @@ That is not a theory: the first version of these screens put the helpers beside 
 **Alternatives.** *An inline edit on the profile page* — fewer clicks, but the office would be editing twenty-odd fields in a page that also carries fee plans, documents and a danger zone, with no single Save. *A partial update (`PATCH`) that sends only what changed* — appealing, and wrong here: the whole-record `PUT` means a field cleared on screen is cleared in the database, which is how the office removes a guardian's phone number that is no longer valid. The harness checks that a field left out is cleared rather than quietly kept.
 
 **Consequences.** Every field the college records can now be corrected by the office, and every correction has a name and a time against it. The admission form gained a Notes box it had always been sending.
+
+---
+
+## ADR-187 · The voucher follows the year's fee
+
+**Status:** Accepted · 2026-09-11 · Phase 34 · revises [ADR-177](#adr-177--the-fee-is-annual-paid-in-instalments-and-made-of-optional-heads)
+
+**Context.** A voucher's lines were frozen at the moment it was issued, and `setStudentFeePlan` said so in as many words: *"Changing these amounts does not change it — what it charged is frozen on it. Cancel and reissue the voucher if the year's fee is genuinely wrong."*
+
+That reasoning holds for a voucher belonging to a *different* year. It does not hold for the year in front of you, and the college walked straight into the difference. The whole intake was migrated with its vouchers already issued; the office then decided on further funds, added them to each student's fee — and they appeared nowhere on the bill the family is handed. The advice to cancel and reissue is no advice at all: a voucher with money against it **cannot** be cancelled, which is correct, and that is every student who has paid anything.
+
+**Decision.** Saving a student's fee updates the live voucher for that session to match, line for line.
+
+What is **kept**: the voucher's number, so a family quoting it still finds the right bill; its due date; and every payment ever recorded against it. What *changes* is only what is charged — the lines, the gross, and the concession — after which the status and any late fine are worked out again from the amounts now on the row. A part-paid voucher that grows stays part paid; one that shrinks below what has been received reads as settled, with the excess visible as an overpayment rather than swallowed.
+
+A **cancelled** voucher is left alone. The office withdrew it deliberately and nothing here should quietly bring it back.
+
+**A voucher is the bill for its year, not a receipt of a decision.** That is the idea the old rule got wrong. The college charges annually and the family pays in instalments against one slip; if the year's fee moves, the slip has to move, or the college is collecting against a number it no longer believes. Freezing still does the work it was for, because a voucher is tied to one academic session: next year's fee can never rewrite this year's bill.
+
+**Alternatives.** *A second voucher for the difference* — offered to the college and declined: a family holding two slips for one year is how money goes uncollected. *A "reissue" button that cancels and re-bills* — it would have to be allowed to cancel a voucher with payments on it, and then every payment would need moving across by hand. *Leaving it as it was and telling the office to void the payments first* — the college would simply stop adding funds.
+
+**Consequences.** The audit log gains `fee_voucher.rebilled`, recording what was charged before and after, separately from the fee-plan entry that caused it — one is a decision about the student, the other a change to a bill somebody is holding. The family is notified when what they owe actually moves, and not when the office saves the form having changed nothing. The office's fee card now says what saving does instead of the opposite. Sixteen checks through the production build follow one voucher from issue, through two instalments, through a fund added afterwards, to the fund being taken away again — proving at each step that the number, the payments and the arithmetic all survive.
+
+---
+
+## ADR-188 · Staff type describes the job; it does not decide who may teach
+
+**Status:** Accepted · 2026-09-11 · Phase 34
+
+**Context.** A staff record carries a type — Teaching, Administrative, Support — and `createAssignment` refused any subject to a member of staff who was not Teaching: *"Change their staff type to Teaching before assigning subjects."*
+
+The college has a member of staff who runs the office **and** teaches two classes. She is recorded as administrative, which is true. The office could not give her a single subject, and the only way past the rule was to write something false on her record.
+
+**Decision.** The refusal is gone. Any **active** staff member can be assigned subjects and made a section in-charge; the type stays as what it always described, which is the job somebody does.
+
+The type was never load-bearing. It is not a permission, it grants nothing, and it is chosen from a dropdown by whoever fills the form. Every check that matters is still there: the section must exist in the chosen session, the subject must be in that group's curriculum, the person must be employed, and the same pairing cannot be held twice. A "teaching" flag on top of those caught nothing a college would thank you for catching.
+
+**Alternatives.** *Let a staff record hold more than one type* — a bigger model for a distinction nothing consumes. *A separate "may teach" flag* — the same rule with a new name, and the office would forget to tick it for exactly the person this ADR is about.
+
+**Consequences.** The Assign button on a staff profile is now offered to any active staff member. The harness records a staff member as administrative, assigns them a subject, checks it lands on their record with no complaint about their type, and puts the type back.
+
+---
+
+## ADR-189 · One paper per section per exam on a teacher's list
+
+**Status:** Accepted · 2026-09-11 · Phase 34
+
+**Context.** Teachers reported the Exams & Marks screen showing the same class and subject several times over, some of the rows against sections with no students in them.
+
+Two separate causes, both real.
+
+**A paper may name a program or leave it blank**, and the unique index counts those as different rows — correctly, because the office may set a different maximum for ICS than for Pre-Medical. But a Pre-Medical section matches *both* the specific paper and the general one, and `getMyExamPapers` pushed a row for each. Two rows, same subject, same section, nothing on screen to tell them apart.
+
+**And the college's structure carries sections that hold no students** — created for a group that never filled, or emptied by a transfer. A teacher assigned to one got a row for a mark sheet with nobody on it.
+
+**Decision.** For each section, **the paper that names that section's program wins**; the general paper is what covers the classes nobody wrote a specific one for, so it only applies where no specific one exists. And a section with no active enrolments is **left out of the list**, with a line underneath saying how many were left out and why — a teacher hunting for a missing class is told, rather than left to wonder.
+
+The row itself now names the program, so two sections that genuinely differ only by it can be told apart at a glance.
+
+**Alternatives.** *Show both papers and let the teacher choose* — they have no way to know which the office meant. *Refuse to let the office create both* — it would break the case the nullable column exists for. *Grey the empty sections out instead of hiding them* — still four rows of noise on a phone.
+
+**Consequences.** The list is what a teacher can actually act on. The filtering that hides empty sections is done on the screen rather than in the service, so `/api/v1/marks/my-papers` still answers with everything and the count of what was hidden can be honest. Opening a sheet is unchanged and still checked on the server.

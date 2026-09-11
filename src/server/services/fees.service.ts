@@ -9,9 +9,11 @@
  *
  * Two rules run through all of it. **Every amount is whole paisa** — nothing
  * here holds a floating-point number of rupees, and the database refuses a
- * negative one. And **a voucher's amounts are frozen when it is issued**,
- * line by line: changing a student's fee for next year must not rewrite what
- * this year's family was asked for.
+ * negative one. And **a voucher is the bill for its own year**: it is tied to
+ * one academic session, so changing next year's fee never rewrites what this
+ * year's family was asked for. Changing *this* year's fee does, deliberately —
+ * see `setStudentFeePlan`. The voucher keeps its number and its payments; only
+ * what is charged moves.
  *
  * The one figure that is *not* stored is the late fine still owed today. It
  * is worked out from the due date on every read, so the numbers are right
@@ -270,19 +272,31 @@ export async function getStudentFeePlan(ctx: AuthContext, studentId: string, aca
 
 /**
  * Writes a student's fee for a year: the whole set of heads, replacing
- * whatever was there.
+ * whatever was there — **and the year's voucher with it**.
  *
  * The lines are replaced rather than merged, because the form shows every
  * head at once and an amount cleared on the screen must be a head removed in
- * the database. A voucher already issued is untouched: what it charged is
- * frozen on it.
+ * the database.
+ *
+ * **The live voucher follows the fee.** The college charges by the year and
+ * issues one voucher for it, so that voucher is the bill for the year rather
+ * than a receipt of a decision taken once. When the office adds a fund to a
+ * student who has already been billed — which is most of the college, since
+ * the intake was migrated with its vouchers already issued — the fund has to
+ * appear on the bill the family is handed, or it is never collected.
+ *
+ * What is kept: the voucher's **number**, so a family quoting it still finds
+ * the right bill; its due date; and every payment recorded against it. Only
+ * what is *charged* changes, and the amount still to come in is worked out
+ * again from it. A cancelled voucher is left alone — the office withdrew it
+ * deliberately, and nothing here should bring it back.
  */
 export async function setStudentFeePlan(ctx: AuthContext, studentId: string, input: StudentFeePlanInput): Promise<StudentFeePlanView> {
   requireOffice(ctx, 'fees.manage')
 
   const student = await prisma.student.findFirst({
     where: { id: studentId, deletedAt: null },
-    select: { id: true, fullName: true, studentCode: true, feeDiscountPaisa: true },
+    select: { id: true, fullName: true, studentCode: true, feeDiscountPaisa: true, userId: true },
   })
   if (!student) throw new NotFoundError('student')
   const session = await resolveSession(input.academicSessionId)
@@ -291,6 +305,21 @@ export async function setStudentFeePlan(ctx: AuthContext, studentId: string, inp
     where: { studentId, academicSessionId: session.id },
     select: { head: true, label: true, amountPaisa: true },
   })
+
+  const today = todayInCollegeTimezone()
+  const rules = await getFeeRules()
+
+  const gross = totalOfLines(input.lines)
+  const discount = discountFor(gross, input.feeDiscountPaisa)
+
+  interface Rebilled {
+    voucherId: string
+    voucherNumber: string
+    /** What was payable before the fee changed, and after. */
+    before: number
+    after: number
+  }
+  let rebilled: Rebilled | null = null
 
   await prisma.$transaction(async (tx) => {
     await tx.studentFeeLine.deleteMany({ where: { studentId, academicSessionId: session.id } })
@@ -320,7 +349,72 @@ export async function setStudentFeePlan(ctx: AuthContext, studentId: string, inp
       },
       tx,
     )
+
+    const live = await tx.feeVoucher.findFirst({
+      where: { studentId, academicSessionId: session.id, status: { not: 'CANCELLED' } },
+      select: { id: true, voucherNumber: true, grossPaisa: true, discountPaisa: true, lateFinePaisa: true, paidPaisa: true },
+    })
+    if (!live) return
+
+    const was = netPayable(live)
+
+    // The lines are rewritten rather than patched, for the same reason the
+    // plan's are: a head cleared on the screen has to disappear from the bill.
+    await tx.feeVoucherLine.deleteMany({ where: { voucherId: live.id } })
+    if (input.lines.length > 0) {
+      await tx.feeVoucherLine.createMany({
+        data: input.lines.map((line) => ({
+          voucherId: live.id,
+          head: line.head as FeeHeadValue,
+          label: line.head === 'OTHER' ? (line.label ?? null) : null,
+          amountPaisa: line.amountPaisa,
+        })),
+      })
+    }
+    await tx.feeVoucher.update({ where: { id: live.id }, data: { grossPaisa: gross, discountPaisa: discount } })
+
+    // Reads the row back, so the status and any late fine are settled against
+    // the amounts that are now on it rather than the ones that were.
+    await recomputeVoucher(tx, live.id, today, rules.lateFinePaisa)
+
+    await writeAuditLog(
+      ctx,
+      {
+        action: 'fee_voucher.rebilled',
+        entityType: 'fee_voucher',
+        entityId: live.id,
+        entityLabel: `${live.voucherNumber} · ${student.fullName}`,
+        before: { grossPaisa: live.grossPaisa, discountPaisa: live.discountPaisa },
+        after: { grossPaisa: gross, discountPaisa: discount },
+        metadata: { academicSession: session.name, reason: "The year's fee was changed" },
+      },
+      tx,
+    )
+
+    rebilled = {
+      voucherId: live.id,
+      voucherNumber: live.voucherNumber,
+      before: was,
+      after: netPayable({ grossPaisa: gross, discountPaisa: discount, lateFinePaisa: live.lateFinePaisa }),
+    }
   })
+
+  // Told only when what the family owes actually moved. The office often saves
+  // this form having changed nothing, or having corrected a label.
+  const change = rebilled as Rebilled | null
+  if (student.userId && change && change.after !== change.before) {
+    await notify([student.userId], {
+      kind: 'FEE',
+      title: 'Your fee voucher has changed',
+      body:
+        change.after > change.before
+          ? 'The college has added to this year’s fee. Your voucher shows what is now due.'
+          : 'The college has reduced this year’s fee. Your voucher shows what is now due.',
+      link: `/student/fees/${change.voucherId}`,
+      entityType: 'fee_voucher',
+      entityId: change.voucherId,
+    })
+  }
 
   return getStudentFeePlan(ctx, studentId, session.id)
 }

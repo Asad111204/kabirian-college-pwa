@@ -45,7 +45,6 @@ export function StaffActions({
   const [fieldErrors, setFieldErrors] = React.useState<Record<string, string[]>>({})
 
   const isActive = staff.employmentStatus === 'ACTIVE'
-  const isTeaching = staff.staffType === 'TEACHING'
 
   function close() {
     setDialog(null)
@@ -83,18 +82,16 @@ export function StaffActions({
             icon={BookOpen}
             title="Assign subjects"
             description={
-              !isTeaching
-                ? 'Only teaching staff can be assigned subjects.'
-                : !isActive
-                  ? 'Only active staff can receive new assignments.'
-                  : 'Tick the sections and the subjects; every pairing is made.'
+              isActive
+                ? 'Tick the sections and the subjects; every pairing is made.'
+                : 'Only active staff can receive new assignments.'
             }
-            disabled={!isTeaching || !isActive}
+            disabled={!isActive}
             action={
               <Button
                 variant="secondary"
                 size="sm"
-                disabled={!isTeaching || !isActive}
+                disabled={!isActive}
                 onClick={() => setDialog('assign')}
               >
                 Assign

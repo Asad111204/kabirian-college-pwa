@@ -471,12 +471,34 @@ export async function getMyExamPapers(ctx: AuthContext): Promise<MyPaperOption[]
   const options: MyPaperOption[] = []
   for (const assignment of assignments) {
     const group = assignment.section.academicGroup
+
+    /*
+     * One paper per exam and subject for this section, not two.
+     *
+     * A paper may name a program or leave it blank for every program in the
+     * class, and both can exist for the same exam, class and subject — the
+     * unique index counts them as different rows, which is right, because the
+     * office may set a different maximum for ICS than for Pre-Medical. But a
+     * Pre-Medical section matches *both*, and the teacher was then shown the
+     * same subject twice with no way to tell the rows apart.
+     *
+     * The paper that names this section's program wins. It is the more
+     * specific rule, and the general one exists only for the classes nobody
+     * has written a specific one for.
+     */
+    const bestPaper = new Map<string, (typeof papers)[number]>()
     for (const paper of papers) {
       if (paper.academicSessionId !== assignment.academicSessionId) continue
       if (paper.classId !== group.classId) continue
       if (paper.subjectId !== assignment.subjectId) continue
       if (paper.programId !== null && paper.programId !== group.programId) continue
 
+      const key = `${paper.exam.id}:${paper.subjectId}`
+      const held = bestPaper.get(key)
+      if (!held || (held.programId === null && paper.programId !== null)) bestPaper.set(key, paper)
+    }
+
+    for (const paper of bestPaper.values()) {
       options.push({
         examId: paper.exam.id,
         examName: paper.exam.name,
