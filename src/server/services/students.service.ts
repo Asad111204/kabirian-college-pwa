@@ -498,6 +498,82 @@ function toStudentData(input: StudentCreateInput | StudentUpdateInput) {
   }
 }
 
+/** A date column or an ISO string as the plain calendar date, for a snapshot. */
+function auditDate(value: Date | string | null | undefined): string | null {
+  if (!value) return null
+  return (value instanceof Date ? value.toISOString() : String(value)).slice(0, 10)
+}
+
+/**
+ * What an edit to a student writes into the audit log.
+ *
+ * Every field the office can change, so "who corrected this phone number, and
+ * when" has an answer — with one exception carved out deliberately.
+ *
+ * **The CNIC / B-Form and the father's CNIC are never written into a
+ * snapshot.** They are national identity numbers. The audit viewer would hide
+ * them on the way out (`audit-redaction.ts`), but a number that is never
+ * stored cannot leak from a table nobody thought to look at. What is recorded
+ * is whether one is **on file**, so adding or removing one still shows up;
+ * correcting one shows up as the edit itself, with its actor and its time, but
+ * without the number.
+ */
+function studentAuditSnapshot(record: {
+  fullName: string
+  admissionNumber: string
+  admissionDate: Date | string
+  dateOfBirth: Date | string | null
+  gender: string | null
+  phone: string | null
+  email: string | null
+  address: string | null
+  city: string | null
+  cnicBformNumber: string | null
+  fatherName: string
+  fatherCnic: string | null
+  fatherPhone: string | null
+  fatherOccupation: string | null
+  motherName: string | null
+  guardianName: string | null
+  guardianRelation: string | null
+  guardianPhone: string | null
+  previousInstitution: string | null
+  previousResultSummary: string | null
+  previousResultObtained: number | null
+  previousResultTotal: number | null
+  matricRollNumber: string | null
+  matricBoard: string | null
+  notes: string | null
+}) {
+  return {
+    fullName: record.fullName,
+    admissionNumber: record.admissionNumber,
+    admissionDate: auditDate(record.admissionDate),
+    dateOfBirth: auditDate(record.dateOfBirth),
+    gender: record.gender,
+    phone: record.phone,
+    email: record.email,
+    address: record.address,
+    city: record.city,
+    fatherName: record.fatherName,
+    fatherPhone: record.fatherPhone,
+    fatherOccupation: record.fatherOccupation,
+    motherName: record.motherName,
+    guardianName: record.guardianName,
+    guardianRelation: record.guardianRelation,
+    guardianPhone: record.guardianPhone,
+    previousInstitution: record.previousInstitution,
+    previousResultSummary: record.previousResultSummary,
+    previousResultObtained: record.previousResultObtained,
+    previousResultTotal: record.previousResultTotal,
+    matricRollNumber: record.matricRollNumber,
+    matricBoard: record.matricBoard,
+    notes: record.notes,
+    idNumberOnFile: record.cnicBformNumber !== null && record.cnicBformNumber !== '',
+    fatherIdNumberOnFile: record.fatherCnic !== null && record.fatherCnic !== '',
+  }
+}
+
 /**
  * Admits a student: creates the record, their first enrollment, and optionally
  * a portal login — all in one transaction, so a failure anywhere leaves nothing
@@ -699,8 +775,12 @@ export async function updateStudent(
     entityType: 'student',
     entityId: id,
     entityLabel: `${before.studentCode} ${input.fullName}`,
-    before: { fullName: before.fullName, admissionNumber: before.admissionNumber, fatherName: before.fatherName },
-    after: { fullName: input.fullName, admissionNumber: input.admissionNumber, fatherName: input.fatherName },
+    before: studentAuditSnapshot(before),
+    after: studentAuditSnapshot({
+      ...toStudentData(input),
+      admissionNumber: input.admissionNumber,
+      admissionDate: input.admissionDate,
+    }),
   })
 
   return getStudent(ctx, id)

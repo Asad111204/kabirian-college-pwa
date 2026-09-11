@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, BookOpen, Clock } from 'lucide-react'
+import { ArrowLeft, BookOpen, Clock, Pencil } from 'lucide-react'
 import { requirePortalAccess } from '@/server/auth/context'
 import { getStudent } from '@/server/services/students.service'
 import { listAcademicSessions } from '@/server/services/academic-structure.service'
@@ -93,6 +93,14 @@ export default async function StudentProfilePage({
             ) : (
               <Badge variant="neutral">No portal account</Badge>
             )}
+            {can(ctx, 'students.update') ? (
+              <Button variant="secondary" size="sm" asChild>
+                <Link href={`/admin/students/${student.id}/edit`}>
+                  <Pencil className="h-4 w-4" />
+                  Edit details
+                </Link>
+              </Button>
+            ) : null}
           </div>
         }
       />

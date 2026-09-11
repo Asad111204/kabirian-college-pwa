@@ -7,33 +7,22 @@ import { Save } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Checkbox, Field, Input, Select, Textarea } from '@/components/ui/field'
+import { Checkbox, Field, Input } from '@/components/ui/field'
 import { Alert } from '@/components/ui/feedback'
 import { api, ApiError } from '@/lib/api-client'
-import { staffCreateSchema, STAFF_TYPES, STAFF_TYPE_LABEL } from '@/validation/staff'
+import { staffCreateSchema } from '@/validation/staff'
 import { TemporaryPasswordPanel } from '@/features/users/shared'
+import { StaffDetailsFields } from './staff-details-fields'
+import { EMPTY_STAFF_DETAILS, type StaffDetailsValue } from './staff-details'
 
 interface CreatedStaff {
   staff: { id: string; staffCode: string; fullName: string }
   account?: { username: string; temporaryPassword: string }
 }
 
-const EMPTY = {
-  fullName: '',
-  fatherOrHusbandName: '',
-  dateOfBirth: '',
-  gender: '',
-  cnicNumber: '',
-  phone: '',
-  email: '',
-  address: '',
-  designationId: '',
-  departmentId: '',
-  staffType: 'TEACHING',
+const EMPTY: StaffDetailsValue = {
+  ...EMPTY_STAFF_DETAILS,
   joiningDate: new Date().toISOString().slice(0, 10),
-  qualification: '',
-  salaryPaisa: '',
-  notes: '',
 }
 
 /**
@@ -60,10 +49,6 @@ export function AddStaffForm({
   const [formError, setFormError] = React.useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = React.useState<Record<string, string[]>>({})
   const [created, setCreated] = React.useState<CreatedStaff | null>(null)
-
-  function set(field: keyof typeof EMPTY, value: string) {
-    setForm((prev) => ({ ...prev, [field]: value }))
-  }
 
   function suggestUsername(fullName: string): string {
     return fullName
@@ -157,217 +142,24 @@ export function AddStaffForm({
     <form onSubmit={handleSubmit} className="space-y-4" noValidate>
       {formError ? <Alert variant="danger">{formError}</Alert> : null}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Employment</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2">
-          <Field label="Staff ID" hint="Generated automatically when you save.">
-            <Input value={nextStaffCode ?? 'STF-…'} disabled readOnly className="font-mono" />
-          </Field>
-
-          <Field label="Joining date" htmlFor="joiningDate" required error={fieldErrors.joiningDate}>
-            <Input
-              id="joiningDate"
-              type="date"
-              value={form.joiningDate}
-              onChange={(e) => set('joiningDate', e.target.value)}
-              disabled={submitting}
-            />
-          </Field>
-
-          <Field
-            label="Designation"
-            htmlFor="designationId"
-            required
-            hint="Managed in Academic Management → Designations."
-            error={fieldErrors.designationId}
-          >
-            <Select
-              id="designationId"
-              value={form.designationId}
-              onChange={(e) => set('designationId', e.target.value)}
-              disabled={submitting}
-            >
-              <option value="">Select a designation…</option>
-              {designations.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-
-          <Field label="Department" htmlFor="departmentId" error={fieldErrors.departmentId}>
-            <Select
-              id="departmentId"
-              value={form.departmentId}
-              onChange={(e) => set('departmentId', e.target.value)}
-              disabled={submitting}
-            >
-              <option value="">No department</option>
-              {departments.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-
-          <Field
-            label="Staff type"
-            htmlFor="staffType"
-            required
-            hint="Only teaching staff can be assigned subjects."
-            error={fieldErrors.staffType}
-          >
-            <Select
-              id="staffType"
-              value={form.staffType}
-              onChange={(e) => set('staffType', e.target.value)}
-              disabled={submitting}
-            >
-              {STAFF_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {STAFF_TYPE_LABEL[t]}
-                </option>
-              ))}
-            </Select>
-          </Field>
-
-          <Field label="Qualification" htmlFor="qualification" error={fieldErrors.qualification}>
-            <Input
-              id="qualification"
-              value={form.qualification}
-              onChange={(e) => set('qualification', e.target.value)}
-              placeholder="e.g. MSc Botany"
-              disabled={submitting}
-            />
-          </Field>
-
-          <Field
-            label="Salary per month (Rs)"
-            htmlFor="salaryPaisa"
-            hint="Optional. Leave it empty if the college has not settled one."
-            error={fieldErrors.salaryPaisa}
-          >
-            <Input
-              id="salaryPaisa"
-              inputMode="decimal"
-              value={form.salaryPaisa}
-              onChange={(e) => set('salaryPaisa', e.target.value)}
-              placeholder="e.g. 45000"
-              disabled={submitting}
-            />
-          </Field>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Personal information</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2">
-          <Field label="Full name" htmlFor="fullName" required error={fieldErrors.fullName}>
-            <Input
-              id="fullName"
-              value={form.fullName}
-              onChange={(e) => {
-                set('fullName', e.target.value)
-                if (createAccount && username === suggestUsername(form.fullName)) {
-                  setUsername(suggestUsername(e.target.value))
-                }
-              }}
-              placeholder="e.g. Muhammad Ahmed"
-              disabled={submitting}
-              autoFocus
-            />
-          </Field>
-
-          <Field
-            label="Father's / husband's name"
-            htmlFor="fatherOrHusbandName"
-            error={fieldErrors.fatherOrHusbandName}
-          >
-            <Input
-              id="fatherOrHusbandName"
-              value={form.fatherOrHusbandName}
-              onChange={(e) => set('fatherOrHusbandName', e.target.value)}
-              disabled={submitting}
-            />
-          </Field>
-
-          <Field label="Date of birth" htmlFor="dateOfBirth" error={fieldErrors.dateOfBirth}>
-            <Input
-              id="dateOfBirth"
-              type="date"
-              value={form.dateOfBirth}
-              onChange={(e) => set('dateOfBirth', e.target.value)}
-              disabled={submitting}
-            />
-          </Field>
-
-          <Field label="Gender" htmlFor="gender" error={fieldErrors.gender}>
-            <Select
-              id="gender"
-              value={form.gender}
-              onChange={(e) => set('gender', e.target.value)}
-              disabled={submitting}
-            >
-              <option value="">Not specified</option>
-              <option value="MALE">Male</option>
-              <option value="FEMALE">Female</option>
-              <option value="OTHER">Other</option>
-            </Select>
-          </Field>
-
-          <Field label="CNIC" htmlFor="cnicNumber" hint="Format: 12345-1234567-1" error={fieldErrors.cnicNumber}>
-            <Input
-              id="cnicNumber"
-              value={form.cnicNumber}
-              onChange={(e) => set('cnicNumber', e.target.value)}
-              placeholder="12345-1234567-1"
-              disabled={submitting}
-            />
-          </Field>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Contact information</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2">
-          <Field label="Contact number" htmlFor="phone" hint="Format: 0300-1234567" error={fieldErrors.phone}>
-            <Input
-              id="phone"
-              value={form.phone}
-              onChange={(e) => set('phone', e.target.value)}
-              placeholder="0300-1234567"
-              disabled={submitting}
-            />
-          </Field>
-
-          <Field label="Email" htmlFor="email" error={fieldErrors.email}>
-            <Input
-              id="email"
-              type="email"
-              value={form.email}
-              onChange={(e) => set('email', e.target.value)}
-              disabled={submitting}
-            />
-          </Field>
-
-          <Field label="Address" htmlFor="address" className="sm:col-span-2" error={fieldErrors.address}>
-            <Textarea
-              id="address"
-              value={form.address}
-              onChange={(e) => set('address', e.target.value)}
-              disabled={submitting}
-            />
-          </Field>
-        </CardContent>
-      </Card>
+      <StaffDetailsFields
+        value={form}
+        onChange={(next) => {
+          // The username follows the name only while the office has not typed
+          // its own; once they have, it is theirs.
+          if (createAccount && next.fullName !== form.fullName && username === suggestUsername(form.fullName)) {
+            setUsername(suggestUsername(next.fullName))
+          }
+          setForm(next)
+        }}
+        errors={fieldErrors}
+        disabled={submitting}
+        designations={designations}
+        departments={departments}
+        staffCode={nextStaffCode ?? 'STF-…'}
+        staffCodeHint="Generated automatically when you save."
+        autoFocus
+      />
 
       <Card>
         <CardHeader>

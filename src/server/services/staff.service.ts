@@ -20,6 +20,7 @@ import { writeAuditLog } from '../audit/audit'
 import { ConflictError, NotFoundError, ValidationError } from '../api/errors'
 import { hashPassword, newTemporaryPassword } from '../auth/password'
 import { nextCode } from './code-sequence'
+import { formatPaisa } from '@/lib/money'
 import { paginate, paginatedResult, withUniqueConstraintHandling, type PaginatedResult, assertAdminArea as assertAdminAreaFor } from './service-utils'
 import type {
   AssignmentBulkCreateInput,
@@ -408,6 +409,57 @@ function toStaffData(input: StaffCreateInput | StaffUpdateInput) {
   }
 }
 
+/**
+ * What an edit to a staff record writes into the audit log.
+ *
+ * Every field the office can change, so a corrected qualification or a revised
+ * salary has an actor and a time against it. **The CNIC is never written into
+ * a snapshot** — see the note on the student equivalent; what is recorded is
+ * whether one is on file.
+ *
+ * The designation and department are recorded by **name**. Their ids would be
+ * dropped by the audit viewer as internal references, which would leave the
+ * most common staff edit of all showing nothing at all.
+ */
+function staffAuditSnapshot(record: {
+  fullName: string
+  fatherOrHusbandName: string | null
+  dateOfBirth: Date | string | null
+  gender: string | null
+  cnicNumber: string | null
+  phone: string | null
+  email: string | null
+  address: string | null
+  staffType: string
+  joiningDate: Date | string
+  qualification: string | null
+  salaryPaisa: number | null
+  notes: string | null
+  designationName: string | null
+  departmentName: string | null
+}) {
+  const date = (value: Date | string | null | undefined) =>
+    value ? (value instanceof Date ? value.toISOString() : String(value)).slice(0, 10) : null
+
+  return {
+    fullName: record.fullName,
+    fatherOrHusbandName: record.fatherOrHusbandName,
+    dateOfBirth: date(record.dateOfBirth),
+    gender: record.gender,
+    phone: record.phone,
+    email: record.email,
+    address: record.address,
+    designation: record.designationName,
+    department: record.departmentName,
+    staffType: record.staffType,
+    joiningDate: date(record.joiningDate),
+    qualification: record.qualification,
+    salary: record.salaryPaisa === null ? null : formatPaisa(record.salaryPaisa),
+    notes: record.notes,
+    idNumberOnFile: record.cnicNumber !== null && record.cnicNumber !== '',
+  }
+}
+
 export interface CreateStaffResult {
   staff: StaffDetail
   /** Present only when a portal account was created at the same time. */
@@ -539,12 +591,23 @@ export async function updateStaff(
 
   const before = await prisma.staff.findFirst({
     where: { id, deletedAt: null },
-    include: { designation: { select: { name: true } } },
+    include: {
+      designation: { select: { name: true } },
+      department: { select: { name: true } },
+    },
   })
   if (!before) throw new NotFoundError('staff member')
 
   const designation = await prisma.designation.findUnique({ where: { id: input.designationId } })
   if (!designation) throw new NotFoundError('designation')
+
+  // Recorded by name for the audit log; the id would be dropped as an
+  // internal reference, and "no department" has to be distinguishable from
+  // "a department whose name we did not look up".
+  const department = input.departmentId
+    ? await prisma.department.findUnique({ where: { id: input.departmentId }, select: { name: true } })
+    : null
+  if (input.departmentId && !department) throw new NotFoundError('department')
 
   await withUniqueConstraintHandling(
     () =>
@@ -560,8 +623,17 @@ export async function updateStaff(
     entityType: 'staff',
     entityId: id,
     entityLabel: `${before.staffCode} ${input.fullName}`,
-    before: { fullName: before.fullName, designation: before.designation.name, staffType: before.staffType },
-    after: { fullName: input.fullName, designation: designation.name, staffType: input.staffType },
+    before: staffAuditSnapshot({
+      ...before,
+      designationName: before.designation.name,
+      departmentName: before.department?.name ?? null,
+    }),
+    after: staffAuditSnapshot({
+      ...toStaffData(input),
+      joiningDate: input.joiningDate,
+      designationName: designation.name,
+      departmentName: department?.name ?? null,
+    }),
   })
 
   return getStaff(ctx, id)

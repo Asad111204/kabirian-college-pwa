@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, BookOpen, ShieldCheck, Users } from 'lucide-react'
+import { ArrowLeft, BookOpen, Pencil, ShieldCheck, Users } from 'lucide-react'
 import { requirePortalAccess } from '@/server/auth/context'
 import { getStaff } from '@/server/services/staff.service'
 import { listAcademicSessions } from '@/server/services/academic-structure.service'
@@ -87,6 +87,14 @@ export default async function StaffProfilePage({ params }: { params: Promise<{ i
             ) : (
               <Badge variant="neutral">No portal account</Badge>
             )}
+            {can(ctx, 'staff.update') ? (
+              <Button variant="secondary" size="sm" asChild>
+                <Link href={`/admin/staff/${staff.id}/edit`}>
+                  <Pencil className="h-4 w-4" />
+                  Edit details
+                </Link>
+              </Button>
+            ) : null}
           </div>
         }
       />

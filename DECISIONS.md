@@ -3195,3 +3195,37 @@ The college asked for one thing: **the teacher taking the first period of the da
 **Alternatives.** *Keep subject registers alongside the daily one* — what the college has now, and what it asked to stop: two numbers for the same student and no rule for which one counts. *Let the in-charge take every register* — simpler, and wrong for exactly the reason the college raised it: the in-charge is often not in the room at 8am, and the person who is can see who is missing. *Read the first period from the assignment list rather than the timetable* — the assignment list says who teaches what, never when.
 
 **Consequences.** The teacher's attendance screen is one card per section with a single button; there is no subject to choose, no period box and no section picker, so there is nothing to tamper with either. The office's "open a register" dialog loses its Period field for the same reason. A register from a term whose timetable has since changed can no longer be corrected by the teacher who took it — the timetable being read is today's — and that falls to the office, which is where a stale correction belongs anyway.
+
+---
+
+## ADR-186 · One set of boxes, used by both the form that creates and the form that corrects
+
+**Status:** Accepted · 2026-09-11 · Phase 33
+
+**Context.** The college asked that every detail of a student or a staff member be editable by the office. `PUT /api/v1/students/:id` and `PUT /api/v1/staff/:id` had existed since Phase 3, with their schemas and their audit entries — and **nothing in the application called either of them**. A name spelt wrong at the counter stayed wrong; a phone number that changed could not be changed.
+
+**Decision.** Two edit screens, and — the part that matters — **the fields are not written twice**. `student-details-fields.tsx` and `staff-details-fields.tsx` each hold one copy of the boxes, used by the admission form and by the edit form.
+
+That is the whole point rather than a tidiness preference. A field that exists on the form that *creates* a record and not on the form that *corrects* it is a field nobody can ever fix, and that is exactly the complaint this ADR answers. Writing the boxes twice would rebuild the problem the day somebody adds a field. Proof it was already happening: **both** forms sent a `notes` value that neither of them had a box for. Both have one now.
+
+**What the edit screens deliberately do not touch.**
+
+| Not here | Where it is done, and why |
+|---|---|
+| Which session, class, section, roll number | Transfer / Promote, which write a **new enrollment**. A student's history is the point of that model; an edit form would overwrite it |
+| Student status | The status action, which records a reason and closes the current enrollment |
+| Employment status, leaving date | The staff status action, which also closes their assignments |
+| Subjects and sections taught | Assignments, which keep their own history |
+| Student ID, staff ID | Assigned once by the server and never changed |
+
+**The salary was the one that could have cost money.** It is stored in **paisa**, the box is labelled "Rs", and `amountPaisa` reads a string as rupees. Putting the stored `4500000` into the box and pressing Save would have filed a salary of Rs 4,500,000 instead of Rs 45,000 — a hundredfold error that looks like a typing mistake and would have been argued about for a month. The conversion back to rupees happens once, in `staffDetailsFrom`, and the harness saves the same record twice over to prove the figure does not grow.
+
+**The audit log had to be widened to match.** `student.updated` recorded three fields — name, admission number, father's name — which was adequate when nothing could be edited and useless the moment everything could. Both now snapshot every field the office can change, **except the national ID numbers**. The CNIC / B-Form and the father's CNIC are never written into a snapshot at all: `audit-redaction.ts` would hide them on the way out, but a number that is never stored cannot leak from a table nobody thought to look at. What is recorded is whether one is **on file**, so adding or removing one is visible; correcting one is visible as the edit itself, with its actor and its time, but without the number. The staff snapshot records designation and department by **name**, because their ids are dropped by the viewer as internal references — which would have left the most common staff edit of all showing nothing at all.
+
+**The shape is not in the same file as the boxes, and that is not tidiness.** `student-details.ts` and `staff-details.ts` hold the type, the empty value and the two conversions, with **no `'use client'`**; the boxes that use them sit in the `.tsx` next door. The edit page is a Server Component and calls `studentDetailsFrom` to fill the form — and every export of a `'use client'` module is, on the server, a *client reference* rather than the function itself. Calling one from a page throws.
+
+That is not a theory: the first version of these screens put the helpers beside the boxes, passed the whole unit suite, passed the type-checker, passed the build — and both edit pages answered **500** the moment the harness loaded them through the production build. It is precisely the class of mistake that only a real server rendering a real page can catch, which is what the harness is for.
+
+**Alternatives.** *An inline edit on the profile page* — fewer clicks, but the office would be editing twenty-odd fields in a page that also carries fee plans, documents and a danger zone, with no single Save. *A partial update (`PATCH`) that sends only what changed* — appealing, and wrong here: the whole-record `PUT` means a field cleared on screen is cleared in the database, which is how the office removes a guardian's phone number that is no longer valid. The harness checks that a field left out is cleared rather than quietly kept.
+
+**Consequences.** Every field the college records can now be corrected by the office, and every correction has a name and a time against it. The admission form gained a Notes box it had always been sending.
