@@ -1,10 +1,10 @@
 /**
  * Imports students from a CSV file through the running application.
  *
- *   npm run import:students -- --file students.csv --url https://school.example.com
+ *   npm run import:students -- --file students.csv --url https://college.example.com
  *   npm run import:students -- --file students.csv --url http://localhost:3000 --apply
  *
- * Without `--apply` every row is validated and matched against the school's
+ * Without `--apply` every row is validated and matched against the college's
  * structure and nothing is created — read the report, fix the sheet, run
  * again. With `--apply` each row is sent to POST /api/v1/students exactly as
  * the admission form would send it, so every rule the form obeys (codes,

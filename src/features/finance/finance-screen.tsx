@@ -187,7 +187,7 @@ export function FinanceScreen({
         </CardHeader>
         <CardContent className={expenses.items.length === 0 ? '' : 'p-0'}>
           {expenses.items.length === 0 ? (
-            <EmptyState icon={Wallet} title="Nothing recorded for this month" description="Record what the school has spent so the figures above are the whole picture." />
+            <EmptyState icon={Wallet} title="Nothing recorded for this month" description="Record what the college has spent so the figures above are the whole picture." />
           ) : (
             <ul className="divide-y divide-border">
               {expenses.items.map((expense) => (
@@ -329,7 +329,7 @@ function ExpenseDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent title="Record an expense" description="What the school spent, and when.">
+      <DialogContent title="Record an expense" description="What the college spent, and when.">
         <form
           onSubmit={async (event) => {
             event.preventDefault()

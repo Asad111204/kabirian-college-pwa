@@ -1,6 +1,4 @@
-# Architecture Decision Records — Nova School Kamalia Management System
-
-> **Provenance.** These records were written while the system was built for an intermediate college; the codebase was then cloned and cleaned to become an independent deployment for **Nova School Kamalia** (2026-09-11). The records are kept as they were, because they explain why the code is shaped the way it is. Where one names the original institution or its structure (two years, Boys/Girls, five programmes), that is history — the structure Nova School Kamalia seeds is in `prisma/seed/reference.ts` and PROJECT_PLAN.md § 7.
+# Architecture Decision Records — Kabirian College Management System
 
 Each record: **Context** (the problem) → **Decision** → **Alternatives considered** → **Consequences**. Status is `Accepted`, `Proposed` (needs your confirmation) or `Superseded`.
 
@@ -164,7 +162,7 @@ Recommendation: `service_account` if the college has or can obtain Workspace (Ed
 
 **Context.** The requested layout nests a sub-folder per document type inside each student/staff folder. Evaluated against security, organisation, performance, scalability, searchability, backup and maintainability (see PROJECT_PLAN.md §9.4).
 
-**Decision.** `<school name>/Students/STU-0001/` and `<school name>/Staff/STF-0001/` (the root folder is `ROOT_FOLDER_NAME` in google-drive.provider.ts — `Nova School Kamalia`) with self-describing file names (`STU-0001_FATHER-CNIC_20260828-1532.pdf`). Person folders are created lazily on first upload and their IDs cached in `students.drive_folder_id` / `staff.drive_folder_id`. Top-level folders (`Students`, `Staff`, `Notices`, `Events`, `College-Documents`) are created once by a setup script; IDs stored in `settings`.
+**Decision.** `Kabirian College/Students/STU-0001/` and `Kabirian College/Staff/STF-0001/` with self-describing file names (`STU-0001_FATHER-CNIC_20260828-1532.pdf`). Person folders are created lazily on first upload and their IDs cached in `students.drive_folder_id` / `staff.drive_folder_id`. Top-level folders (`Students`, `Staff`, `Notices`, `Events`, `College-Documents`) are created once by a setup script; IDs stored in `settings`.
 
 **Alternatives.** *Per-type sub-folders* — 5× more folders and API calls, no security or lookup benefit (the app opens files by ID). *Completely flat* — hard for humans to browse/back up.
 
@@ -405,7 +403,7 @@ Recommendation: `service_account` if the college has or can obtain Workspace (Ed
 
 **Context.** Requirement 47: no fake production data.
 
-**Decision.** Two separate seed scripts: `seed:reference` (permissions, document types, exam types, default grade scale, settings, **and the school's real academic building blocks — classes, divisions, programs**, all editable afterwards; safe for production) and `seed:dev` (clearly labelled demo college with fake students/staff — refuses to run when `NODE_ENV=production` or when the database already contains real students). First admin account is created by an interactive `scripts/create-admin.ts`. The first session's *structure* (groups + sections) is created by the admin in the Session Structure screen, or by a one-time `scripts/bootstrap-structure.ts` reading a small JSON config — real configuration, not demo data.
+**Decision.** Two separate seed scripts: `seed:reference` (permissions, document types, exam types, default grade scale, settings, **and Kabirian's real academic building blocks — classes, divisions, programs — confirmed by the college**, all editable afterwards; safe for production) and `seed:dev` (clearly labelled demo college with fake students/staff — refuses to run when `NODE_ENV=production` or when the database already contains real students). First admin account is created by an interactive `scripts/create-admin.ts`. The first session's *structure* (groups + sections) is created by the admin in the Session Structure screen, or by a one-time `scripts/bootstrap-structure.ts` reading a small JSON config — real configuration, not demo data.
 
 **Consequences.** Realistic local testing without ever polluting production; a new install already knows what "1st Year Boys Pre-Medical" means without any code containing those words.
 
@@ -415,7 +413,7 @@ Recommendation: `service_account` if the college has or can obtain Workspace (Ed
 
 **Status:** Accepted · 2026-08-28
 
-**Context.** The original institution was organised as Class (1st/2nd Year) → Division (Boys/Girls) → Program (Pre-Medical, Pre-Engineering, ICS Physics, ICS Economics, FAIT) → Section → Students: 2 × 2 × 5 = 20 combinations per session. (Nova School Kamalia uses the same shape with 14 classes × 1 × 1.) The requirement is explicit that none of this may be hard-coded, that Admin must manage every level, that multiple sections per combination must be possible, and that a future session may have a different structure.
+**Context.** Kabirian College is organised as Class (1st/2nd Year) → Division (Boys/Girls) → Program (Pre-Medical, Pre-Engineering, ICS Physics, ICS Economics, FAIT) → Section → Students: 2 × 2 × 5 = 20 combinations per session today. The requirement is explicit that none of this may be hard-coded, that Admin must manage every level, that multiple sections per combination must be possible, and that a future session may have a different structure.
 
 **Decision.**
 - **Building blocks** — `classes` (with a numeric `level` for promotion), `divisions`, `programs`, `subjects` — are independent lookup tables, each concept stored **once** and reused by every session.
@@ -462,7 +460,7 @@ A composite foreign key `(section_id, academic_session_id) → sections(id, acad
 
 **Context.** "Different programs may have different subjects — do NOT create one universal hard-coded subject list." Pre-Medical studies Biology; ICS Physics studies Computer Science and Physics; FAIT differs again. Boys and Girls of the same program study the same subjects, and so do sections A and B.
 
-**Decision.** `curriculum_subjects (academic_session_id, class_id, program_id, subject_id, is_compulsory, sort_order)` — 10 lists in the original deployment (2 classes × 5 programs); 14 for Nova School Kamalia (14 classes × 1 program). A section's subject list is **derived** from its group's class + program. The curriculum drives: which subjects a teacher may be assigned to, which exam papers a student sits, what the timetable may schedule, and the row order on result cards.
+**Decision.** `curriculum_subjects (academic_session_id, class_id, program_id, subject_id, is_compulsory, sort_order)` — 10 lists for Kabirian today (2 classes × 5 programs). A section's subject list is **derived** from its group's class + program. The curriculum drives: which subjects a teacher may be assigned to, which exam papers a student sits, what the timetable may schedule, and the row order on result cards.
 
 **Alternatives.** *Per section* (`section_subjects`) — 20+ near-identical lists per session, guaranteed to drift when someone edits one. *Per student* — correct only when electives exist; premature and heavy today. *Global subject list* — explicitly rejected by the requirements.
 
@@ -2024,7 +2022,7 @@ From that moment the office can no longer withdraw the date sheet — which is r
 
 **Status:** Accepted · 2026-08-31
 
-**Context.** It is tempting to refuse marks before the exam date, or after some window. Neither rule was wanted by the school.
+**Context.** It is tempting to refuse marks before the exam date, or after some window. Neither rule exists at Kabirian College.
 
 **Decision.** Marks may be entered while the exam is `SCHEDULED` or `MARKS_ENTRY`, and at no other time. `DRAFT` means the date sheet has not gone out — or has been withdrawn — so the paper may still move. `CANCELLED` means the exam did not happen. `COMPLETED` means results are done, and reopening that is the office's decision.
 
@@ -2342,9 +2340,9 @@ Hiding by **visibility** rather than `display` matters. The card sits many level
 
 **Status:** Accepted · 2026-08-31
 
-**Context.** The original institution supplied its logo as `college logo.jpeg` in the repository root (that file is not in this repository; Nova School Kamalia’s crest is `public/brand/logo.png` — see `public/brand/README.md`). Next.js serves static files only from `public/`, so a file at the root is unreachable by a browser — and the space in the name would have to be URL-encoded on every reference.
+**Context.** The college supplied `college logo.jpeg` in the repository root. Next.js serves static files only from `public/`, so a file at the root is unreachable by a browser — and the space in the name would have to be URL-encoded on every reference.
 
-**Decision.** The file was **copied**, byte for byte, to `public/brand/` (for Nova School Kamalia: `logo.png`, cut to `logo-full.png` and `logo-mark.png`) — the folder the project's own `Logo` component already documents as the home for brand assets. Nothing was redrawn, recoloured, cropped, resized or regenerated; the served bytes are verified identical to the college's file.
+**Decision.** The file was **copied**, byte for byte, to `public/brand/college-logo.jpeg` — the folder the project's own `Logo` component already documents as the home for brand assets. Nothing was redrawn, recoloured, cropped, resized or regenerated; the served bytes are verified identical to the college's file.
 
 It is rendered with a plain `<img>`, eagerly, rather than `next/image`. `next/image` lazy-loads by default, and a logo that has not finished loading when the reader presses Print is a result card with a blank space where the crest belongs. Next preloads it from the markup anyway.
 
@@ -2381,7 +2379,7 @@ The previous `StudentResultView` was deleted rather than left unused. Its phone-
 
 **Context.** The college asked for a result-card header where the logo is one of the strongest elements — roughly 55–75mm wide on A4 — without wasting vertical space.
 
-Measuring the supplied file explains why the first version looked small. the original institution's logo file was a 1280×960 canvas, but the artwork inside it — a shield, a wordmark and a strapline — was only **572×155**, sitting dead centre:
+Measuring the supplied file explains why the first version looked small. `college logo.jpeg` is a 1280×960 canvas, but the artwork inside it — the shield, the **KABIRIAN** wordmark and the strapline — is only **572×155**, sitting dead centre:
 
 | | |
 |---|---|

@@ -20,7 +20,7 @@ export function TeacherTimetableGrid({ timetable }: { timetable: TeacherTimetabl
     return (
       <EmptyState
         title="No lessons timetabled yet"
-        description="Once the school office puts your classes on the timetable, your week appears here."
+        description="Once the college office puts your classes on the timetable, your week appears here."
       />
     )
   }

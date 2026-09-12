@@ -31,7 +31,7 @@ export default async function MyAssignmentsPage() {
         <>
           <PageHeader title="My assignments" />
           <Alert variant="warning" title="Your account is not linked to a staff record">
-            The school office needs to connect this login to your staff record first.
+            The college office needs to connect this login to your staff record first.
           </Alert>
         </>
       )
@@ -62,7 +62,7 @@ export default async function MyAssignmentsPage() {
             <EmptyState
               icon={BookOpen}
               title="No assignments yet"
-              description="The school office assigns teachers to subjects and sections. Once that is done, your classes and students appear here."
+              description="The college office assigns teachers to subjects and sections. Once that is done, your classes and students appear here."
             />
           </CardContent>
         </Card>

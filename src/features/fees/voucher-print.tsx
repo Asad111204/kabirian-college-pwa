@@ -37,7 +37,7 @@ export function VoucherPrint({ voucher, collegeName }: { voucher: FeeVoucherDeta
 
       <div className="print-area rounded-[var(--radius-card)] border border-border bg-white p-4 text-black">
         <div className="grid gap-3 sm:grid-cols-3">
-          {(['Bank copy', 'School copy', 'Student copy'] as const).map((copy) => (
+          {(['Bank copy', 'College copy', 'Student copy'] as const).map((copy) => (
             <VoucherCopy key={copy} copy={copy} voucher={voucher} collegeName={collegeName} />
           ))}
         </div>

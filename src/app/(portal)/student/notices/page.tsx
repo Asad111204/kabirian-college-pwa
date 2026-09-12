@@ -19,7 +19,7 @@ export default async function StudentNoticesPage() {
 
   return (
     <>
-      <PageHeader title="Notices" description="Announcements from the school that are for you." />
+      <PageHeader title="Notices" description="Announcements from the college that are for you." />
       <NoticeFeed initial={initial} />
     </>
   )

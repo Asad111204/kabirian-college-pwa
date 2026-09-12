@@ -1,12 +1,12 @@
 # Handover — running the system day to day
 
-For the Nova School Kamalia administrator. `docs/DEPLOYMENT.md` covers the hosting; this covers the people and the data.
+For the college administrator. `docs/DEPLOYMENT.md` covers the hosting; this covers the people and the data.
 
 ## Accounts and passwords
 
 - There is no sign-up. Every account is created by an administrator under **User Accounts → Create account**, which shows a temporary password **once**. Hand it over in person; the person is made to choose their own password at first sign-in.
 - Roles: **Admin** (the office), **Staff** (teachers and other staff, linked to a staff record), **Student** (linked to a student record). Permissions come with the role; a single account can be given or refused an extra permission under its page → **Permissions** (for example a clerk who may generate reports but not manage accounts).
-- The first administrator is the **system owner** and cannot be deactivated or demoted, so the school can never lock itself out.
+- The first administrator is the **system owner** and cannot be deactivated or demoted, so the college can never lock itself out.
 - A forgotten password: open the account → **Reset password** → a new temporary password, shown once. Nothing is ever emailed.
 - A lost or shared phone: the person (or an administrator on their page) → **Signed-in devices** → sign that device out. Changing the password signs out every device.
 - Ten wrong passwords lock an account for fifteen minutes; an administrator can unlock it on the account's page.
@@ -46,15 +46,15 @@ The first run only reports problems (a section that does not exist, a CNIC in th
 
 ## Documents
 
-Photos, CNIC/B-Form scans, result cards and certificates are uploaded from the student's or staff member's page and stored in the school's Google Drive. **Settings → Document types** decides which are required and their size limits; the missing-documents report lists who still owes what.
+Photos, CNIC/B-Form scans, result cards and certificates are uploaded from the student's or staff member's page and stored in the college's Google Drive. **Settings → Document types** decides which are required and their size limits; the missing-documents report lists who still owes what.
 
 ## When something goes wrong
 
 - **"Cannot reach the server"** on a phone: the app is offline — the banner says so. Nothing typed is lost until the page is left; submit once the connection is back.
 - **A page says "Something went wrong"** with a reference: try again; if it persists, note the reference and the time and check the host's logs (`docs/DEPLOYMENT.md` § Monitoring).
-- **Google Drive stopped working**: Settings → Google Drive shows the connection; press **Test connection**; if it asks, reconnect with the school's Google account.
+- **Google Drive stopped working**: Settings → Google Drive shows the connection; press **Test connection**; if it asks, reconnect with the college's Google account.
 - **A record was changed by mistake**: the audit log shows what it was; most things can be edited back. A whole-database mistake is what Neon's history and the weekly backup are for (`docs/DEPLOYMENT.md` § Backups).
-- **Someone left the school**: deactivate the account (it keeps its history); mark the student's or staff member's status; do not delete.
+- **Someone left the college**: deactivate the account (it keeps its history); mark the student's or staff member's status; do not delete.
 
 ## What the system does not do (yet)
 

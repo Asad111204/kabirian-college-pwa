@@ -221,7 +221,7 @@ check('the fee rules page renders', r.status === 200 && r.text.includes('Late fi
 r = await get('admin', `/admin/fees/${voucher.id}`)
 check('one voucher opens for the office, itemised', r.status === 200 && r.text.includes(voucher.voucherNumber) && r.text.includes('Hostel'), String(r.status))
 r = await get('admin', `/admin/students/${ids.student}`)
-check('the student record carries their fee for the year', r.status === 200 && r.text.includes('School tuition fee'), String(r.status))
+check('the student record carries their fee for the year', r.status === 200 && r.text.includes('College tuition fee'), String(r.status))
 r = await get('admin', '/admin/students/new')
 check('the admission form offers every fee head, and the documents', r.status === 200 && r.text.includes('Fees for the year') && r.text.includes('Board registration fee') && r.text.includes('Documents'), String(r.status))
 r = await get('admin', '/admin/staff/new')

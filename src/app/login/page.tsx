@@ -17,7 +17,7 @@ export default async function LoginPage() {
     <main className="flex min-h-dvh flex-col items-center justify-center bg-background px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center text-center">
-          <LogoFull height={128} />
+          <LogoFull height={56} />
           <h1 className="mt-4 text-xl font-semibold text-foreground">{env.APP_COLLEGE_NAME}</h1>
           <p className="mt-1 text-sm text-foreground-muted">Management System</p>
         </div>
@@ -28,7 +28,7 @@ export default async function LoginPage() {
         </div>
 
         <p className="mt-5 text-center text-xs text-foreground-muted">
-          Accounts are created by the school administration.
+          Accounts are created by the college administration.
           <br />
           Forgot your password? Please contact the admin office.
         </p>

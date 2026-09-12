@@ -48,7 +48,7 @@ export default async function SettingsPage({
     <>
       <PageHeader
         title="Settings"
-        description="Connections and options for the whole school. Changes here affect every user."
+        description="Connections and options for the whole college. Changes here affect every user."
       />
 
       <div className="space-y-4">

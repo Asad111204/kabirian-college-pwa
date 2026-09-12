@@ -24,7 +24,7 @@ export function StudentResults({ results }: { results: ResultRow[] }) {
         <EmptyState
           icon={Trophy}
           title="No published results yet"
-          description="Your results appear here once the school publishes them."
+          description="Your results appear here once the college publishes them."
         />
       </Card>
     )

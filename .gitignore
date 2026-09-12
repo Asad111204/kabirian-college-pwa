@@ -54,8 +54,8 @@ Thumbs.db
 # stray clones of this repo made into the project folder.
 # Committed as gitlinks these produce "unrelated histories" and a broken
 # submodule entry on GitHub. Ignored so it cannot happen again.
-/Nova School Kamalia PWA
-/nova-school-kamalia-pwa
+/Kabirian College PWA
+/kabirian-college-pwa
 
 # test harness and browser tests (generated)
 /tests/harness/pgdata
@@ -68,21 +68,18 @@ Thumbs.db
 # local database backups (npm run backup:export) — sensitive, never committed
 /backups
 
-# data brought in from a previous system, and any CSV prepared for the
-# importers — real students' B-Forms, CNICs and addresses, never committed
+# the college's old FoxPro files and the CSV converted from them — real
+# students' B-Forms, CNICs and addresses, never committed
 /Old System data
 /old-students.csv
-/*.csv
 
 # student portal logins made by the importer — passwords in readable form,
 # printed and handed out, then deleted. Never committed.
 /student-logins.csv
 
-# a fee ledger prepared for scripts/import-fees.ts — real families' money
+# the fee ledger converted from the old system — real families' money
 /old-fee-plans.csv
 /old-fee-payments.csv
-/fee-plans.csv
-/fee-payments.csv
 
 # the importer’s own transcript of a run — student names and amounts
 /fee-import-report.txt

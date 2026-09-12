@@ -17,8 +17,8 @@ export const dynamic = 'force-dynamic'
 /**
  * Academic Management -> Curriculum.
  *
- * Which subjects each Class x Program studies. Class 9 Science and Class 9 Arts
- * can have completely different subject lists — there is no single global list
+ * Which subjects each Class x Program studies. Pre-Medical and ICS Physics can
+ * have completely different subject lists — there is no single global list
  * (requirement 8).
  */
 export default async function CurriculumPage({

@@ -28,7 +28,7 @@ export function ExamTypesManager({ items }: { items: ExamTypeRow[] }) {
       labelOf={(item) => item.name}
       searchPlaceholder="Search exam types…"
       emptyTitle="No exam types yet"
-      emptyDescription="Add the kinds of examination your school holds — a term test, a send-up, a final. Nothing is assumed on your behalf."
+      emptyDescription="Add the kinds of examination your college holds — a term test, a send-up, a final. Nothing is assumed on your behalf."
       columns={[
         {
           header: 'Exam type',

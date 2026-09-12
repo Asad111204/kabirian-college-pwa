@@ -139,7 +139,7 @@ export function StaffDetailsFields({
           <Field
             label="Salary per month (Rs)"
             htmlFor="salaryPaisa"
-            hint="Optional. Leave it empty if the school has not settled one."
+            hint="Optional. Leave it empty if the college has not settled one."
             error={errors.salaryPaisa}
           >
             <Input

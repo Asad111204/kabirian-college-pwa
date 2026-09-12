@@ -35,7 +35,7 @@ async function admin(path) {
   return (await r.json()).data
 }
 
-const dir = mkdtempSync(join(tmpdir(), 'nova-school-import-'))
+const dir = mkdtempSync(join(tmpdir(), 'kabirian-import-'))
 const csv = join(dir, 'intake.csv')
 writeFileSync(
   csv,

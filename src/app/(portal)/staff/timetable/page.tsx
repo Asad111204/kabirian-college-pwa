@@ -28,7 +28,7 @@ export default async function StaffTimetablePage() {
         <>
           <PageHeader title="My timetable" />
           <Alert variant="warning" title="Your account is not linked to a staff record">
-            The school office needs to connect this login to your staff record before your
+            The college office needs to connect this login to your staff record before your
             timetable appears here.
           </Alert>
         </>

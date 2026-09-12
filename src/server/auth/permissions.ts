@@ -74,7 +74,7 @@ export const PERMISSIONS = {
   'fees.manage': { module: 'fees', description: 'Set fee packages, plans and rules, and issue vouchers' },
   'fees.collect': { module: 'fees', description: 'Record and void fee payments' },
   // Finance (Phase 26)
-  'finance.view': { module: 'finance', description: "See the school's income and spending" },
+  'finance.view': { module: 'finance', description: "See the college's income and spending" },
   'finance.manage': { module: 'finance', description: 'Record and void expenses' },
 
   // Documents (Phase 6)

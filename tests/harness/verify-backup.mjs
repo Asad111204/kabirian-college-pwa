@@ -40,7 +40,7 @@ const login = async (username) => {
   return res.status
 }
 
-const dir = mkdtempSync(join(tmpdir(), 'nova-school-backup-'))
+const dir = mkdtempSync(join(tmpdir(), 'kabirian-backup-'))
 const before = { students: await count('students'), users: await count('users'), audit: await count('audit_logs'), notices: await count('notices') }
 
 console.log('\nThe restore drill\n' + '-'.repeat(52))

@@ -70,7 +70,7 @@ export default async function AttendancePage({
     <>
       <PageHeader
         title="Attendance"
-        description="Registers taken across the school. Open one to mark it, submit it, or correct it."
+        description="Registers taken across the college. Open one to mark it, submit it, or correct it."
       />
 
       <AttendanceList

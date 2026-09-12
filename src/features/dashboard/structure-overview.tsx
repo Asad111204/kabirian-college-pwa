@@ -44,7 +44,7 @@ export function StructureOverview({
           <EmptyState
             icon={Layers}
             title="No structure for this session yet"
-            description="Create the class, division and program combinations the school is running this year."
+            description="Create the class, division and program combinations the college is running this year."
             action={
               canManage ? (
                 <Button size="sm" asChild>

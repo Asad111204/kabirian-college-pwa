@@ -29,7 +29,7 @@ export default async function MyProfilePage() {
         <>
           <PageHeader title="My profile" />
           <Alert variant="warning" title="Your account is not linked to a staff record">
-            The school office needs to connect this login to your staff record first.
+            The college office needs to connect this login to your staff record first.
           </Alert>
         </>
       )
@@ -111,7 +111,7 @@ export default async function MyProfilePage() {
       </div>
 
       <Alert variant="info" className="mt-4">
-        To correct anything here, please contact the school office — staff records are maintained by
+        To correct anything here, please contact the college office — staff records are maintained by
         the administration.
       </Alert>
     </>

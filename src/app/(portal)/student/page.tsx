@@ -99,7 +99,7 @@ export default async function StudentDashboardPage() {
             </dl>
           ) : (
             <p className="text-sm text-foreground-muted">
-              You are not enrolled in the current academic session yet. Please contact the school
+              You are not enrolled in the current academic session yet. Please contact the college
               office.
             </p>
           )}
@@ -113,7 +113,7 @@ export default async function StudentDashboardPage() {
 
       <Alert variant="info" className="mt-4">
         Your attendance, exam date sheets and published results are in the menu. Your class
-        timetable is kept by the school office.
+        timetable is kept by the college office.
       </Alert>
     </>
   )

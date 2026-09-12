@@ -64,7 +64,7 @@ export function PeriodsEditor({ initial }: { initial: CollegePeriod[] }) {
       })
       setRows(toRows(periods))
       setSaved(toRows(periods))
-      toast.success('The school day has been updated.')
+      toast.success('The college day has been updated.')
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message)
@@ -80,7 +80,7 @@ export function PeriodsEditor({ initial }: { initial: CollegePeriod[] }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>The school day</CardTitle>
+        <CardTitle>The college day</CardTitle>
         <CardDescription>
           The periods the bells ring for. A lesson records which period it is in, never a time, so
           changing a time here moves every lesson in that period with it.
@@ -101,7 +101,7 @@ export function PeriodsEditor({ initial }: { initial: CollegePeriod[] }) {
         ) : null}
 
         <Alert variant="info">
-          There is no break period any more. A break is simply an hour the school does not fill —
+          There is no break period any more. A break is simply an hour the college does not fill —
           leave a gap between two periods, or keep a period and put nothing in it.
         </Alert>
 

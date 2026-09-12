@@ -22,7 +22,7 @@ export default async function HomeworkPage({ searchParams }: { searchParams: Pro
 
   return (
     <>
-      <PageHeader title="Homework" description="Every piece of homework set across the school. The office can set homework in a teacher’s name and remove anything." />
+      <PageHeader title="Homework" description="Every piece of homework set across the college. The office can set homework in a teacher’s name and remove anything." />
       <HomeworkList
         items={result.items}
         page={result.page}

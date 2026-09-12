@@ -132,14 +132,14 @@ describe('the thread', () => {
         complaint={{
           ...detail,
           messages: [
-            { id: 'm1', body: 'We have asked the accounts office.', byOffice: true, authorName: 'The school office', createdAt: '2026-09-07T09:00:00.000Z' },
+            { id: 'm1', body: 'We have asked the accounts office.', byOffice: true, authorName: 'The college office', createdAt: '2026-09-07T09:00:00.000Z' },
             { id: 'm2', body: 'Thank you.', byOffice: false, authorName: 'Ali Raza', createdAt: '2026-09-07T10:00:00.000Z' },
           ],
         }}
       />,
     )
     expect(screen.getByText('We have asked the accounts office.')).toBeTruthy()
-    expect(screen.getByText(/The school office ·/)).toBeTruthy()
+    expect(screen.getByText(/The college office ·/)).toBeTruthy()
     // The header names the student too, so the message's own byline is one of two.
     expect(screen.getAllByText(/Ali Raza ·/).length).toBe(2)
     expect(screen.getByText('Thank you.')).toBeTruthy()

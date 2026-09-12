@@ -39,7 +39,7 @@ export default async function StaffDashboardPage() {
         <>
           <PageHeader title="Staff portal" />
           <Alert variant="warning" title="Your account is not linked to a staff record">
-            The school office needs to connect this login to your staff record before your
+            The college office needs to connect this login to your staff record before your
             assignments and students appear here.
           </Alert>
         </>
@@ -69,7 +69,7 @@ export default async function StaffDashboardPage() {
 
       {!dashboard.currentSession ? (
         <Alert variant="warning" className="mb-5" title="No current academic session">
-          The school has not set a current academic session yet.
+          The college has not set a current academic session yet.
         </Alert>
       ) : null}
 
@@ -139,7 +139,7 @@ export default async function StaffDashboardPage() {
                 <EmptyState
                   icon={GraduationCap}
                   title="No assignments yet"
-                  description="Once the school office assigns you subjects or sections, they will appear here along with your students."
+                  description="Once the college office assigns you subjects or sections, they will appear here along with your students."
                 />
               ) : (
                 <ul className="space-y-2">

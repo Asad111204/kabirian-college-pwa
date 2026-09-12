@@ -48,7 +48,7 @@ export default async function EditStaffPage({ params }: { params: Promise<{ id: 
 
       <PageHeader
         title={`Edit ${staff.fullName}`}
-        description={`${staff.staffCode} · every detail the school holds about this staff member`}
+        description={`${staff.staffCode} · every detail the college holds about this staff member`}
       />
 
       <EditStaffForm

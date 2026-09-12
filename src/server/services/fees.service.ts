@@ -206,7 +206,7 @@ export async function updateFeeRules(ctx: AuthContext, input: FeeRulesInput): Pr
 
   await prisma.$transaction(async (tx) => {
     await writeSetting(SETTING_FEE_LATE_FINE, input.lateFinePaisa, ctx, {
-      description: 'Flat late fine in paisa, applied after a due date the school has set',
+      description: 'Flat late fine in paisa, applied after a due date the college has set',
       executor: tx,
     })
     await writeAuditLog(ctx, { action: 'fees.rules_updated', entityType: 'setting', entityLabel: 'Fee rules', before, after: input }, tx)
@@ -408,8 +408,8 @@ export async function setStudentFeePlan(ctx: AuthContext, studentId: string, inp
       title: 'Your fee voucher has changed',
       body:
         change.after > change.before
-          ? 'The school has added to this year’s fee. Your voucher shows what is now due.'
-          : 'The school has reduced this year’s fee. Your voucher shows what is now due.',
+          ? 'The college has added to this year’s fee. Your voucher shows what is now due.'
+          : 'The college has reduced this year’s fee. Your voucher shows what is now due.',
       link: `/student/fees/${change.voucherId}`,
       entityType: 'fee_voucher',
       entityId: change.voucherId,
@@ -822,7 +822,7 @@ export async function runVouchers(ctx: AuthContext, input: VoucherRunInput): Pro
     {
       kind: 'FEE',
       title: `Fee voucher for ${session.name}`,
-      body: 'Your fee voucher is ready. It can be paid in instalments at the school office.',
+      body: 'Your fee voucher is ready. It can be paid in instalments at the college office.',
       link: '/student/fees',
       entityType: 'fee_voucher',
     },
@@ -919,7 +919,7 @@ export async function recordPayment(
     await notify([voucher.student.userId], {
       kind: 'FEE',
       title: 'A fee payment was recorded',
-      body: left > 0 ? 'The school has recorded your payment. Your voucher shows what is left to pay.' : 'The school has recorded your payment. Your fee is settled in full.',
+      body: left > 0 ? 'The college has recorded your payment. Your voucher shows what is left to pay.' : 'The college has recorded your payment. Your fee is settled in full.',
       link: `/student/fees/${voucherId}`,
       entityType: 'fee_voucher',
       entityId: voucherId,

@@ -247,7 +247,7 @@ function RunDialog({
           <Field
             label="Due date"
             htmlFor="run-due-date"
-            hint="Optional. Families pay in instalments, so leave it empty unless the school wants a date on the voucher."
+            hint="Optional. Families pay in instalments, so leave it empty unless the college wants a date on the voucher."
           >
             <Input id="run-due-date" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="max-w-[14rem]" />
           </Field>

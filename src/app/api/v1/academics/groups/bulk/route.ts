@@ -4,7 +4,7 @@ import { academicGroupBulkSchema } from '@/validation/academics'
 
 /**
  * Creates many groups at once — this is what the Session Structure matrix uses
- * to build every one of the school's combinations in one click.
+ * to build all 20 of Kabirian College's combinations in one click.
  * Combinations that already exist are skipped, so it is safe to re-run.
  */
 export const POST = withAuth(async ({ request, ctx }) => {

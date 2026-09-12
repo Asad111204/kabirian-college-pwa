@@ -13,7 +13,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     id: '/',
     name: `${env.APP_COLLEGE_NAME} Management System`,
-    short_name: env.APP_COLLEGE_NAME.split(' ')[0] ?? 'Nova',
+    short_name: env.APP_COLLEGE_NAME.split(' ')[0] ?? 'Kabirian',
     description: `Student, staff and academic management system for ${env.APP_COLLEGE_NAME}.`,
     lang: 'en',
     dir: 'ltr',
@@ -22,7 +22,7 @@ export default function manifest(): MetadataRoute.Manifest {
     display: 'standalone',
     orientation: 'portrait-primary',
     background_color: '#f8fafc',
-    theme_color: '#104b78',
+    theme_color: '#134e4a',
     categories: ['education', 'productivity'],
     icons: [
       { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },

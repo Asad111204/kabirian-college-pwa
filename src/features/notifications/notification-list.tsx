@@ -53,7 +53,7 @@ export function NotificationList({ page }: { page: PaginatedResult<NotificationV
 
       {page.items.length === 0 ? (
         <Card>
-          <EmptyState icon={BellOff} title="Nothing yet" description="When the school posts a notice, sets homework or answers you, it will appear here." />
+          <EmptyState icon={BellOff} title="Nothing yet" description="When the college posts a notice, sets homework or answers you, it will appear here." />
         </Card>
       ) : (
         <ul className="space-y-2">

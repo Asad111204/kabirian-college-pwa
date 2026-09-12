@@ -59,13 +59,13 @@ export function ClassesManager({ items }: { items: ClassRecord[] }) {
           label: 'Class name',
           type: 'text',
           required: true,
-          placeholder: 'e.g. Nursery or 1',
+          placeholder: 'e.g. 1st Year',
         },
         {
           name: 'displayName',
           label: 'Display name',
           type: 'text',
-          placeholder: 'e.g. Class 1',
+          placeholder: 'e.g. 1st Year / 11th Class',
           hint: 'Optional longer name shown on reports and result cards.',
         },
         {
@@ -74,7 +74,7 @@ export function ClassesManager({ items }: { items: ClassRecord[] }) {
           type: 'text',
           required: true,
           uppercase: true,
-          placeholder: 'e.g. KG or 1',
+          placeholder: 'e.g. 11',
         },
         {
           name: 'level',
@@ -83,7 +83,7 @@ export function ClassesManager({ items }: { items: ClassRecord[] }) {
           required: true,
           defaultValue: 1,
           min: 1,
-          hint: 'Promotion order: PG = 1, Pre-Nursery = 2 … Class 10 = 14, and so on.',
+          hint: 'Promotion order: 1st Year = 1, 2nd Year = 2, and so on.',
         },
         { name: 'isActive', label: 'Active', type: 'checkbox', defaultValue: true },
       ]}

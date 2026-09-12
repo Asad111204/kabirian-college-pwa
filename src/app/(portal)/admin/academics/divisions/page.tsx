@@ -16,13 +16,13 @@ export default async function DivisionsPage() {
     <>
       <PageHeader
         title="Divisions"
-        description="How the school separates its student body — one General division to begin with; add Boys and Girls if classes are taught separately. These are ordinary records, so the structure can change later without touching the code."
+        description="How the college separates its student body — currently Boys and Girls. These are ordinary records, so the structure can change later without touching the code."
       />
 
       <DivisionsManager items={divisions} />
 
       <Alert variant="info" className="mt-4">
-        Divisions are data, not code. If the school changes how it organises students, edit or add
+        Divisions are data, not code. If the college changes how it organises students, edit or add
         divisions here.
       </Alert>
     </>

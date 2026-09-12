@@ -43,7 +43,7 @@ export default async function MyStudentsPage({
         <>
           <PageHeader title="My students" />
           <Alert variant="warning" title="Your account is not linked to a staff record">
-            The school office needs to connect this login to your staff record first.
+            The college office needs to connect this login to your staff record first.
           </Alert>
         </>
       )
@@ -116,7 +116,7 @@ export default async function MyStudentsPage({
 
       <Alert variant="info" className="mt-4">
         You see each student&apos;s name, roll number and class only. Identity documents, addresses
-        and guardian contact details are held by the school office.
+        and guardian contact details are held by the college office.
       </Alert>
     </>
   )

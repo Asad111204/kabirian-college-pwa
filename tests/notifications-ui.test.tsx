@@ -155,7 +155,7 @@ describe('the red dots in the menu', () => {
   it('marks the buttons the unread things belong to, and no others', () => {
     post.mockResolvedValue(summary)
     render(
-      <AppShell user={user} collegeName="Nova School Kamalia" notifications={summary}>
+      <AppShell user={user} collegeName="Kabirian College" notifications={summary}>
         <p>page</p>
       </AppShell>,
     )
@@ -168,7 +168,7 @@ describe('the red dots in the menu', () => {
   it('marks nothing when nothing is unread', () => {
     post.mockResolvedValue(quiet)
     render(
-      <AppShell user={user} collegeName="Nova School Kamalia" notifications={quiet}>
+      <AppShell user={user} collegeName="Kabirian College" notifications={quiet}>
         <p>page</p>
       </AppShell>,
     )
@@ -178,7 +178,7 @@ describe('the red dots in the menu', () => {
   it('tells the server which page was opened, so the dot comes off', async () => {
     post.mockResolvedValue(quiet)
     render(
-      <AppShell user={user} collegeName="Nova School Kamalia" notifications={summary}>
+      <AppShell user={user} collegeName="Kabirian College" notifications={summary}>
         <p>page</p>
       </AppShell>,
     )
@@ -228,7 +228,7 @@ describe('the printable fee voucher', () => {
     status: 'PARTIALLY_PAID' as const,
     overdue: false,
     createdAt: '2026-09-01T05:00:00.000Z',
-    lines: [{ id: 'l1', head: 'TUITION' as const, label: null, name: 'School tuition fee', amountPaisa: 1_250_000 }],
+    lines: [{ id: 'l1', head: 'TUITION' as const, label: null, name: 'College tuition fee', amountPaisa: 1_250_000 }],
     payments: [],
     cancelReason: null,
     canRecordPayment: false,
@@ -236,16 +236,16 @@ describe('the printable fee voucher', () => {
     blockedReason: null,
   }
 
-  it('prints three copies on one page: bank, school and student', () => {
-    render(<VoucherPrint voucher={voucher} collegeName="Nova School Kamalia" />)
+  it('prints three copies on one page: bank, college and student', () => {
+    render(<VoucherPrint voucher={voucher} collegeName="Kabirian College" />)
     expect(screen.getByText('Bank copy')).toBeTruthy()
-    expect(screen.getByText('School copy')).toBeTruthy()
+    expect(screen.getByText('College copy')).toBeTruthy()
     expect(screen.getByText('Student copy')).toBeTruthy()
-    expect(screen.getAllByText('Nova School Kamalia').length).toBe(3)
+    expect(screen.getAllByText('Kabirian College').length).toBe(3)
   })
 
   it('shows what has been paid and what is left, on every copy', () => {
-    render(<VoucherPrint voucher={voucher} collegeName="Nova School Kamalia" />)
+    render(<VoucherPrint voucher={voucher} collegeName="Kabirian College" />)
     expect(screen.getAllByText('FV-000001').length).toBe(3)
     expect(screen.getAllByText('Paid so far').length).toBe(3)
     expect(screen.getAllByText('Rs 4,000').length).toBe(3)
@@ -254,7 +254,7 @@ describe('the printable fee voucher', () => {
   })
 
   it('never prints the year’s total, which the college asked to keep off it', () => {
-    render(<VoucherPrint voucher={voucher} collegeName="Nova School Kamalia" />)
+    render(<VoucherPrint voucher={voucher} collegeName="Kabirian College" />)
     // The fee itself is Rs 12,500 and the payable Rs 10,000; neither belongs
     // on a voucher a family pays in instalments.
     expect(screen.queryByText('Rs 12,500')).toBeNull()
@@ -263,11 +263,11 @@ describe('the printable fee voucher', () => {
   })
 
   it('shows a late fine only when there is one', () => {
-    const { unmount } = render(<VoucherPrint voucher={voucher} collegeName="Nova School Kamalia" />)
+    const { unmount } = render(<VoucherPrint voucher={voucher} collegeName="Kabirian College" />)
     expect(screen.queryByText('Late fine')).toBeNull()
     unmount()
 
-    render(<VoucherPrint voucher={{ ...voucher, lateFinePaisa: 50_000, netPayablePaisa: 1_050_000, outstandingPaisa: 650_000 }} collegeName="Nova School Kamalia" />)
+    render(<VoucherPrint voucher={{ ...voucher, lateFinePaisa: 50_000, netPayablePaisa: 1_050_000, outstandingPaisa: 650_000 }} collegeName="Kabirian College" />)
     expect(screen.getAllByText('Late fine').length).toBe(3)
   })
 
@@ -275,7 +275,7 @@ describe('the printable fee voucher', () => {
     const print = vi.fn()
     Object.defineProperty(window, 'print', { writable: true, value: print })
     const user = userEvent.setup()
-    render(<VoucherPrint voucher={voucher} collegeName="Nova School Kamalia" />)
+    render(<VoucherPrint voucher={voucher} collegeName="Kabirian College" />)
 
     const button = screen.getByRole('button', { name: /Print or save as PDF/ })
     expect(button.closest('.print-hide')).not.toBeNull()

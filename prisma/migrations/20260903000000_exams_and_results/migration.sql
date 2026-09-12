@@ -326,7 +326,7 @@ ALTER TABLE "exam_papers"
 -- The heart of the marks model.
 --
 -- PENDING means nobody has entered a mark, and must never be readable as a
--- zero. ABSENT is the school's confirmed rule -- it scores 0 -- but the absence is
+-- zero. ABSENT is Kabirian's confirmed rule -- it scores 0 -- but the absence is
 -- recorded as its own fact, so "was not there" and "scored nothing" stay
 -- distinguishable forever. Without this constraint a service bug could quietly
 -- turn one into the other.

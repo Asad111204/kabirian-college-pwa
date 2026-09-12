@@ -180,7 +180,7 @@ function auditEntry(overrides: Partial<AuditEntryInput> = {}): AuditEntryInput {
     entityType: 'program',
     entityLabel: 'I.Com (ICOM)',
     createdAt: new Date('2026-08-29T10:00:00Z'),
-    actor: { username: 'admin', fullName: 'School Administrator' },
+    actor: { username: 'admin', fullName: 'College Administrator' },
     ...overrides,
   }
 }
@@ -188,7 +188,7 @@ function auditEntry(overrides: Partial<AuditEntryInput> = {}): AuditEntryInput {
 describe('describeAuditEntry', () => {
   it('turns an action into a readable sentence', () => {
     const item = describeAuditEntry(auditEntry())
-    expect(item.actor).toBe('School Administrator')
+    expect(item.actor).toBe('College Administrator')
     expect(item.description).toBe('created the program')
     expect(item.target).toBe('I.Com (ICOM)')
   })

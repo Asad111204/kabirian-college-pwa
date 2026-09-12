@@ -200,7 +200,7 @@ function assertCanManageDocuments(
   throw new ForbiddenError(
     permission === 'documents.upload'
       ? 'Document management is only available to administrators.'
-      : 'A document that has been handed in can only be changed by the school office.',
+      : 'A document that has been handed in can only be changed by the college office.',
     { userId: ctx.userId, role: ctx.role },
   )
 }
@@ -796,7 +796,7 @@ export async function deleteDocument(
         ? `Notice: ${document.notice.title}`
         : document.event
           ? `Event: ${document.event.title}`
-          : 'the school'
+          : 'the college'
 
   await prisma.$transaction(async (tx) => {
     await tx.document.update({

@@ -102,7 +102,7 @@ beforeAll(async () => {
     INSERT INTO exam_mark_sheets (id, exam_paper_id, academic_session_id, section_id, status, entered_by_staff_id, created_at, updated_at)
       VALUES ('${ID.sheet}', '${ID.paper}', '${ID.session}', '${ID.section}', 'DRAFT', '${ID.staff}', now(), now());
     INSERT INTO grade_scales (id, name, is_default, is_active, created_at, updated_at)
-      VALUES ('${ID.scale}', 'Nova School Kamalia', true, true, now(), now());
+      VALUES ('${ID.scale}', 'Kabirian College', true, true, now(), now());
   `)
 }, 90_000)
 

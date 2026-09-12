@@ -558,7 +558,7 @@ export async function setNoticeStatus(
       {
         kind: 'NOTICE',
         title: updated.title,
-        body: 'The school has published a notice for you.',
+        body: 'The college has published a notice for you.',
         link: '/student/notices',
         entityType: 'notice',
         entityId: id,

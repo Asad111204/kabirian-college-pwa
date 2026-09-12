@@ -1,10 +1,8 @@
-# Nova School Kamalia Management System — Project Plan
-
-> **Provenance.** This system was designed and built, phase by phase, for an intermediate college and then cloned and cleaned to become an independent deployment for **Nova School Kamalia** (2026-09-11). This plan is the development history of the codebase: the phases, decisions and questions below were settled with the original institution and its structure (two years, Boys/Girls, five programmes) and are kept so a future developer understands *why* the system is shaped the way it is. Nothing of that institution's data, credentials, Drive or logo is in this repository. The structure Nova School Kamalia actually seeds is in § 7.1; its live status is in the row below.
+# Kabirian College Management System — Project Plan
 
 | | |
 |---|---|
-| **Status** | **Nova School Kamalia: cleaned clone, not yet deployed.** It needs its own new Neon database (run the migrations and the reference/structure seeds there), its own Google Cloud OAuth client and Google account for Drive, and a deployment; its crest and colours are in place (`public/brand/README.md`). Feature-wise the codebase is at the state described next, which was reached in the original deployment: **Phase 28 complete: the fee is annual, made of optional heads, and paid in instalments.** Everything through Phase 29 is covered by nineteen migrations. The college charges one fee per student per year, built from tuition, annual funds, events, board registration, board admission, a tour and anything else, all optional and all set at admission; families pay whenever they can, and a printed voucher shows only what has been paid and what is left. Documents are attached at the counter, and a salary is recorded when staff are added. The college now has a printable **handbook** covering every part of the system, and the app finally shows the college's own logo rather than a placeholder. **The Phase 28 migration was applied to Neon on 2026-09-09.** The college's previous FoxPro system has been read into this one: **188 of its 192 enrolled students are live, each with a portal login**, every class counted back against the old file, and **its 2026-27 fee ledger with them**: 111 students charged Rs 3,449,930 for the year, Rs 273,200 already received, reconciled to the rupee. |
+| **Status** | **Phase 28 complete: the fee is annual, made of optional heads, and paid in instalments.** Google Drive stays connected (`kabiriancollege@gmail.com`, folders created, live connection test passing). Everything through Phase 29 is live on Neon (nineteen migrations, zero drift). The college charges one fee per student per year, built from tuition, annual funds, events, board registration, board admission, a tour and anything else, all optional and all set at admission; families pay whenever they can, and a printed voucher shows only what has been paid and what is left. Documents are attached at the counter, and a salary is recorded when staff are added. The college now has a printable **handbook** covering every part of the system, and the app finally shows the college's own logo rather than a placeholder. **The Phase 28 migration was applied to Neon on 2026-09-09.** The college's previous FoxPro system has been read into this one: **188 of its 192 enrolled students are live, each with a portal login**, every class counted back against the old file, and **its 2026-27 fee ledger with them**: 111 students charged Rs 3,449,930 for the year, Rs 273,200 already received, reconciled to the rupee. |
 | **Last updated** | 2026-09-10 (rev. 56 — copying a day of the week) |
 | **Companion docs** | [DECISIONS.md](DECISIONS.md) · [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) · [README.md](README.md) |
 
@@ -12,7 +10,7 @@
 
 ## 1. Project overview
 
-A production-grade, installable **Progressive Web App** that becomes the single platform for running Nova School Kamalia: students, staff, academics, attendance, exams, results, timetables, notices, events, documents (stored in Google Drive), reports and audit logs.
+A production-grade, installable **Progressive Web App** that becomes the single platform for running Kabirian College: students, staff, academics, attendance, exams, results, timetables, notices, events, documents (stored in Google Drive), reports and audit logs.
 
 Three portals share one codebase, one database and one permission system:
 
@@ -232,18 +230,18 @@ The **authorization matrix** (who can do what to whose data) becomes a permanent
 
 ---
 
-## 7. Academic structure of Nova School Kamalia
+## 7. Academic structure of Kabirian College
 
-### 7.1 The structure seeded for Nova School Kamalia
+### 7.1 The real structure (confirmed 2026-08-28)
 
 | Level | Values today |
 |---|---|
-| Class | **PG**, **Pre-Nursery**, **Nursery**, **KG**, **Class 1** … **Class 10** (levels 1–14, in that promotion order) |
-| Division | **General** — add Boys / Girls in Admin if classes are taught separately |
-| Program / Group | **General** — add Science / Arts in Admin if classes 9–10 run them |
+| Class / Year | **1st Year (11th Class)**, **2nd Year (12th Class)** |
+| Division | **Boys**, **Girls** |
+| Program / Group | **Pre-Medical**, **Pre-Engineering**, **ICS Physics**, **ICS Economics**, **FAIT** |
 | Section | at least **A** per combination; more can be added any time |
 
-14 classes × 1 division × 1 program = **14 academic groups** per session, each with one or more sections. (The original deployment this plan was written for had 2 × 2 × 5 = 20; every "20 groups" further down is that history.)
+2 classes × 2 divisions × 5 programs = **20 academic groups** per session, each with one or more sections.
 
 **None of this is hard-coded.** Classes, divisions, programs, subjects and sections are database rows managed by Admin in the Academic Management area. Adding "3rd Year", a new division, or a program such as "Pre-Medical (Evening)" is data entry, not a code change.
 
@@ -423,7 +421,7 @@ Proposed by you: per-person folders with per-document-type sub-folders. Evaluati
 **Decision:** one folder per person, no type sub-folders, self-describing file names:
 
 ```
-Nova School Kamalia/                    (root; ID in env / settings)
+Kabirian College/                       (root; ID in env / settings)
 ├── Students/
 │   ├── STU-0001/
 │   │   ├── STU-0001_PHOTO_20260828-1530.jpg
@@ -479,8 +477,8 @@ Status per (person, type): **Uploaded** (an `ACTIVE` doc exists) · **Needs repl
 
 | Piece | Design |
 |---|---|
-| Manifest | `app/manifest.ts`: name from `APP_COLLEGE_NAME` ("Nova School Kamalia"), short_name its first word ("Nova"), `display: standalone`, `start_url: /`, theme/background colours from the design tokens, 192/512 px + maskable icons, shortcuts (Attendance, Timetable, Notices). |
-| Icons | `public/icons/` generated from the school’s crest on white by `scripts/generate-icons.ts`; `apple-touch-icon` + iOS meta tags. |
+| Manifest | `app/manifest.ts`: name "Kabirian College", short_name "Kabirian", `display: standalone`, `start_url: /`, theme/background colours from the design tokens, 192/512 px + maskable icons, shortcuts (Attendance, Timetable, Notices). |
+| Icons | `public/icons/` generated from the college logo (placeholder until the official logo is supplied); `apple-touch-icon` + iOS meta tags. |
 | Service worker | Serwist via `@serwist/turbopack` (`app/sw.ts`, served from `/serwist/sw.js`), registered by `PwaProvider`; "A new version is ready — Reload" prompt on update (no `skipWaiting`). |
 | Caching strategy | `/_next/static/**` (hashed), icons, logo: CacheFirst (30 d, capped) with the stylesheet, icons and offline page precached · HTML navigations: **NetworkOnly** → precached offline page (amended from NetworkFirst in ADR-161: a cached page would outlive a sign-out) · **`/api/**`: NetworkOnly — never cached by the SW** (sensitive, per-user). Document content relies only on the browser's private HTTP cache. |
 | Offline-capable | Installing/launching the app, the app shell, the offline page, static assets, data already on screen. |
@@ -493,14 +491,14 @@ Status per (person, type): **Uploaded** (an `ACTIVE` doc exists) · **Needs repl
 ## 11. Project folder structure
 
 ```
-nova-school-kamalia/
+kabirian-college/
 ├── prisma/
 │   ├── schema.prisma
 │   ├── migrations/                 # versioned SQL migrations (incl. hand-written partial indexes)
 │   └── seed/                       # reference data (permissions, doc types…) + clearly-labelled DEV demo seed
 ├── public/
 │   ├── icons/                      # PWA icons, apple-touch-icon
-│   └── brand/                      # the school’s crest and the sizes cut from it
+│   └── brand/                      # logo placeholder → official logo later
 ├── src/
 │   ├── app/                        # Next.js App Router — routes only, kept thin
 │   │   ├── (public)/login/         # login, change-password
@@ -667,7 +665,7 @@ Each phase ends with: verification, tests, `PROJECT_PLAN.md` progress update, `D
 | 0 | **Discovery & architecture** | This plan, DECISIONS.md, schema doc | You confirm the open questions |
 | 1 | **Project setup & design system** | Next.js + TS + Tailwind + shadcn; ESLint/Prettier/Husky; git init; Zod-validated env; Prisma connected to Neon; health endpoint; app shell (sidebar/topbar/mobile nav) for 3 portals; design tokens + logo placeholder; base components; manifest + icons (installable shell); README | `npm run dev` shows branded shell; `lint`, `typecheck`, `test` pass; DB connection verified |
 | 2 | **Auth, users, permissions, audit** | Identity tables + migration; Argon2id; login/logout/forced change; sessions; rate limit/lockout; `withAuth`, `authorize`; permission seed; `create-admin` script; admin **User management** UI (create, activate/deactivate, reset password, role, overrides); audit logger + first entries; authorization test suite | Three demo users log into three portals; matrix tests pass |
-| 3 | **Academic structure** | Building blocks (classes/years, divisions, programs, subjects, departments) with add/edit/activate; academic sessions + "current session" switch; **Session structure builder** (create the 20 groups from a matrix, add/rename/deactivate sections); **Curriculum** screen (subjects per class × program); "copy structure & curriculum from previous session"; reference seed for the school's classes, divisions and programs | Admin can build 2026-27 exactly: 2 classes × 2 divisions × 5 programs, sections, and each program's subject list |
+| 3 | **Academic structure** | Building blocks (classes/years, divisions, programs, subjects, departments) with add/edit/activate; academic sessions + "current session" switch; **Session structure builder** (create the 20 groups from a matrix, add/rename/deactivate sections); **Curriculum** screen (subjects per class × program); "copy structure & curriculum from previous session"; reference seed for Kabirian's real classes, divisions and programs | Admin can build 2026-27 exactly: 2 classes × 2 divisions × 5 programs, sections, and each program's subject list |
 | 4 | **Student management** | Student CRUD (multi-step form), enrollment into class → division → program → section, list w/ server pagination + search + filters (class, division, program, section, status), profile tabs, section/program transfer, promotion wizard, leave/deactivate, account creation, optional CSV import; student portal profile | Full student lifecycle works and is audited |
 | 5 | **Staff management** | Staff CRUD, teacher assignments UI (pick section + subject from the curriculum), section in-charge, lists/filters, account creation, leave workflow; staff portal profile + "my assignments" | Assignments drive staff scope |
 | 6 | **Google Drive & documents** | `StorageProvider`, Google auth (mode per Q1) + "Connect Drive" flow/script, folder bootstrap, upload/view/download/replace/delete, magic-byte validation, thumbnails, checklist & missing-document filters, document-type settings; own-documents views | Real file round-trips to Drive; checklist correct |
@@ -744,7 +742,7 @@ Everything else in §20 will proceed on the stated defaults.
 
 | Phase | Status | Notes |
 |---|---|---|
-| 0 Discovery & architecture | ✅ Done (2026-08-28) | Docs created; **rev. 2** added the original institution’s real academic structure |
+| 0 Discovery & architecture | ✅ Done (2026-08-28) | Docs created; **rev. 2** added Kabirian's real academic structure |
 | 1 Setup, design system, auth & Academic Management | ✅ Done (2026-08-29) | Phase 1 absorbed the original Phases 1–3 at the college's request. See §22.1 |
 | 2 User accounts & permission management | ✅ Done (2026-08-29) | Admin User Management, account lifecycle, password resets, permission overrides. See §22.3 |
 | 3 Admin dashboard | ✅ Done (2026-08-29) | Live statistics, academic overview, quick actions, recent activity. See §22.5 |
@@ -932,7 +930,7 @@ Google Drive as the college's document store, with the database as the record of
 **Folders** — created on connection and reused thereafter:
 
 ```
-Nova School Kamalia/
+Kabirian College/
   Students/
     STU-0001 Ali Raza/
   Staff/
@@ -1026,7 +1024,7 @@ Two checks could not be completed on the throwaway harness, which serves only on
 
 ### 22.18 Connecting Google Drive
 
-Connecting requires a browser, because an administrator has to sign in to Google and approve the request. **For Nova School Kamalia this has not been done yet**: connect the school’s own Google account from Settings after deployment; the app then creates `Nova School Kamalia/Students/` and `/Staff/` and **Test connection** reports the space used. (In the original deployment this step was completed on 2026-08-30.)
+Connecting requires a browser, because an administrator has to sign in to Google and approve the request. **This was done on 2026-08-30**: the college account `kabiriancollege@gmail.com` is connected, the `Kabirian College/Students/` and `/Staff/` folders exist, and a live **Test connection** returns 0.01 GB used of 16 GB.
 
 While the OAuth app stays in **Testing** in Google Cloud, Google expires the connection after seven days; the app says so plainly and an administrator clicks **Reconnect** in Settings. Setting the publishing status to **In production** removes that limit and, because `drive.file` is a non-sensitive scope, does not normally require Google's verification review.
 
@@ -1652,15 +1650,15 @@ An incomplete result says *"Result incomplete"* and *"Your final result is not y
 
 ### 22.32 Phase 9, the official result card (2026-08-31)
 
-A printable, official-looking result card carrying the school’s name (from `APP_COLLEGE_NAME`). **Presentation only** — no calculation, no grading, no ranking, no publication changed. **No database change, no new dependency.**
+A printable, official-looking Kabirian College result card. **Presentation only** — no calculation, no grading, no ranking, no publication changed. **No database change, no new dependency.**
 
 **Where it lives.** `/student/results/[id]` now renders the card itself, with a **Print Result Card** button above it. The card is the on-screen preview *and* the printed document, so what a student sees is what comes out of the printer (ADR-140).
 
-**The logo.** In the original deployment the institution’s logo file was copied byte for byte to `public/brand/` (for Nova School Kamalia the crest is `public/brand/logo.png`, cut to size by `scripts/prepare-logo.ts`) — Next serves static files only from `public/`, so the root file was unreachable by a browser. Nothing was redrawn, recoloured, cropped or resized, and the served bytes are verified identical. It is rendered eagerly with a plain `<img>`: `next/image` lazy-loads, and a logo that has not loaded when Print is pressed is a card with a blank space where the crest belongs (ADR-139).
+**The logo.** The college's `college logo.jpeg` was copied byte for byte to `public/brand/college-logo.jpeg` — Next serves static files only from `public/`, so the root file was unreachable by a browser. Nothing was redrawn, recoloured, cropped or resized, and the served bytes are verified identical. It is rendered eagerly with a plain `<img>`: `next/image` lazy-loads, and a logo that has not loaded when Print is pressed is a card with a blank space where the crest belongs (ADR-139).
 
 **What the card shows** — all of it from the stored published snapshot, nothing recalculated:
 
-- the logo, the **SCHOOL NAME**, its *strapline* (none for Nova School Kamalia yet), and a boxed **RESULT CARD**;
+- the logo, **KABIRIAN COLLEGE**, *INSPIRING MINDS SHAPING FUTURE*, and a boxed **RESULT CARD**;
 - examination, exam type, academic session;
 - student name, student code, roll number, class, division, programme, section;
 - a bordered table of every subject — Subject · Max Marks · Obtained · % · Grade · Status;
@@ -1705,7 +1703,7 @@ A **visual refinement only.** No calculation, grading, ranking, publication, API
 
 **The header, which is where the complaint was.** The logo now prints **66mm wide** — a third of the page — instead of reading as an icon. It turned out the supplied file is a 1280×960 canvas holding only 572×155 of artwork, so 84% of its height was empty white; painting the whole canvas at that scale would have cost 111mm of page height for 18mm of ink. The image is instead shown at full width in a 6:1 box, which paints the artwork and leaves the blank margin unpainted. Nothing was cropped, redrawn or distorted, and there is 3.3mm of clear space above and below the mark (ADR-141).
 
-Below it, restrained type: the **SCHOOL NAME** in the school colour (`--color-college`, read off the logo once there is one), the strapline small and light in wide capitals, a hairline rule, **RESULT CARD** in spaced capitals, and a single heavier navy rule closing the header.
+Below it, restrained type: **KABIRIAN COLLEGE** in the navy read off the logo itself, the strapline small and light in wide capitals, a hairline rule, **RESULT CARD** in spaced capitals, and a single heavier navy rule closing the header.
 
 **The rest of the document.** Examination, exam type and session in a compact three-up row. Student identity and placement in one bordered grid of small capital labels against plain values. The subject table keeps a thin outer border and hairline row rules with no vertical lines, compact rows and small-capital headers. The overall result is a six-cell grid — Total · Obtained · Percentage / Grade · **Result** · Position — with the outcome word set larger, in navy, always spelled out. Then three signature areas with room to actually sign, and the notice in the smallest type on the page.
 

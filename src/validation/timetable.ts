@@ -72,7 +72,7 @@ export const teachingPeriod = z.coerce
   .number({ error: 'Choose a period.' })
   .int('Choose a period.')
   .min(1, 'Choose a period.')
-  .max(MAX_PERIOD_NUMBER, 'That is not a period of the school day.')
+  .max(MAX_PERIOD_NUMBER, 'That is not a period of the college day.')
 
 /** One row of the college's day, as the office edits it. */
 export const collegePeriodSchema = z.object({
@@ -85,8 +85,8 @@ export const collegePeriodSchema = z.object({
 export const collegePeriodsSchema = z.object({
   periods: z
     .array(collegePeriodSchema)
-    .min(1, 'A school day needs at least one period.')
-    .max(MAX_PERIOD_NUMBER, 'That is more periods than a school day has.'),
+    .min(1, 'A college day needs at least one period.')
+    .max(MAX_PERIOD_NUMBER, 'That is more periods than a college day has.'),
 })
 
 export type CollegePeriodsInput = z.infer<typeof collegePeriodsSchema>
@@ -163,7 +163,7 @@ export const timetableCopyDaySchema = z
     toDays: z
       .array(dayOfWeek)
       .min(1, 'Choose at least one day to copy on to.')
-      .max(TIMETABLE_DAYS.length, 'That is more days than the school week has.'),
+      .max(TIMETABLE_DAYS.length, 'That is more days than the college week has.'),
     /** Clear each target day first. Without it, a day with lessons is refused. */
     replace: z.boolean().default(false),
   })

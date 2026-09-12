@@ -29,7 +29,7 @@ const RS = (rupees: number) => rupees * 100
 describe('what a year is charged for', () => {
   it('names every head in words', () => {
     for (const head of FEE_HEADS) expect(FEE_HEAD_LABEL[head]).toBeTruthy()
-    expect(FEE_HEAD_LABEL.TUITION).toBe('School tuition fee')
+    expect(FEE_HEAD_LABEL.TUITION).toBe('College tuition fee')
     expect(FEE_HEAD_LABEL.BOARD_REGISTRATION).toBe('Board registration fee')
   })
 

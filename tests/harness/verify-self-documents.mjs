@@ -131,19 +131,19 @@ console.log('\nA student hands in a paper of their own\n' + '-'.repeat(52))
 
 r = await call('student', 'GET', `/api/v1/students/${ids.student}/documents`)
 check('they can see their own checklist', r.status === 200 && Array.isArray(r.data), String(r.status))
-const slot = (r.data ?? []).find((s) => s.type.key === 'STUDENT_LEAVING_CERTIFICATE')
+const slot = (r.data ?? []).find((s) => s.type.key === 'STUDENT_MATRIC_ROLL_SLIP')
 check('a document the college has not got is on it', Boolean(slot) && slot.document === null, JSON.stringify(slot?.type?.key))
 
-r = await upload('student', `/api/v1/students/${ids.student}/documents`, 'STUDENT_LEAVING_CERTIFICATE')
+r = await upload('student', `/api/v1/students/${ids.student}/documents`, 'STUDENT_MATRIC_ROLL_SLIP')
 check('they may upload it themselves', r.status === 201 && Boolean(r.data?.id), `${r.status} ${r.error?.message ?? ''}`)
 const handedIn = r.data?.id
 
 console.log('\n...and cannot change their mind\n' + '-'.repeat(52))
 
-r = await upload('student', `/api/v1/students/${ids.student}/documents`, 'STUDENT_LEAVING_CERTIFICATE', 'second-try.png')
+r = await upload('student', `/api/v1/students/${ids.student}/documents`, 'STUDENT_MATRIC_ROLL_SLIP', 'second-try.png')
 check(
   'uploading over it is refused: that is a replace, and replacing is the office’s',
-  r.status === 403 && /school office/i.test(r.error?.message ?? ''),
+  r.status === 403 && /college office/i.test(r.error?.message ?? ''),
   `${r.status} ${r.error?.message}`,
 )
 
@@ -151,12 +151,12 @@ r = await call('student', 'DELETE', `/api/v1/documents/${handedIn}`)
 check('deleting it is refused too', r.status === 403, `${r.status} ${r.error?.message}`)
 
 r = await call('admin', 'GET', `/api/v1/students/${ids.student}/documents`)
-const after = (r.data ?? []).find((s) => s.type.key === 'STUDENT_LEAVING_CERTIFICATE')
+const after = (r.data ?? []).find((s) => s.type.key === 'STUDENT_MATRIC_ROLL_SLIP')
 check('the office still sees exactly the one file they handed in', after?.document?.id === handedIn, after?.document?.originalFileName)
 
 console.log('\n...and the office is not bound by any of that\n' + '-'.repeat(52))
 
-r = await upload('admin', `/api/v1/students/${ids.student}/documents`, 'STUDENT_LEAVING_CERTIFICATE', 'office-copy.png')
+r = await upload('admin', `/api/v1/students/${ids.student}/documents`, 'STUDENT_MATRIC_ROLL_SLIP', 'office-copy.png')
 check('the office may replace it', r.status === 201, `${r.status} ${r.error?.message ?? ''}`)
 
 console.log('\nNobody may hand in anything for anybody else\n' + '-'.repeat(52))

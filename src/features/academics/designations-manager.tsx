@@ -28,7 +28,7 @@ export function DesignationsManager({ items }: { items: DesignationRow[] }) {
       items={items}
       labelOf={(item) => item.name}
       searchPlaceholder="Search designations…"
-      emptyDescription="Add the job titles your school uses."
+      emptyDescription="Add the job titles your college uses."
       columns={[
         {
           header: 'Designation',

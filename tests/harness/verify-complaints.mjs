@@ -106,9 +106,9 @@ r = await get('admin', '/api/v1/complaints?awaitingOffice=true')
 check('…so it leaves the "waiting on us" list', r.status === 200 && !r.data.items.some((x) => x.id === id), `${r.data?.total}`)
 
 r = await get('student', `/api/v1/complaints/${id}`)
-check('the student sees the answer as the college’s, not one clerk’s', r.status === 200 && r.data.messages[0].authorName === 'The school office', r.data?.messages?.[0]?.authorName)
+check('the student sees the answer as the college’s, not one clerk’s', r.status === 200 && r.data.messages[0].authorName === 'The college office', r.data?.messages?.[0]?.authorName)
 r = await get('admin', `/api/v1/complaints/${id}`)
-check('…while the office sees who in the office wrote it', r.status === 200 && r.data.messages[0].authorName !== 'The school office' && r.data.messages[0].authorName.length > 0, r.data?.messages?.[0]?.authorName)
+check('…while the office sees who in the office wrote it', r.status === 200 && r.data.messages[0].authorName !== 'The college office' && r.data.messages[0].authorName.length > 0, r.data?.messages?.[0]?.authorName)
 
 r = await call('student', 'POST', `/api/v1/complaints/${id}/replies`, { body: 'Thank you. It still shows on my voucher today.' })
 check('the student writes back', r.status === 201 && r.data.messages.length === 2 && r.data.awaiting === 'OFFICE', `${r.status} ${r.data?.awaiting}`)

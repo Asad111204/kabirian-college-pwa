@@ -36,7 +36,7 @@ export default defineConfig({
      * their own in-memory PostgreSQL.
      */
     env: {
-      DATABASE_URL: 'postgresql://localhost:5432/nova_school_test',
+      DATABASE_URL: 'postgresql://localhost:5432/kabirian_test',
       APP_TIMEZONE: 'Asia/Karachi',
     },
   },

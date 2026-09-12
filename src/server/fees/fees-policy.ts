@@ -24,7 +24,7 @@ export const FEE_HEADS = ['TUITION', 'ANNUAL_FUNDS', 'EVENTS_FUNDS', 'BOARD_REGI
 export type FeeHeadValue = (typeof FEE_HEADS)[number]
 
 export const FEE_HEAD_LABEL: Record<FeeHeadValue, string> = {
-  TUITION: 'School tuition fee',
+  TUITION: 'College tuition fee',
   ANNUAL_FUNDS: 'Annual funds',
   EVENTS_FUNDS: 'Events funds',
   BOARD_REGISTRATION: 'Board registration fee',

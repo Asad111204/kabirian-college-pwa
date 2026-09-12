@@ -140,7 +140,7 @@ export function GoogleDriveCard({
                 Google account.
               </span>
             </Detail>
-            <Detail label="School folder">
+            <Detail label="College folder">
               {status.rootFolderId ? (
                 <a
                   href={`https://drive.google.com/drive/folders/${status.rootFolderId}`}

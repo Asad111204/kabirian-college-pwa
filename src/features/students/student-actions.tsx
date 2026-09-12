@@ -363,7 +363,7 @@ function MoveDialog({
                   id="reason"
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
-                  placeholder={isTransfer ? 'e.g. Moved from Section A to Section B' : ''}
+                  placeholder={isTransfer ? 'e.g. Changed from Pre-Engineering to ICS Physics' : ''}
                   disabled={busy}
                 />
               </Field>

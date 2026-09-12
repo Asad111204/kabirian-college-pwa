@@ -4,7 +4,7 @@
  * Creates the academic session and builds every Class x Division x Program
  * combination that currently exists, each with a Section A:
  *
- *   14 classes x 1 division x 1 program = 14 academic groups
+ *   2 classes x 2 divisions x 5 programs = 20 academic groups
  *
  * This is real configuration, not demo data. It is exactly what the admin would
  * otherwise click together on the Session Structure screen — the script only
@@ -18,7 +18,7 @@
 import { done, heading, prisma } from './seed-utils'
 
 /**
- * Default academic session. The school's year runs August–July, so we take the
+ * Default academic session. The college's year runs August–July, so we take the
  * calendar year (or the previous one before August) as the starting year.
  */
 function defaultSessionName(): string {
@@ -38,7 +38,7 @@ function sessionDates(name: string): { startDate: Date; endDate: Date } {
 async function main() {
   const sessionName = process.argv[2] ?? defaultSessionName()
 
-  console.log('\nNova School Kamalia — academic structure seed')
+  console.log('\nKabirian College — academic structure seed')
   console.log(`Session: ${sessionName}`)
 
   /* ---------------- Academic session ---------------- */

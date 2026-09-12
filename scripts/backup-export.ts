@@ -2,12 +2,12 @@
  * Exports every table of the database to a folder of JSON files.
  *
  *   npm run backup:export                 → backups/<timestamp>/
- *   npm run backup:export -- --out D:/nova-school-backups/today
+ *   npm run backup:export -- --out D:/kabirian-backups/today
  *
  * Why not pg_dump: it is a separate program the office's computer will not
  * have. This is a logical backup the same Node the app runs on can take and
  * `npm run backup:restore` can put back (ADR-164). Neon's own point-in-time
- * history is the first line of defence; this is the copy the school holds
+ * history is the first line of defence; this is the copy the college holds
  * itself, on a drive it controls.
  *
  * The export contains everything — names, phone numbers, password hashes.

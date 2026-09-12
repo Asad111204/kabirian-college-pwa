@@ -170,7 +170,7 @@ export function StudentAttendanceView({ initial }: { initial: MyAttendanceData }
         </p>
       ) : (
         <Alert variant="warning" title="Not currently enrolled">
-          You are not currently enrolled in an active section. Please contact the school office.
+          You are not currently enrolled in an active section. Please contact the college office.
         </Alert>
       )}
 

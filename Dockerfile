@@ -1,12 +1,12 @@
-# Nova School Kamalia Management System — production image.
+# Kabirian College Management System — production image.
 #
 # Builds the Next.js standalone server (ADR-163). Runs as a plain Node
 # process on port 3000; give it the same environment variables as
 # .env.example. Nothing in this image reads .env — secrets come from the
 # host's environment settings.
 #
-#   docker build -t nova-school-kamalia .
-#   docker run -p 3000:3000 --env-file .env.production nova-school-kamalia
+#   docker build -t kabirian-college .
+#   docker run -p 3000:3000 --env-file .env.production kabirian-college
 
 FROM node:22-bookworm-slim AS deps
 WORKDIR /app

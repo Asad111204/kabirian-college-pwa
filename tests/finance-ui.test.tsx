@@ -206,7 +206,7 @@ describe('erasing a record', () => {
         report={{
           ...canDelete,
           canDelete: false,
-          reason: 'This student cannot be erased: the school’s records still refer to them — 42 attendance marks and 2 results.',
+          reason: 'This student cannot be erased: the college’s records still refer to them — 42 attendance marks and 2 results.',
           blockers: [
             { what: 'attendance marks', count: 42 },
             { what: 'results', count: 2 },

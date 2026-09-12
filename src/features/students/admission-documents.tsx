@@ -36,7 +36,7 @@ export function AdmissionDocuments({
   disabled?: boolean
 }) {
   if (types.length === 0) {
-    return <p className="text-sm text-foreground-muted">The school has no document checklist set up yet.</p>
+    return <p className="text-sm text-foreground-muted">The college has no document checklist set up yet.</p>
   }
 
   return (

@@ -15,7 +15,7 @@ export function ProgramsManager({ items }: { items: ProgramRecord[] }) {
       items={items}
       labelOf={(program) => program.name}
       searchPlaceholder="Search programs…"
-      emptyDescription="Add your first program, for example General, Science or Arts."
+      emptyDescription="Add your first program, for example Pre-Medical."
       columns={[
         {
           header: 'Program',
@@ -57,14 +57,14 @@ export function ProgramsManager({ items }: { items: ProgramRecord[] }) {
           type: 'text',
           required: true,
           uppercase: true,
-          placeholder: 'e.g. SCI',
+          placeholder: 'e.g. ICOM',
           hint: 'A short unique code. Letters, numbers and hyphens only.',
         },
         {
           name: 'description',
           label: 'Description',
           type: 'textarea',
-          placeholder: 'e.g. Science group for classes 9 and 10',
+          placeholder: 'e.g. Intermediate in Commerce',
         },
         {
           name: 'sortOrder',

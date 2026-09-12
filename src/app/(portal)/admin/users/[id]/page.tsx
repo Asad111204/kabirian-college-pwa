@@ -77,7 +77,7 @@ export default async function UserDetailPage({
       {user.isSystemOwner ? (
         <Alert variant="info" className="mb-4" title="Protected account">
           This is the first administrator account. It cannot be deactivated, given a different role,
-          or stripped of user-management permissions — that guarantees the school can never be
+          or stripped of user-management permissions — that guarantees the college can never be
           locked out of its own system.
         </Alert>
       ) : null}

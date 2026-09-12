@@ -309,7 +309,7 @@ export async function setEventStatus(ctx: AuthContext, id: string, status: Event
       {
         kind: 'EVENT',
         title: status === 'CANCELLED' ? `Cancelled: ${updated.title}` : updated.title,
-        body: status === 'CANCELLED' ? 'This event will not take place.' : 'The school has added an event.',
+        body: status === 'CANCELLED' ? 'This event will not take place.' : 'The college has added an event.',
         link: '/student/events',
         entityType: 'event',
         entityId: id,

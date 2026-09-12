@@ -62,7 +62,7 @@ const voucherRow = {
 const detail = {
   ...voucherRow,
   lines: [
-    { id: 'l1', head: 'TUITION' as const, label: null, name: 'School tuition fee', amountPaisa: 3_000_000 },
+    { id: 'l1', head: 'TUITION' as const, label: null, name: 'College tuition fee', amountPaisa: 3_000_000 },
     { id: 'l2', head: 'TOUR' as const, label: null, name: 'Tour fee', amountPaisa: 500_000 },
   ],
   payments: [],
@@ -163,7 +163,7 @@ describe('one voucher', () => {
 
   it('itemises what the year was charged for', () => {
     render(<VoucherDetailScreen voucher={detail} today="2026-09-09" printBase="/admin/fees" />)
-    expect(screen.getByText('School tuition fee')).toBeTruthy()
+    expect(screen.getByText('College tuition fee')).toBeTruthy()
     expect(screen.getByText('Tour fee')).toBeTruthy()
   })
 
@@ -204,7 +204,7 @@ describe('the fee on a student’s record', () => {
     academicSessionId: SESSION,
     academicSessionName: '2026-27',
     lines: [
-      { id: 'l1', head: 'TUITION' as const, label: null, name: 'School tuition fee', amountPaisa: 3_000_000 },
+      { id: 'l1', head: 'TUITION' as const, label: null, name: 'College tuition fee', amountPaisa: 3_000_000 },
       { id: 'l2', head: 'OTHER' as const, label: 'Hostel', name: 'Hostel', amountPaisa: 500_000 },
     ],
     totalPaisa: 3_500_000,
@@ -215,7 +215,7 @@ describe('the fee on a student’s record', () => {
 
   it('offers every head the college charges, all optional', () => {
     render(<StudentFeePlanCard plan={plan} canManage />)
-    expect(screen.getByLabelText('School tuition fee')).toBeTruthy()
+    expect(screen.getByLabelText('College tuition fee')).toBeTruthy()
     expect(screen.getByLabelText('Annual funds')).toBeTruthy()
     expect(screen.getByLabelText('Events funds')).toBeTruthy()
     expect(screen.getByLabelText('Board registration fee')).toBeTruthy()
@@ -227,7 +227,7 @@ describe('the fee on a student’s record', () => {
 
   it('fills in what the student is already charged, and works out the year', () => {
     render(<StudentFeePlanCard plan={plan} canManage />)
-    expect((screen.getByLabelText('School tuition fee') as HTMLInputElement).value).toBe('30000')
+    expect((screen.getByLabelText('College tuition fee') as HTMLInputElement).value).toBe('30000')
     expect((screen.getByLabelText('Others') as HTMLInputElement).value).toBe('5000')
     expect((screen.getByLabelText(/What is it for/) as HTMLInputElement).value).toBe('Hostel')
     expect(screen.getByText('Rs 35,000')).toBeTruthy()
@@ -261,7 +261,7 @@ describe('the fee on a student’s record', () => {
   it('offers nothing to change to a reader who may only look', () => {
     render(<StudentFeePlanCard plan={plan} canManage={false} />)
     expect(screen.queryByRole('button', { name: /Save fee/ })).toBeNull()
-    expect((screen.getByLabelText('School tuition fee') as HTMLInputElement).disabled).toBe(true)
+    expect((screen.getByLabelText('College tuition fee') as HTMLInputElement).disabled).toBe(true)
   })
 })
 
@@ -280,7 +280,7 @@ describe('a student’s own fees', () => {
 
   it('says where fees are actually paid', () => {
     render(<MyFeesScreen page={{ ...page, totalOutstandingPaisa: 0 }} />)
-    expect(screen.getByText(/paid at the school office/)).toBeTruthy()
+    expect(screen.getByText(/paid at the college office/)).toBeTruthy()
   })
 
   it('says something useful when nothing has been issued', () => {

@@ -1,8 +1,6 @@
-# Database Schema — Nova School Kamalia Management System
+# Database Schema — Kabirian College Management System
 
-> This document was written while the schema was being designed for the original (college) deployment and is kept as the technical reference; the schema is unchanged for Nova School Kamalia. Where it quotes example rows such as *1st Year · Boys · Pre-Medical*, read them as illustrations of the shape — the rows Nova School Kamalia actually seeds are listed in § 13.
-
-Status: sections **1–5, 8 and 9 are built and applied** to the database (seven migrations, to 2026-08-30). Sections **6 (timetable) and 7 (communication) remain proposed** — they are a Phase 0 sketch and will be revised when those phases are built, the way section 5 was. · Database: PostgreSQL 18 · ORM: Prisma
+Status: sections **1–5, 8 and 9 are built and applied** to the college's database (seven migrations, to 2026-08-30). Sections **6 (timetable) and 7 (communication) remain proposed** — they are a Phase 0 sketch and will be revised when those phases are built, the way section 5 was. · Database: PostgreSQL 18 · ORM: Prisma
 
 Conventions
 - Table names: `snake_case`, plural. Column names: `snake_case`. Prisma models map to these with `@@map`/`@map`.
@@ -18,10 +16,10 @@ Conventions
 
 ```
 BUILDING BLOCKS (defined once, reused every session)
-  classes    : PG (level 1) · Pre-Nursery (2) · Nursery (3) · KG (4) · Class 1 (5) … Class 10 (14)
-  divisions  : General   (add Boys · Girls if classes are taught separately)
-  programs   : General   (add Science · Arts for classes 9–10 if the school runs them)
-  subjects   : English, Urdu, Mathematics, Science, Islamiat, Pakistan Studies, Social Studies, Computer, …
+  classes    : 1st Year (11th Class, level 1) · 2nd Year (12th Class, level 2)
+  divisions  : Boys · Girls
+  programs   : Pre-Medical · Pre-Engineering · ICS Physics · ICS Economics · FAIT
+  subjects   : Biology, Chemistry, Physics, Mathematics, Computer Science, Economics, English, Urdu, …
 
 THIS SESSION'S STRUCTURE (built from the blocks; frozen as history when the session closes)
   academic_sessions      2026-27
@@ -268,7 +266,7 @@ Deactivating a block hides it from *new* structures and forms; it never changes 
 
 Unique `(academic_session_id, class_id, division_id, program_id)`. Also `unique(id, academic_session_id)` so child tables can carry a composite FK that *proves* they belong to the same session. Display name is derived: `1st Year · Boys · Pre-Medical`.
 
-Nova School Kamalia today: 14 rows per session (14 classes × 1 division × 1 program).
+Kabirian College today: 20 rows per session (2 classes × 2 divisions × 5 programs).
 
 #### `sections`
 | Column | Type | Notes |
@@ -567,7 +565,7 @@ An absent student scores zero, but the absence stays recorded as its own fact, a
 
 A grade is chosen by the **lower** bound only, taking the highest band the mark reaches, so there is no gap between "A up to 89" and "A+ from 90" (ADR-103).
 
-**Seeded:** one scale, `Nova School Kamalia Scale`, marked default — A+ 90, A 80, B 70, C 60, D 50, F 0 (a starting scale for the school to confirm).
+**Seeded:** one scale, `Kabirian College Scale`, marked default — A+ 90, A 80, B 70, C 60, D 50, F 0.
 
 ### `results` — one row per exam × student × version
 | Column | Type | Notes |
@@ -998,12 +996,12 @@ You never manage these composite keys by hand — the services fill them in; the
 
 ## 13. Seed data
 
-**Reference seed (safe for production; Nova School Kamalia's starting rows, all editable in Admin):**
-- `classes`: PG (level 1), Pre-Nursery (2), Nursery (3), KG (4), Class 1 (5) … Class 10 (14) — codes `PG`, `PRE-NUR`, `NUR`, `KG`, `1` … `10`
-- `divisions`: General (GEN)
-- `programs`: General (GEN)
+**Reference seed (safe for production, confirmed by the college on 2026-08-28):**
+- `classes`: 1st Year / 11th Class (level 1), 2nd Year / 12th Class (level 2)
+- `divisions`: Boys (B), Girls (G)
+- `programs`: Pre-Medical (PM), Pre-Engineering (PE), ICS Physics (ICS-PHY), ICS Economics (ICS-ECO), FAIT (FAIT)
 - `permissions` + `role_permissions`, `document_types`, `settings`, `code_sequences`, and one default `grade_scales` with its six bands (A+ 90, A 80, B 70, C 60, D 50, F 0)
-- **No `exam_types`** — none are assumed, so the Admin enters them (ADR-112)
+- **No `exam_types`** — the college confirmed none, so the Admin enters them (ADR-112)
 
 **Editable defaults (proposed; Admin adjusts in the Curriculum screen — see PROJECT_PLAN.md Q4):**
 - `subjects`: English, Urdu, Islamiat, Pakistan Studies, Tarjuma-tul-Quran, Biology, Chemistry, Physics, Mathematics, Computer Science, Economics, Statistics, Education, Civics, … (final list to be confirmed)
