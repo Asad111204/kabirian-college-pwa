@@ -38,7 +38,7 @@ export default async function StaffAttendancePage() {
         <>
           <PageHeader title="Today's attendance" description={formatDate(today)} />
           <Alert variant="warning" title="Your account is not linked to a staff record">
-            The college office needs to connect this login to your staff record before your classes
+            The school office needs to connect this login to your staff record before your classes
             appear here.
           </Alert>
         </>

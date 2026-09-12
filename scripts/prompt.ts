@@ -3,7 +3,7 @@
  *
  * The password must not appear on the screen. Node's readline can be talked
  * into hiding it, but only when it decides the input is a terminal, and on
- * Windows `cmd.exe` it does not always decide that — the college sent a
+ * Windows `cmd.exe` it does not always decide that — a user once sent a
  * screenshot with the password sitting in plain view to prove it. So the
  * password is read from the raw input stream instead, one keystroke at a time,
  * and nothing is echoed at all.

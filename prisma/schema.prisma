@@ -1,4 +1,4 @@
-// Kabirian College Management System — database schema
+// Nova School Kamalia Management System — database schema
 // Design notes: docs/DATABASE_SCHEMA.md · decisions: DECISIONS.md (ADR-031/032/033)
 //
 // Phase 1 implements: identity & access, the academic structure, people (schema only,
@@ -230,7 +230,7 @@ enum MarkStatus {
   PENDING
   /// A mark has been entered. `obtained_marks` is present.
   ENTERED
-  /// The student did not sit the paper. Kabirian counts this as 0 obtained,
+  /// The student did not sit the paper. The school counts this as 0 obtained,
   /// but the fact of absence is stored separately and never inferred from the
   /// zero — "scored nothing" and "was not there" are different facts.
   ABSENT
@@ -665,7 +665,7 @@ model AcademicSession {
 }
 
 /// One row per combination that actually runs in a session:
-/// Session x Class x Division x Program (20 rows for Kabirian College today).
+/// Session x Class x Division x Program (14 rows for Nova School Kamalia today: 14 classes x 1 x 1).
 model AcademicGroup {
   id                String   @id @default(uuid(7)) @db.Uuid
   academicSessionId String   @map("academic_session_id") @db.Uuid
@@ -1617,7 +1617,7 @@ model ExamPaper {
   maxMarks          Decimal @map("max_marks") @db.Decimal(6, 2)
   /// The pass rule as a **percentage**, not a computed number of marks, so the
   /// rule that applied to this paper survives even if the policy changes later.
-  /// Kabirian confirmed 50% of each paper.
+  /// The default is 50% of each paper; the office may set another per paper.
   passingPercentage Decimal @default(50.00) @map("passing_percentage") @db.Decimal(5, 2)
 
   isActive        Boolean  @default(true) @map("is_active")

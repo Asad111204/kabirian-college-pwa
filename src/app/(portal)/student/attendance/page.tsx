@@ -32,7 +32,7 @@ export default async function StudentAttendancePage() {
         <>
           <PageHeader title="My attendance" />
           <Alert variant="warning" title="Your account is not linked to a student record yet">
-            The college office needs to connect this login to your student record before your
+            The school office needs to connect this login to your student record before your
             attendance appears here.
           </Alert>
         </>

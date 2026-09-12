@@ -19,7 +19,7 @@ export const staffAttendanceSaveSchema = z.object({
       }),
     )
     .min(1, 'Send at least one staff member.')
-    .max(500, 'That is more staff than the college has.'),
+    .max(500, 'That is more staff than the school has.'),
 })
 
 export const staffAttendanceDayQuerySchema = z.object({

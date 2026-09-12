@@ -24,7 +24,7 @@ export default async function StaffAttendancePage({ searchParams }: { searchPara
     <>
       <PageHeader
         title="Staff attendance"
-        description="The college's own register. Present, Absent, Short leave or Leave — for the day shown."
+        description="The school's own register. Present, Absent, Short leave or Leave — for the day shown."
         actions={
           <Link href="/admin/staff-attendance/month" className="text-sm text-primary hover:underline">
             This month →

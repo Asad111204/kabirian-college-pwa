@@ -63,7 +63,7 @@ export function LoginForm() {
       <div>
         <h2 className="text-base font-semibold text-foreground">Sign in</h2>
         <p className="mt-0.5 text-sm text-foreground-muted">
-          Use the username given to you by the college.
+          Use the username given to you by the school.
         </p>
       </div>
 

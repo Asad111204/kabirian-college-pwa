@@ -336,7 +336,7 @@ function uniq(pairs: readonly (readonly [string, string])[]): [string, string][]
 
 function describeScope(s: { session: string | null; className: string | null; divisionName: string | null; programName: string | null; sectionLabel: string | null }): string {
   const parts = [s.sectionLabel ?? [s.className, s.divisionName, s.programName].filter(Boolean).join(' · '), s.session ? `Session ${s.session}` : null].filter(Boolean)
-  return parts.length ? parts.join(' — ') : 'The whole college'
+  return parts.length ? parts.join(' — ') : 'The whole school'
 }
 
 function ReportBody({ kind, data }: { kind: ReportKind; data: unknown }) {

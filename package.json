@@ -1,8 +1,8 @@
 {
-  "name": "kabirian-college",
+  "name": "nova-school-kamalia",
   "version": "0.1.0",
   "private": true,
-  "description": "Kabirian College Management System — Admin, Staff and Student portals (PWA)",
+  "description": "Nova School Kamalia Management System — Admin, Staff and Student portals (PWA)",
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",

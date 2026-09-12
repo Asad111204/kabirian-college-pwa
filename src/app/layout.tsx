@@ -21,7 +21,7 @@ export const metadata: Metadata = {
     apple: [{ url: '/icons/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
   },
   formatDetection: { telephone: false },
-  robots: { index: false, follow: false }, // a private college system — keep it out of search engines
+  robots: { index: false, follow: false }, // a private school system — keep it out of search engines
 }
 
 export const viewport: Viewport = {
@@ -29,7 +29,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   viewportFit: 'cover',
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#134e4a' },
+    { media: '(prefers-color-scheme: light)', color: '#104b78' },
     { media: '(prefers-color-scheme: dark)', color: '#0f172a' },
   ],
 }

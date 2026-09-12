@@ -39,7 +39,7 @@ export default async function StudentProfilePage() {
         <>
           <PageHeader title="My profile" />
           <Alert variant="warning" title="This login is not linked to a student record">
-            The college office needs to connect this login to your student record before your
+            The school office needs to connect this login to your student record before your
             profile can be shown.
           </Alert>
         </>
@@ -192,7 +192,7 @@ export default async function StudentProfilePage() {
       </div>
 
       <Alert variant="info" className="mt-4">
-        To correct anything on this page, please contact the college office — student records are
+        To correct anything on this page, please contact the school office — student records are
         maintained by the administration.
       </Alert>
     </>

@@ -20,7 +20,7 @@ export default async function NotificationsPage({ searchParams }: { searchParams
 
   return (
     <>
-      <PageHeader title="Notifications" description="Everything the college has told you, newest first." />
+      <PageHeader title="Notifications" description="Everything the school has told you, newest first." />
       <NotificationList page={page} />
     </>
   )

@@ -263,12 +263,12 @@ export async function completeConnection(args: {
       action: 'storage.folders_created',
       entityType: 'setting',
       entityId: SETTING_CONNECTION,
-      entityLabel: 'Kabirian College folders',
+      entityLabel: 'Nova School Kamalia folders',
       after: { rootFolderId: folders.rootFolderId },
       request: args.request,
     })
   } catch (folderError) {
-    logger.warn('Google Drive connected, but the college folders could not be created yet', {
+    logger.warn('Google Drive connected, but the school folders could not be created yet', {
       error: folderError,
     })
   }
@@ -343,7 +343,7 @@ export async function testDriveConnection(ctx: AuthContext): Promise<{
   try {
     rootFolderId = (await ensureRootFolders()).rootFolderId
   } catch (error) {
-    logger.warn('Drive answered, but the college folders could not be created', { error })
+    logger.warn('Drive answered, but the school folders could not be created', { error })
   }
 
   return {

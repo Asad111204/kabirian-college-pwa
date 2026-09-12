@@ -34,12 +34,12 @@ function generatePassword(): string {
   const bytes = new Uint8Array(8)
   globalThis.crypto.getRandomValues(bytes)
   const chars = Array.from(bytes, (b) => alphabet[b % alphabet.length])
-  return `Kbr-${chars.slice(0, 4).join('')}-${chars.slice(4, 8).join('')}`
+  return `Nsk-${chars.slice(0, 4).join('')}-${chars.slice(4, 8).join('')}`
 }
 
 async function main() {
   const username = (argValue('--username') ?? 'admin').trim().toLowerCase()
-  const fullName = argValue('--name') ?? 'College Administrator'
+  const fullName = argValue('--name') ?? 'School Administrator'
 
   const existing = await prisma.user.findFirst({
     where: { username: { equals: username, mode: 'insensitive' } },

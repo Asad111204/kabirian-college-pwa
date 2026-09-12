@@ -117,7 +117,7 @@ async function requireStaffSelf(ctx: AuthContext) {
 
   if (!ctx.staffId) {
     throw new ForbiddenError(
-      'This account is not linked to a staff record yet, so there is nothing to show. Please contact the college office.',
+      'This account is not linked to a staff record yet, so there is nothing to show. Please contact the school office.',
       { userId: ctx.userId },
     )
   }

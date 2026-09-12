@@ -81,7 +81,7 @@ export async function periodsInUse(): Promise<Map<number, string[]>> {
  * overlapping periods between two saves.
  */
 export async function setCollegePeriods(ctx: AuthContext, periods: CollegePeriod[]): Promise<CollegePeriod[]> {
-  assertAdminArea(ctx, 'The college day')
+  assertAdminArea(ctx, 'The school day')
   authorize(ctx, 'settings.manage')
 
   const problems = problemsWithGrid(periods)
@@ -107,7 +107,7 @@ export async function setCollegePeriods(ctx: AuthContext, periods: CollegePeriod
   const ordered = inClockOrder(periods)
   await prisma.$transaction(async (tx) => {
     await writeSetting(SETTING_TIMETABLE_PERIODS, ordered, ctx, {
-      description: 'The college’s daily period grid: the number of each period and the times it runs',
+      description: 'The school’s daily period grid: the number of each period and the times it runs',
       executor: tx,
     })
     await writeAuditLog(
@@ -115,7 +115,7 @@ export async function setCollegePeriods(ctx: AuthContext, periods: CollegePeriod
       {
         action: 'timetable.periods_updated',
         entityType: 'setting',
-        entityLabel: 'The college day',
+        entityLabel: 'The school day',
         before,
         after: ordered,
       },

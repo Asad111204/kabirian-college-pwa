@@ -8,7 +8,7 @@ import { USERS, ids, signIn } from './helpers'
 test.describe('signing in', () => {
   test('a wrong password is refused with a sentence, and the right one opens the portal', async ({ page }) => {
     await page.goto('/login')
-    await expect(page.getByRole('heading', { name: 'Kabirian College' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Nova School Kamalia' })).toBeVisible()
 
     await page.locator('#username').fill(USERS.teacher)
     await page.locator('#password').fill('not-the-password')

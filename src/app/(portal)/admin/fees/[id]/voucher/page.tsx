@@ -28,7 +28,7 @@ export default async function VoucherPrintPage({ params }: { params: Promise<{ i
   return (
     <>
       <div className="print-hide">
-        <PageHeader title="Fee voucher" description="Three copies on one page: bank, college and student." />
+        <PageHeader title="Fee voucher" description="Three copies on one page: bank, school and student." />
       </div>
       <VoucherPrint voucher={voucher} collegeName={env.APP_COLLEGE_NAME} />
     </>

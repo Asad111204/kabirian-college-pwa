@@ -39,7 +39,7 @@ import type {
 const FOLDER_MIME = 'application/vnd.google-apps.folder'
 
 /** The folder names created inside the college root. */
-export const ROOT_FOLDER_NAME = 'Kabirian College'
+export const ROOT_FOLDER_NAME = 'Nova School Kamalia'
 export const STUDENTS_FOLDER_NAME = 'Students'
 export const STAFF_FOLDER_NAME = 'Staff'
 
@@ -146,7 +146,7 @@ export class GoogleDriveProvider implements StorageProvider {
           name: safeDriveName(input.fileName),
           parents: [input.folderId],
           // A marker so files created by this app are identifiable in Drive.
-          appProperties: { kabirian: '1' },
+          appProperties: { novaSchoolKamalia: '1' },
         },
         media: { mimeType: input.mimeType, body },
         fields: 'id,size',
@@ -217,7 +217,7 @@ export class GoogleDriveProvider implements StorageProvider {
 /**
  * Creates the college folder structure, once.
  *
- *   Kabirian College/
+ *   Nova School Kamalia/
  *     Students/
  *     Staff/
  *
@@ -265,7 +265,7 @@ export async function ensureRootFolders(): Promise<{
     description: 'Google Drive connection details. Contains no secret.',
   })
 
-  logger.info('Google Drive college folders ready', { rootFolderId })
+  logger.info('Google Drive school folders ready', { rootFolderId })
 
   return { rootFolderId, studentsFolderId, staffFolderId }
 }

@@ -55,7 +55,7 @@ export function decideCanDelete(noun: string, blockers: readonly Blocker[]): Del
     allowed: false,
     code: 'HAS_HISTORY',
     reason:
-      `This ${noun} cannot be erased: the college's records still refer to them — ${describeBlockers(standing)}. ` +
+      `This ${noun} cannot be erased: the school's records still refer to them — ${describeBlockers(standing)}. ` +
       `Deleting them would take that history with them, so deactivate them instead; they will stop appearing in lists and keep their record.`,
     blockers: [...standing],
   }

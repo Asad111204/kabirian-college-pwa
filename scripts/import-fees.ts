@@ -1,8 +1,8 @@
 /**
- * Brings the old college system's fee ledger into this one, through the
+ * Brings a previous fee ledger (two CSV files) into this system, through the
  * running application.
  *
- *   npx tsx scripts/import-fees.ts --plans old-fee-plans.csv --payments old-fee-payments.csv --url https://college.example.com
+ *   npx tsx scripts/import-fees.ts --plans fee-plans.csv --payments fee-payments.csv --url https://school.example.com
  *   …same again with --apply once the report reads correctly.
  *
  * Without `--apply` nothing is created: every row is matched to a student and
@@ -150,7 +150,7 @@ async function main() {
   const skipPlans = process.argv.includes('--no-plans')
 
   if (!plansFile) {
-    complain('\nGive the plans CSV: --plans old-fee-plans.csv [--payments old-fee-payments.csv] [--url https://…] [--no-plans] [--apply]\n')
+    complain('\nGive the plans CSV: --plans fee-plans.csv [--payments fee-payments.csv] [--url https://…] [--no-plans] [--apply]\n')
     process.exit(1)
   }
 
@@ -272,7 +272,7 @@ async function main() {
     // A few students per request, section by section, until nothing is left.
     //
     // A hosted request has a wall clock, and a whole class at once runs past
-    // it: the college's own sections of eleven went through while those of
+    // it: the school's own sections of eleven went through while those of
     // seventeen, twenty and twenty-nine came back as 500s having issued
     // nothing. So each call is bounded, and the reply says how many are still
     // waiting. Anyone who already has a voucher is skipped, so asking again
@@ -385,7 +385,7 @@ async function main() {
             amountPaisa: payment.amountPaisa,
             paidOn: payment.paidOn,
             method: 'CASH',
-            remarks: `Carried over from the previous college system (${payment.month}).`,
+            remarks: `Carried over from the previous fee system (${payment.month}).`,
           }),
         })
         if (!res.ok) {

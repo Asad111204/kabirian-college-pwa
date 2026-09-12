@@ -31,7 +31,7 @@ export default async function StaffExamsPage() {
         <>
           <PageHeader title="Exams & Marks" />
           <Alert variant="warning" title="Your account is not linked to a staff record">
-            The college office needs to connect this login to your staff record before your papers
+            The school office needs to connect this login to your staff record before your papers
             appear here.
           </Alert>
         </>

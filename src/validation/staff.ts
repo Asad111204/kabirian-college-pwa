@@ -207,7 +207,7 @@ export const assignmentBulkCreateSchema = z.object({
       }),
     )
     .min(1, 'Choose at least one section.')
-    .max(60, 'That is more sections than the college has.'),
+    .max(60, 'That is more sections than the school has.'),
   assignedAt: optionalIsoDate,
 })
 

@@ -27,7 +27,7 @@ export function DepartmentsManager({ items }: { items: DepartmentRow[] }) {
       items={items}
       labelOf={(item) => item.name}
       searchPlaceholder="Search departments…"
-      emptyDescription="Add the departments your college is organised into."
+      emptyDescription="Add the departments your school is organised into."
       columns={[
         {
           header: 'Department',

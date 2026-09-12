@@ -110,7 +110,7 @@ export async function login(
   if (user.status !== 'ACTIVE') {
     logger.warn('Login attempt on inactive account', { userId: user.id, ip })
     throw new AuthenticationError(
-      'This account is not active. Please contact the college administration.',
+      'This account is not active. Please contact the school administration.',
     )
   }
 

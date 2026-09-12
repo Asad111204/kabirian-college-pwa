@@ -17,7 +17,7 @@ export default async function SubjectsPage() {
     <>
       <PageHeader
         title="Subjects"
-        description="The master list of subjects taught at the college. Which programs study which subjects is set on the Curriculum screen."
+        description="The master list of subjects taught at the school. Which programs study which subjects is set on the Curriculum screen."
       />
 
       <SubjectsManager items={subjects} />

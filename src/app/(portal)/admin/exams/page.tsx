@@ -61,7 +61,7 @@ export default async function ExamsPage({
       {examTypes.length === 0 ? (
         <Alert variant="warning" title="No exam types have been configured yet" className="mb-4">
           An exam has to be of some kind — a term test, a send-up, a final. Add the ones your
-          college holds and they become selectable here immediately.{' '}
+          school holds and they become selectable here immediately.{' '}
           <Link href="/admin/academics/exam-types">Go to Exam Types</Link>
         </Alert>
       ) : null}

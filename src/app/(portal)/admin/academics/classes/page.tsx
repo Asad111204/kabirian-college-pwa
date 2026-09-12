@@ -16,7 +16,7 @@ export default async function ClassesPage() {
     <>
       <PageHeader
         title="Classes / Years"
-        description="The academic years the college offers. The level decides the promotion order — a student in level 1 is promoted into level 2."
+        description="The classes the school offers, from PG to Class 10. The level decides the promotion order — a student in level 1 is promoted into level 2."
       />
 
       <ClassesManager items={classes} />

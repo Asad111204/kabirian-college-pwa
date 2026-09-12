@@ -219,7 +219,7 @@ export function NoticeEditorDialog({
               onChange={(e) => set({ body: e.target.value })}
               rows={6}
               required
-              placeholder="What the college wants to say. Line breaks are kept."
+              placeholder="What the school wants to say. Line breaks are kept."
             />
           </Field>
 

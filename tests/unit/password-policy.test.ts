@@ -3,7 +3,7 @@ import { checkPasswordPolicy, PASSWORD_MIN_LENGTH } from '@/lib/password-policy'
 
 describe('password policy', () => {
   it('accepts a reasonable password', () => {
-    expect(checkPasswordPolicy('Kabirian2026Xy', 'admin').ok).toBe(true)
+    expect(checkPasswordPolicy('NovaSchool2026Xy', 'admin').ok).toBe(true)
   })
 
   it('rejects passwords that are too short', () => {
@@ -20,7 +20,7 @@ describe('password policy', () => {
 
   it('rejects very common passwords', () => {
     expect(checkPasswordPolicy('password123').ok).toBe(false)
-    expect(checkPasswordPolicy('kabiriancollege').ok).toBe(false)
+    expect(checkPasswordPolicy('novaschoolkamalia').ok).toBe(false)
   })
 
   it('rejects a password containing the username', () => {

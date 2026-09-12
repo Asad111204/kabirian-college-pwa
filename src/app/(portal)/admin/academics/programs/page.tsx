@@ -11,9 +11,9 @@ export const dynamic = 'force-dynamic'
 /**
  * Academic Management -> Programs.
  *
- * Pre-Medical, Pre-Engineering, ICS Physics, ICS Economics and FAIT are seeded
- * starting data — the application contains no logic that depends on them. Adding
- * "I.Com" here makes it selectable everywhere at once (requirement 13).
+ * A single "General" program is seeded as starting data — the application
+ * contains no logic that depends on it. Adding "Science" or "Arts" here makes
+ * it selectable everywhere at once (requirement 13).
  */
 export default async function ProgramsPage() {
   const ctx = await requirePortalAccess(['ADMIN'])

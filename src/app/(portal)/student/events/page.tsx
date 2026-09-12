@@ -19,7 +19,7 @@ export default async function StudentEventsPage() {
 
   return (
     <>
-      <PageHeader title="Events" description="What is coming up at the college." />
+      <PageHeader title="Events" description="What is coming up at the school." />
       <EventFeed initial={initial} />
     </>
   )

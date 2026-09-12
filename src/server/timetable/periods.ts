@@ -93,7 +93,7 @@ export function lengthOf(period: CollegePeriod): number {
 export function problemsWithGrid(periods: readonly CollegePeriod[]): string[] {
   const problems: string[] = []
 
-  if (periods.length === 0) return ['A college day needs at least one period.']
+  if (periods.length === 0) return ['A school day needs at least one period.']
 
   const seen = new Set<number>()
   for (const period of periods) {

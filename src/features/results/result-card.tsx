@@ -17,31 +17,27 @@ import { marksLabel, percentageLabel, positionLabel } from './shared'
  * the design.
  *
  * The look is an academic document, not a dashboard: white paper, thin rules,
- * one colour taken from the college's own logo, and nothing rounded, tinted or
- * shadowed. On paper, `.print-area` in globals.css hides everything else and
- * this fills an A4 portrait page.
+ * one colour taken from the school's own crest (`--color-college` in
+ * globals.css — the maroon of the NOVA wordmark), and nothing rounded, tinted
+ * or shadowed. On paper, `.print-area` in globals.css hides everything else
+ * and this fills an A4 portrait page.
  */
 
-/** The college's own strapline, as it appears on the official logo. */
-const TAGLINE = 'INSPIRING MINDS SHAPING FUTURE'
+/** The school's strapline, as it appears on the ribbon of the crest. */
+const TAGLINE: string = 'GLEAM OF KNOWLEDGE'
 
 /**
- * The official logo, used exactly as the college supplied it.
+ * The crest printed at the top of the card.
  *
- * The file is a 1280x960 canvas carrying a wide horizontal lockup: the artwork
- * itself measures 572x155, sitting dead centre with roughly 27% blank canvas to
- * each side and 42% above and below. Rendering the whole canvas large enough
- * for the crest to read would have cost about 110mm of page height for 18mm of
- * ink, so the image is shown at full width inside a 6:1 box and centred with
- * `object-cover`.
- *
- * That paints the artwork at ~66mm wide on A4 while the blank canvas margin is
- * simply not painted. The file is untouched, the aspect ratio is preserved by
- * `object-cover`, and the artwork is never clipped: the visible band is the
- * middle 22.2% of the image (38.9%-61.1%) and the artwork occupies 41.9%-57.9%,
- * leaving clear space on both sides.
+ * Nova School Kamalia's logo is a portrait emblem, so it is set by height —
+ * 34mm, about a fifth of the page's printable height — and keeps its own
+ * proportions with `object-contain`. LOGO_WIDTH / LOGO_HEIGHT are the file's
+ * pixel size (scripts/prepare-logo.ts prints them), so the browser reserves
+ * the right box before the image arrives.
  */
-const LOGO_SRC = '/brand/college-logo.jpeg'
+const LOGO_SRC = '/brand/logo-full.png'
+const LOGO_WIDTH = 495
+const LOGO_HEIGHT = 640
 
 /** Labels are small, spaced capitals; values are plain text. */
 const LABEL = 'text-[9px] font-semibold uppercase tracking-[0.09em] text-ink-500'
@@ -113,28 +109,30 @@ export function ResultCard({
         {/* A plain <img>, deliberately. next/image lazy-loads and wraps the
             element, and a logo that has not loaded when the reader presses
             Print is a result card with a blank space where the crest should be.
-            The file is 25 KB and served once.
+            The file is under 200 KB and served once.
 
             The size is fixed in millimetres with no breakpoint, so the printed
-            logo is the same 66mm whether the browser applies screen breakpoints
-            to the page box or not. */}
+            crest is the same 34mm tall whether the browser applies screen
+            breakpoints to the page box or not. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={LOGO_SRC}
           alt={`${collegeName} logo`}
-          width={1280}
-          height={960}
+          width={LOGO_WIDTH}
+          height={LOGO_HEIGHT}
           loading="eager"
           decoding="sync"
-          className="mx-auto block aspect-[6/1] w-full max-w-[148mm] object-cover object-center"
+          className="mx-auto block h-[34mm] w-auto object-contain object-center"
         />
 
         <h1 className="mt-4 text-[22px] leading-tight font-bold tracking-[0.11em] text-college uppercase">
           {collegeName}
         </h1>
-        <p className="mt-1.5 text-[9.5px] font-medium tracking-[0.26em] text-ink-500 uppercase">
-          {TAGLINE}
-        </p>
+        {TAGLINE ? (
+          <p className="mt-1.5 text-[9.5px] font-medium tracking-[0.26em] text-ink-500 uppercase">
+            {TAGLINE}
+          </p>
+        ) : null}
 
         <div className="mt-4 border-t border-ink-200" />
 

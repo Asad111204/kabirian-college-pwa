@@ -52,7 +52,7 @@ const options = {
   departments: [{ id: '66666666-6666-4666-8666-666666666661', name: 'Science' }],
   designations: [{ id: '77777777-7777-4777-8777-777777777771', name: 'Lecturer' }],
   exams: [{ id: EXAM, name: 'First Term', sessionName: '2026-27', status: 'SCHEDULED' }],
-  collegeName: 'Kabirian College',
+  collegeName: 'Nova School Kamalia',
 }
 
 const studentReport = {
@@ -103,7 +103,7 @@ describe('the report centre', () => {
     await screen.findByText('Ali Raza')
     const area = container.querySelector('.print-area')!
     expect(area).toBeTruthy()
-    expect(within(area as HTMLElement).getByText('Kabirian College')).toBeTruthy()
+    expect(within(area as HTMLElement).getByText('Nova School Kamalia')).toBeTruthy()
     expect(within(area as HTMLElement).queryByRole('button')).toBeNull()
     expect(screen.getByRole('button', { name: /Print/ }).closest('.print-hide')).toBeTruthy()
   })

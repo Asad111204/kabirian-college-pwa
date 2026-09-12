@@ -83,7 +83,7 @@ describe('the switcher in the user menu', () => {
     answerNotifications()
     const user = userEvent.setup()
     render(
-      <AppShell user={shellUser()} collegeName="Kabirian College" notifications={quiet}>
+      <AppShell user={shellUser()} collegeName="Nova School Kamalia" notifications={quiet}>
         <p>page</p>
       </AppShell>,
     )
@@ -95,7 +95,7 @@ describe('the switcher in the user menu', () => {
     answerNotifications()
     const user = userEvent.setup()
     render(
-      <AppShell user={shellUser({ portals: ['STAFF', 'ADMIN'] })} collegeName="Kabirian College" notifications={quiet}>
+      <AppShell user={shellUser({ portals: ['STAFF', 'ADMIN'] })} collegeName="Nova School Kamalia" notifications={quiet}>
         <p>page</p>
       </AppShell>,
     )
@@ -108,7 +108,7 @@ describe('the switcher in the user menu', () => {
     answerNotifications()
     const user = userEvent.setup()
     render(
-      <AppShell user={shellUser({ portals: ['STAFF', 'ADMIN'] })} collegeName="Kabirian College" notifications={quiet}>
+      <AppShell user={shellUser({ portals: ['STAFF', 'ADMIN'] })} collegeName="Nova School Kamalia" notifications={quiet}>
         <p>page</p>
       </AppShell>,
     )
@@ -124,7 +124,7 @@ describe('the switcher in the user menu', () => {
     answerNotifications()
     const user = userEvent.setup()
     render(
-      <AppShell user={shellUser({ role: 'ADMIN', portals: ['STAFF', 'ADMIN'] })} collegeName="Kabirian College" notifications={quiet}>
+      <AppShell user={shellUser({ role: 'ADMIN', portals: ['STAFF', 'ADMIN'] })} collegeName="Nova School Kamalia" notifications={quiet}>
         <p>page</p>
       </AppShell>,
     )

@@ -1,5 +1,5 @@
 /**
- * DEVELOPMENT DEMO DATA — NEVER RUN THIS ON A REAL COLLEGE DATABASE.
+ * DEVELOPMENT DEMO DATA — NEVER RUN THIS ON A REAL SCHOOL DATABASE.
  *
  * Creates clearly-labelled fake people so the portals can be tested end to end:
  *   - one teacher   (username: demo.teacher)
@@ -32,12 +32,12 @@ async function main() {
   if (realStudents > 0) {
     console.error(
       `\nRefusing to run: the database already contains ${realStudents} real student record(s).\n` +
-        `Demo data must never be mixed into a live college database.\n`,
+        `Demo data must never be mixed into a live school database.\n`,
     )
     process.exit(1)
   }
 
-  console.log('\nKabirian College — DEVELOPMENT demo data')
+  console.log('\nNova School Kamalia — DEVELOPMENT demo data')
   console.log('These are fake people for testing. Do not use in production.')
 
   const session = await prisma.academicSession.findFirst({ where: { isCurrent: true } })
@@ -46,19 +46,18 @@ async function main() {
     process.exit(1)
   }
 
-  // Pick a real section from the seeded structure: 1st Year, Boys, Pre-Medical.
+  // Pick a real section from the seeded structure: the lowest class (PG) and
+  // its first section, whatever the division and program are called.
   const section = await prisma.section.findFirst({
-    where: {
-      academicSessionId: session.id,
-      academicGroup: { class: { level: 1 }, division: { code: 'B' }, program: { code: 'PM' } },
-    },
+    where: { academicSessionId: session.id, isActive: true },
+    orderBy: [{ academicGroup: { class: { level: 'asc' } } }, { name: 'asc' }],
     include: {
       academicGroup: { include: { class: true, division: true, program: true } },
     },
   })
 
   if (!section) {
-    console.error('\nNo section found for 1st Year / Boys / Pre-Medical. Run `npm run seed:structure`.\n')
+    console.error('\nNo section found in the current session. Run `npm run seed:structure`.\n')
     process.exit(1)
   }
 
@@ -81,9 +80,9 @@ async function main() {
     })
 
     // Designations are reference data from the Phase 5 seed.
-    const lecturer = await prisma.designation.findFirst({ where: { name: 'Lecturer' } })
+    const lecturer = await prisma.designation.findFirst({ where: { name: 'Teacher' } })
     if (!lecturer) {
-      console.error('\nNo "Lecturer" designation found. Run `npm run seed:reference` first.\n')
+      console.error('\nNo "Teacher" designation found. Run `npm run seed:reference` first.\n')
       process.exit(1)
     }
 
@@ -211,7 +210,7 @@ async function main() {
   ${session.name} > ${group.class.displayName ?? group.class.name} > ${group.division.name} > ${group.program.name} > Section ${section.name}
 
   This is fake data for testing. Delete it before the
-  college's real records are entered.
+  school's real records are entered.
 ============================================================
 `)
 }

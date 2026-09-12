@@ -24,7 +24,7 @@ import {
  * hundredth above.
  */
 
-/** The seeded Kabirian College scale. */
+/** The seeded Nova School Kamalia scale. */
 const BANDS: GradeBandInput[] = [
   { grade: 'A+', minPercentage: '90.00' },
   { grade: 'A', minPercentage: '80.00' },

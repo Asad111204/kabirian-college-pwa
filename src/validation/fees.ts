@@ -21,7 +21,7 @@ export const amountPaisa = z
       return z.NEVER
     }
     if (paisa > MAX_AMOUNT_PAISA) {
-      ctx.addIssue({ code: 'custom', message: 'That is larger than the college allows. Check for an extra zero.' })
+      ctx.addIssue({ code: 'custom', message: 'That is larger than the school allows. Check for an extra zero.' })
       return z.NEVER
     }
     return paisa
@@ -62,14 +62,14 @@ export const feeLineSchema = z.object({
 export const studentFeePlanSchema = z.object({
   academicSessionId: uuid,
   /** Every head the office filled in. An empty list means they are charged nothing. */
-  lines: z.array(feeLineSchema).max(20, 'That is more fee heads than the college has.').default([]),
+  lines: z.array(feeLineSchema).max(20, 'That is more fee heads than the school has.').default([]),
   /** Taken off the year's total. */
   feeDiscountPaisa: amountPaisa.default(0),
 })
 
 /** The same lines, as an optional part of the admission form. */
 export const admissionFeeSchema = z.object({
-  lines: z.array(feeLineSchema).max(20, 'That is more fee heads than the college has.').default([]),
+  lines: z.array(feeLineSchema).max(20, 'That is more fee heads than the school has.').default([]),
   feeDiscountPaisa: amountPaisa.default(0),
 })
 

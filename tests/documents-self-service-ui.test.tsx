@@ -83,7 +83,7 @@ describe('handing in your own documents', () => {
   it('says up front that a document can only be handed in once', () => {
     mine()
     expect(screen.getByText('You can hand in a document once')).toBeTruthy()
-    expect(screen.getByText(/contact the college office/i)).toBeTruthy()
+    expect(screen.getByText(/contact the school office/i)).toBeTruthy()
   })
 
   it('offers an upload only for what the college is missing', () => {

@@ -186,7 +186,7 @@ check('…and the year drawn on it', r.text.includes('The year, month by month')
 console.log('\nThe handbook\n' + '-'.repeat(52))
 r = await get('admin', '/admin/handbook')
 check('the handbook renders, cover to close', r.status === 200 && r.text.includes('Handbook') && r.text.includes('Contents'), String(r.status))
-check('…carrying the college’s own logo', /brand%2Flogo|brand\/logo/.test(r.text))
+check('…carrying the school’s own crest', /brand%2Flogo|brand\/logo/.test(r.text))
 check('…and explaining the money rules it keeps', r.text.includes('whole number of paisa') && r.text.includes('Rules the system keeps'))
 check('…with the print button kept off the paper', r.text.includes('print-hide') && r.text.includes('print-area'))
 for (const who of ['teacher', 'student', 'nobody']) {

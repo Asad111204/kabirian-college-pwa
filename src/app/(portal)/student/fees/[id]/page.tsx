@@ -31,7 +31,7 @@ export default async function StudentVoucherPage({ params }: { params: Promise<{
 
   return (
     <>
-      <PageHeader title="Fee voucher" description="Fees are paid at the college office." />
+      <PageHeader title="Fee voucher" description="Fees are paid at the school office." />
       <VoucherDetailScreen voucher={voucher} today={todayInCollegeTimezone()} printBase="/student/fees" />
     </>
   )

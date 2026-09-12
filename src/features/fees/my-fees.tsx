@@ -81,7 +81,7 @@ export function MyFeesScreen({ page }: { page: PaginatedResult<FeeVoucherRow> & 
       )}
 
       <Alert variant="info" className="mt-4">
-        Fees are paid at the college office. What you see here is the college&apos;s own record; if something looks wrong, write to the office from{' '}
+        Fees are paid at the school office. What you see here is the school&apos;s own record; if something looks wrong, write to the office from{' '}
         <Link href="/student/complaints" className="underline">
           Write to the Office
         </Link>

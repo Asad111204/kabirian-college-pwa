@@ -169,7 +169,7 @@ check('the student has a voucher from the fee checks', Boolean(voucher), `${r.da
 if (voucher) {
   r = await get('student', `/student/fees/${voucher.id}/voucher`)
   check('the student can print their own', r.status === 200 && r.text.includes('Bank copy') && r.text.includes('Student copy'), String(r.status))
-  check('…on one sheet, with the college’s name on every copy', (r.text.match(/College copy/g) ?? []).length >= 1 && r.text.includes('print-area'))
+  check('…on one sheet, with the college’s name on every copy', (r.text.match(/School copy/g) ?? []).length >= 1 && r.text.includes('print-area'))
   check('…and the button is kept off the paper', r.text.includes('print-hide'))
   r = await get('admin', `/admin/fees/${voucher.id}/voucher`)
   check('the office can print it too', r.status === 200 && r.text.includes('Bank copy'), String(r.status))

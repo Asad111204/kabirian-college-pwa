@@ -3,14 +3,14 @@
  *
  * It inserts the data the system needs in order to work at all:
  *   - the permission catalogue and each role's defaults,
- *   - Kabirian College's real classes, divisions and programs,
+ *   - Nova School Kamalia's classes (PG to 10), a starting division and program,
  *   - a starting list of subjects,
- *   - the grading scale the college confirmed,
+ *   - a starting grading scale,
  *   - system settings and the STU-/STF- code counters.
  *
  * Everything here is EDITABLE afterwards from the Admin portal. These are
  * starting values, not application logic — the code never refers to
- * "Pre-Medical" or "Boys" by name.
+ * "General" or "Class 1" by name.
  *
  * The script is idempotent: running it twice changes nothing the second time,
  * and it never overwrites a record the admin has since edited.
@@ -21,26 +21,43 @@ import { PERMISSIONS, ROLE_DEFAULT_PERMISSIONS } from '../../src/server/auth/per
 import { done, heading, prisma } from './seed-utils'
 
 /* --------------------------------------------------------------------------
- * Kabirian College's current structure — confirmed by the college, 2026-08-28.
- * Change any of it later in Admin -> Academic Management.
+ * Nova School Kamalia's structure. Change any of it later in
+ * Admin -> Academic Management.
+ *
+ * `level` is the promotion order: a student in level 5 (Class 1) is promoted
+ * into level 6 (Class 2). `displayName` is what reports and result cards
+ * print; when it is null the short name is used everywhere.
  * ----------------------------------------------------------------------- */
 
 const CLASSES = [
-  { name: '1st Year', displayName: '1st Year / 11th Class', code: '11', level: 1 },
-  { name: '2nd Year', displayName: '2nd Year / 12th Class', code: '12', level: 2 },
+  { name: 'PG', displayName: null, code: 'PG', level: 1 },
+  { name: 'Pre-Nursery', displayName: null, code: 'PRE-NUR', level: 2 },
+  { name: 'Nursery', displayName: null, code: 'NUR', level: 3 },
+  { name: 'KG', displayName: null, code: 'KG', level: 4 },
+  { name: '1', displayName: 'Class 1', code: '1', level: 5 },
+  { name: '2', displayName: 'Class 2', code: '2', level: 6 },
+  { name: '3', displayName: 'Class 3', code: '3', level: 7 },
+  { name: '4', displayName: 'Class 4', code: '4', level: 8 },
+  { name: '5', displayName: 'Class 5', code: '5', level: 9 },
+  { name: '6', displayName: 'Class 6', code: '6', level: 10 },
+  { name: '7', displayName: 'Class 7', code: '7', level: 11 },
+  { name: '8', displayName: 'Class 8', code: '8', level: 12 },
+  { name: '9', displayName: 'Class 9', code: '9', level: 13 },
+  { name: '10', displayName: 'Class 10', code: '10', level: 14 },
 ]
 
-const DIVISIONS = [
-  { name: 'Boys', code: 'B', sortOrder: 1 },
-  { name: 'Girls', code: 'G', sortOrder: 2 },
-]
+/**
+ * The application requires every academic group to have a division and a
+ * program (Session x Class x Division x Program -> Section). A school does not
+ * split its classes into streams the way a college does, so one neutral entry
+ * of each is seeded. If the school separates Boys and Girls, or runs Science
+ * and Arts groups in classes 9-10, add those rows in Admin -> Academic
+ * Management; nothing in the code depends on these names.
+ */
+const DIVISIONS = [{ name: 'General', code: 'GEN', sortOrder: 1 }]
 
 const PROGRAMS = [
-  { name: 'Pre-Medical', code: 'PM', description: 'Intermediate in Pre-Medical', sortOrder: 1 },
-  { name: 'Pre-Engineering', code: 'PE', description: 'Intermediate in Pre-Engineering', sortOrder: 2 },
-  { name: 'ICS Physics', code: 'ICS-PHY', description: 'Intermediate in Computer Science (with Physics)', sortOrder: 3 },
-  { name: 'ICS Economics', code: 'ICS-ECO', description: 'Intermediate in Computer Science (with Economics)', sortOrder: 4 },
-  { name: 'FAIT', code: 'FAIT', description: 'Faculty of Arts with Information Technology', sortOrder: 5 },
+  { name: 'General', code: 'GEN', description: 'The standard school programme for every class', sortOrder: 1 },
 ]
 
 /**
@@ -50,32 +67,32 @@ const PROGRAMS = [
 const SUBJECTS = [
   { name: 'English', code: 'ENG' },
   { name: 'Urdu', code: 'URD' },
+  { name: 'Mathematics', code: 'MATH' },
+  { name: 'Science', code: 'SCI' },
   { name: 'Islamiat', code: 'ISL' },
   { name: 'Pakistan Studies', code: 'PST' },
-  { name: 'Mathematics', code: 'MATH' },
+  { name: 'Social Studies', code: 'SST' },
+  { name: 'General Knowledge', code: 'GK' },
+  { name: 'Computer', code: 'COMP' },
+  { name: 'Nazra Quran', code: 'QRN' },
+  { name: 'Drawing', code: 'ART' },
   { name: 'Physics', code: 'PHY' },
   { name: 'Chemistry', code: 'CHEM' },
   { name: 'Biology', code: 'BIO' },
-  { name: 'Computer Science', code: 'CS' },
-  { name: 'Economics', code: 'ECO' },
-  { name: 'Statistics', code: 'STAT' },
-  { name: 'Civics', code: 'CIV' },
-  { name: 'Education', code: 'EDU' },
-  { name: 'Information Technology', code: 'IT' },
 ]
 
 /**
- * Job titles used across Pakistani intermediate colleges. Reference data, not
- * fixed logic — the Admin adds to this list from Academic Management.
+ * Job titles used across Pakistani schools. Reference data, not fixed logic —
+ * the Admin adds to this list from Academic Management.
  */
 const DESIGNATIONS = [
   { name: 'Principal', code: 'PRIN', isTeaching: true, sortOrder: 1 },
   { name: 'Vice Principal', code: 'VPRIN', isTeaching: true, sortOrder: 2 },
-  { name: 'Professor', code: 'PROF', isTeaching: true, sortOrder: 3 },
-  { name: 'Associate Professor', code: 'ASSOC-PROF', isTeaching: true, sortOrder: 4 },
-  { name: 'Assistant Professor', code: 'ASST-PROF', isTeaching: true, sortOrder: 5 },
-  { name: 'Lecturer', code: 'LECT', isTeaching: true, sortOrder: 6 },
-  { name: 'Junior Lecturer', code: 'JR-LECT', isTeaching: true, sortOrder: 7 },
+  { name: 'Academic Coordinator', code: 'COORD', isTeaching: true, sortOrder: 3 },
+  { name: 'Senior Teacher', code: 'SR-TEACH', isTeaching: true, sortOrder: 4 },
+  { name: 'Teacher', code: 'TEACH', isTeaching: true, sortOrder: 5 },
+  { name: 'Junior Teacher', code: 'JR-TEACH', isTeaching: true, sortOrder: 6 },
+  { name: 'Montessori Teacher', code: 'MONT', isTeaching: true, sortOrder: 7 },
   { name: 'Lab Assistant', code: 'LAB-ASST', isTeaching: false, sortOrder: 8 },
   { name: 'Librarian', code: 'LIB', isTeaching: false, sortOrder: 9 },
   { name: 'Office Superintendent', code: 'OFF-SUP', isTeaching: false, sortOrder: 10 },
@@ -83,23 +100,22 @@ const DESIGNATIONS = [
   { name: 'Accountant', code: 'ACCT', isTeaching: false, sortOrder: 12 },
 ]
 
-/** Academic departments a staff member can belong to. Also editable by Admin. */
+/** Departments a staff member can belong to. Also editable by Admin. */
 const DEPARTMENTS = [
-  { name: 'Biology', code: 'BIO', sortOrder: 1 },
-  { name: 'Chemistry', code: 'CHEM', sortOrder: 2 },
-  { name: 'Physics', code: 'PHY', sortOrder: 3 },
+  { name: 'Pre-Primary', code: 'PRE-PRI', sortOrder: 1 },
+  { name: 'English', code: 'ENG', sortOrder: 2 },
+  { name: 'Urdu', code: 'URD', sortOrder: 3 },
   { name: 'Mathematics', code: 'MATH', sortOrder: 4 },
-  { name: 'Computer Science', code: 'CS', sortOrder: 5 },
-  { name: 'Economics', code: 'ECO', sortOrder: 6 },
-  { name: 'English', code: 'ENG', sortOrder: 7 },
-  { name: 'Urdu', code: 'URD', sortOrder: 8 },
-  { name: 'Islamic Studies', code: 'ISL', sortOrder: 9 },
-  { name: 'Administration', code: 'ADMIN', sortOrder: 10 },
+  { name: 'Science', code: 'SCI', sortOrder: 5 },
+  { name: 'Computer', code: 'COMP', sortOrder: 6 },
+  { name: 'Islamic Studies', code: 'ISL', sortOrder: 7 },
+  { name: 'Social Studies', code: 'SST', sortOrder: 8 },
+  { name: 'Administration', code: 'ADMIN', sortOrder: 9 },
 ]
 
 
 /**
- * The document checklist the college starts with.
+ * The document checklist the school starts with.
  *
  * These are ordinary rows: the Admin can add "Domicile Certificate", change a
  * size limit, or switch a type off without any code change.
@@ -146,25 +162,28 @@ const DOCUMENT_TYPES = [
     maxSizeBytes: 10 * MB,
     sortOrder: 3,
   },
+  // Most children join a school at PG with no previous record, so neither of
+  // these is required; the office asks for them from students who transfer in.
   {
     key: 'STUDENT_PREVIOUS_RESULT',
-    label: 'Matric result card',
-    ownerType: 'STUDENT',
-    isRequired: true,
-    isSensitive: true,
-    allowedMimeTypes: SCAN_TYPES,
-    maxSizeBytes: 10 * MB,
-    description: 'Result card or detailed marks certificate from the previous board.',
-    sortOrder: 4,
-  },
-  {
-    key: 'STUDENT_MATRIC_ROLL_SLIP',
-    label: 'Matric roll number slip',
+    label: 'Previous school result card',
     ownerType: 'STUDENT',
     isRequired: false,
     isSensitive: true,
     allowedMimeTypes: SCAN_TYPES,
     maxSizeBytes: 10 * MB,
+    description: 'Result card or progress report from the previous school, for a student who transfers in.',
+    sortOrder: 4,
+  },
+  {
+    key: 'STUDENT_LEAVING_CERTIFICATE',
+    label: 'School leaving certificate',
+    ownerType: 'STUDENT',
+    isRequired: false,
+    isSensitive: true,
+    allowedMimeTypes: SCAN_TYPES,
+    maxSizeBytes: 10 * MB,
+    description: 'Leaving certificate from the previous school, for a student who transfers in.',
     sortOrder: 5,
   },
   {
@@ -249,10 +268,12 @@ const DOCUMENT_TYPES = [
 ] as const
 
 /**
- * The grading scale Kabirian College confirmed for Phase 8.
+ * The starting grading scale.
  *
  * A+ 90-100, A 80-89, B 70-79, C 60-69, D 50-59, F below 50 — nothing else. No
- * other scale is seeded, and no remarks text is invented.
+ * other scale is seeded, and no remarks text is invented. The school should
+ * confirm these bands (or edit them from the Admin portal) before the first
+ * result is published.
  *
  * The upper bounds read 89.99 rather than 89 because a percentage is stored to
  * two decimal places: 89.99 is the largest value below the A+ band, so the six
@@ -264,8 +285,8 @@ const DOCUMENT_TYPES = [
  * scale and make it the default, without any code change.
  */
 const GRADE_SCALE = {
-  name: 'Kabirian College Scale',
-  description: 'Confirmed by the college for intermediate examinations.',
+  name: 'Nova School Kamalia Scale',
+  description: 'Starting scale for school examinations — confirm the bands with the school.',
   bands: [
     { grade: 'A+', minPercentage: '90.00', maxPercentage: '100.00', sortOrder: 1 },
     { grade: 'A', minPercentage: '80.00', maxPercentage: '89.99', sortOrder: 2 },
@@ -277,7 +298,7 @@ const GRADE_SCALE = {
 }
 
 const SETTINGS = [
-  { key: 'college.name', value: 'Kabirian College', description: 'Displayed across the app' },
+  { key: 'college.name', value: 'Nova School Kamalia', description: 'Displayed across the app' },
   { key: 'college.timezone', value: 'Asia/Karachi', description: 'Used for all date calculations' },
   { key: 'results.ranking_enabled', value: false, description: 'Show position/rank on results' },
   { key: 'results.ranking_scope', value: 'GROUP', description: 'SECTION | GROUP | CLASS' },
@@ -298,7 +319,7 @@ const CODE_SEQUENCES = [
 ]
 
 async function main() {
-  console.log('\nKabirian College — reference seed')
+  console.log('\nNova School Kamalia — reference seed')
   console.log('This inserts starting data. Everything stays editable in the Admin portal.')
 
   /* ---------------- Permissions ---------------- */
@@ -482,7 +503,7 @@ async function main() {
   done('code sequences', created, existing)
 
   console.log('\nReference seed complete.')
-  console.log('Next: npm run seed:structure   (creates the academic session and its 20 groups)\n')
+  console.log('Next: npm run seed:structure   (creates the academic session and its groups)\n')
 }
 
 main()

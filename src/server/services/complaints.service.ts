@@ -177,8 +177,8 @@ function toRow(row: ComplaintWithAll, now: string): ComplaintRow {
  */
 function authorNameFor(reply: ComplaintWithAll['replies'][number], studentName: string, readerIsOffice: boolean): string {
   if (!reply.byOffice) return studentName
-  if (!readerIsOffice) return 'The college office'
-  return reply.author?.fullName ?? reply.author?.username ?? 'The college office'
+  if (!readerIsOffice) return 'The school office'
+  return reply.author?.fullName ?? reply.author?.username ?? 'The school office'
 }
 
 function toDetail(row: ComplaintWithAll, viewer: ComplaintViewer, now: string): ComplaintDetail {

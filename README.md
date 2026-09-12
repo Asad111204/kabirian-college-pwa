@@ -1,6 +1,8 @@
-# Kabirian College Management System
+# Nova School Kamalia Management System
 
-A Progressive Web App for running Kabirian College: students, staff, academics, attendance, exams, results, timetables, notices, documents and reports — with three portals (**Admin**, **Staff**, **Student**) sharing one database and one permission system.
+A Progressive Web App for running Nova School Kamalia: students, staff, academics, attendance, exams, results, timetables, notices, documents and reports — with three portals (**Admin**, **Staff**, **Student**) sharing one database and one permission system.
+
+> **This deployment is a fresh, independent instance for Nova School Kamalia.** The application was originally built for an intermediate college and then cleaned for this school: no student, staff, fee or attendance records from that deployment are included, and it needs its **own new** Neon database, Google Cloud OAuth client and Google Drive account before it can run (see `.env.example`). The classes seeded here are PG, Pre-Nursery, Nursery, KG and Class 1 to Class 10. The school’s crest is in `public/brand/` and its colours (the pen-blue, the NOVA maroon) drive the design tokens — see `public/brand/README.md`. Where this README says "the college" in a feature description below, it is describing behaviour that applies to the school unchanged.
 
 > **Current status: the roadmap and all sixteen of the college's own requests are built, and the college is now asking for what it needs as it uses the system — the roadmap is built and the college's own requests are under way.** Working today: project setup, design system, database, authentication, roles, **Academic Management**, **User & Account Management**, the **Admin Dashboard**, **Student Management**, **Staff Management with the Staff Portal**, **document storage in Google Drive** with profile photos beside every name, and **Attendance** for all three portals with reports — percentages in the college's colour bands, and teachers correcting their own submitted registers within a correction window the office sets. **Exams & Marks**: an administrator creates exams, sets their papers from the curriculum and publishes a date sheet; teachers enter and submit marks for the papers they teach; the office sets a marks deadline per exam and generates, reviews and publishes results; a teacher may correct their own submitted sheet until that deadline, after which the office reopens the paper; students and teachers read them in their own portals, and a student can print an official result card that fits one A4 page. **Copying a day**: a college week repeats, so one day can be written once and copied on to the others. A day that already has lessons is left alone unless the office says to replace it, and anything that clashes on the new day — a teacher already busy, a room taken — is reported rather than forced. **The college day**: Admin, Timetable carries the period grid itself — the number of each period and the times it runs, edited by the office. There is no break period: a break is an hour the college chooses not to fill. A lesson records a period number rather than a time, so moving a bell moves every lesson in that period with it. **Timetable**: the office builds the master timetable one section at a time on a fixed nine-period grid, clashes are refused before they are written, and teachers see their own week and today's classes; there is no student timetable, by the college's decision. **Homework**: teachers set work with files for the sections and subjects they are assigned to; students see their section's, soonest due first. **Staff attendance**: the office takes its own daily register for the whole staff — Present, Absent, Short leave, Leave — sees the month per person, and each staff member reads their own record on their profile; approved leave is left out of the worked percentage rather than counted against anyone. **Complaints**: a student writes an application to the office — about teaching, attendance, exams, fees, the building or behaviour — and the office answers it, resolves it and can pick it back up; the exchange stays between the student and the office, a teacher cannot read one, and nothing an application says reaches the audit log. **One account, two portals**: a member of staff can also be given office access and switch between the staff portal and the office portal without signing out; the portal they are working in is the role they are, so a principal teaching a class is a teacher, with a teacher's scope. **Fees**: an annual fee made of optional heads — tuition, annual funds, events, board registration, board admission, a tour and anything else — set when a student is admitted along with their documents; one voucher per student per year, paid in instalments whenever the family can, recorded and correctable by voiding rather than editing; adding a fund later updates that voucher, which keeps its number and every payment already on it; the printed voucher shows what has been paid and what is left; every amount is a whole number of paisa. **Finance**: the office records what the college spends, sees it against what the fees brought in — on the Finance page and on the dashboard itself — and reads a year of both on a graph drawn by hand in SVG with the figures available as a table; expenses are voided rather than edited, like every other money record. **Permanent deletion**: a student, staff member or account can be erased only when nothing at all refers to them, and the refusal names what stands in the way. **Notifications**: every portal carries a bell with what is unread, a red dot on the button each one belongs to and a number on the home-screen icon, for notices, events, homework, date sheets, results, applications to the office and fee vouchers; opening the page clears the dot. **Complaints refresh themselves** while a thread is open, and a **fee voucher prints** as three copies on one A4 sheet. **Notices & events**: the office writes notices for everyone, a population or one class, division, programme, group or section, schedules and attaches files to them, and posts events with a picture; teachers and students read what reaches them. **Dashboards**: the office sees today's registers, this month's attendance, exams in progress, results awaiting publication, timetable coverage and missing documents at a glance; teachers see their registers and open mark sheets; students their attendance, results and next paper. **Reports**: a report centre for students, staff, missing documents, exam mark sheets and results, filtered and grouped by class, division, programme or section, printed through the browser or downloaded as CSV that matches the screen. **Audit & security**: an audit viewer with a redacted change list per entry, a Content Security Policy with a nonce per request, signed-in devices that anyone can end one at a time, rate limits on the expensive endpoints, and a CI workflow with a dependency-audit gate. **PWA**: installable from the browser (with iOS steps), home-screen shortcuts, an offline page and banner, submits that wait for a connection, and a service worker that keeps build files only — never a page, never the API. **Testing**: `npm run e2e` runs the production build against an in-memory PostgreSQL with API, page, browser (Playwright, phone and desktop) and 5,000-student load checks; CI does the same on every push. **Assigning teachers**: Staff, a teacher, Assign subjects lists every section in the session under its class, division and program; tick as many sections and subjects as apply and every pairing is made at once, with anything the curriculum does not allow reported by name rather than silently skipped. **Timetable**: a lesson covers one section or several, so a class taught to two sections together is one lesson with one teacher rather than two that clash; a section can hold more than one lesson in a period, which is how an elective split is written; and each campus keeps its own break period. **Handbook**: Admin, Handbook is the whole system explained as a printable document — a cover, a contents page and one part per sheet, each carrying the college's logo, saved as a PDF by the browser; it is generated from the system, so reprinting it after a change gives an accurate copy. **Deployment**: guides for Vercel and Docker, backups with a drilled restore, a CSV import for the intake, and the administrator's handover — see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). Everything the college asked for is built — see [PROJECT_PLAN.md](PROJECT_PLAN.md) § 23A.
 
@@ -51,12 +53,12 @@ Then open `.env` and fill in the values below.
 2. Copy the connection string it shows you.
 3. Paste it in, using `sslmode=verify-full` so the certificate is actually checked:
    ```
-   DATABASE_URL="postgresql://user:password@ep-xxx.region.aws.neon.tech/kabirian?sslmode=verify-full&channel_binding=require"
+   DATABASE_URL="postgresql://user:password@ep-xxx.region.aws.neon.tech/nova_school?sslmode=verify-full&channel_binding=require"
    ```
 
 *Using a local PostgreSQL:*
 ```
-DATABASE_URL="postgresql://postgres:yourpassword@localhost:5432/kabirian_college"
+DATABASE_URL="postgresql://postgres:yourpassword@localhost:5432/nova_school_kamalia"
 ```
 
 **`DATABASE_DIRECT_URL`** — optional, and only used by `prisma migrate`.
@@ -66,8 +68,8 @@ If your `DATABASE_URL` goes through a connection pooler, set this to the **direc
 On Neon, the direct host is the pooled one with `-pooler` removed:
 
 ```
-DATABASE_URL="postgresql://user:password@ep-xxx-pooler.region.aws.neon.tech/kabirian?sslmode=verify-full"
-DATABASE_DIRECT_URL="postgresql://user:password@ep-xxx.region.aws.neon.tech/kabirian?sslmode=verify-full"
+DATABASE_URL="postgresql://user:password@ep-xxx-pooler.region.aws.neon.tech/nova_school?sslmode=verify-full"
+DATABASE_DIRECT_URL="postgresql://user:password@ep-xxx.region.aws.neon.tech/nova_school?sslmode=verify-full"
 ```
 
 Leave it blank if your `DATABASE_URL` is already a direct connection.
@@ -95,22 +97,28 @@ npm run db:migrate
 ```bash
 npm run seed:reference    # permissions, classes, divisions, programs, subjects,
                           # designations and departments
-npm run seed:structure    # the academic session and its 20 groups
+npm run seed:structure    # the academic session and its 14 groups
 ```
 
-This creates Kabirian College's current structure:
+This creates Nova School Kamalia's starting structure — fourteen classes, each
+with one "General" division and one "General" program and a Section A:
 
 ```
 2026-27
-├── 1st Year / 11th Class          └── 2nd Year / 12th Class
-│   ├── Boys                            ├── Boys
-│   │   ├── Pre-Medical → Section A     │   └── (same five programs)
-│   │   ├── Pre-Engineering → A         └── Girls
-│   │   ├── ICS Physics → A                 └── (same five programs)
-│   │   ├── ICS Economics → A
-│   │   └── FAIT → A
-│   └── Girls (same five programs)
+├── PG           → General → General → Section A
+├── Pre-Nursery  → General → General → Section A
+├── Nursery      → General → General → Section A
+├── KG           → General → General → Section A
+├── Class 1      → General → General → Section A
+├── Class 2 … Class 9   (the same)
+└── Class 10     → General → General → Section A
 ```
+
+The application always structures a session as Class × Division × Program →
+Section. A school normally has no streams, so a single neutral division and
+program are seeded; if the school separates Boys and Girls, or runs Science and
+Arts groups in classes 9–10, add those rows under **Admin → Academic
+Management** and build the extra groups on the Session Structure screen.
 
 **This is starting data, not fixed logic.** Every class, division, program, section and subject can be added, renamed or deactivated from the Admin portal without touching any code.
 
@@ -242,15 +250,15 @@ A student who types `/admin` in the address bar is sent back to their own portal
 
 ### Documents (Admin portal)
 
-Every student and staff profile has a **Documents** panel listing what the college collects, whether each item is on file, and what is still missing.
+Every student and staff profile has a **Documents** panel listing what the school collects, whether each item is on file, and what is still missing.
 
 | Student | Staff |
 |---|---|
 | Photograph *(required)* | Photograph *(required)* |
 | CNIC / B-Form *(required)* | CNIC *(required)* |
 | Father's CNIC *(required)* | CV / Résumé |
-| Matric result card *(required)* | |
-| Matric roll number slip | |
+| Previous school result card | |
+| School leaving certificate | |
 
 This list lives in the `document_types` table, so adding "Domicile Certificate" — with its own size limit and allowed file types — is data entry, not a code change.
 
@@ -367,7 +375,7 @@ Sign in as an administrator, go to **Settings**, and click **Connect Google Driv
 Approve the request, and you are returned to Settings showing the connected account. The app creates its folders on the spot:
 
 ```
-Kabirian College/
+Nova School Kamalia/
   Students/
     STU-0001 Ali Raza/
   Staff/
@@ -391,7 +399,7 @@ To stop the seven-day expiry, set the publishing status to **In production**. Be
 
 ### Storage cost
 
-A Google account includes 15 GB free, shared with Gmail and Photos. At roughly 1 MB per document and five documents per student, 3,000 students is about 15 GB — so a college of that size will eventually need Google Workspace or extra storage. Nothing else in this system costs money. The **Test connection** button shows how much space is left, so you will see it coming.
+A Google account includes 15 GB free, shared with Gmail and Photos. At roughly 1 MB per document and five documents per student, 3,000 students is about 15 GB — so a school of that size will eventually need Google Workspace or extra storage. Nothing else in this system costs money. The **Test connection** button shows how much space is left, so you will see it coming.
 
 ### Disconnecting
 
@@ -488,9 +496,9 @@ There are **1,256 tests** covering the password policy, the permission model, ac
 Two supported ways, both documented step by step in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md):
 
 - **Vercel** (free, recommended to start): connect the GitHub repository, set the variables from `.env.example`, add the domain. Uploads are capped at 4 MB per file there.
-- **Docker** (Railway, Render, a VPS): `docker build -t kabirian-college .` builds the standalone server from the `Dockerfile`; run it with the same variables.
+- **Docker** (Railway, Render, a VPS): `docker build -t nova-school-kamalia .` builds the standalone server from the `Dockerfile`; run it with the same variables.
 
-Either way the database is Neon and the files live in the college's Google Drive. Backups (`npm run backup:export` / `npm run backup:restore`), the restore drill, monitoring and the go-live checklist are in the same document; [docs/HANDOVER.md](docs/HANDOVER.md) is the administrator's guide to accounts, the academic year, importing students and what to do when something goes wrong.
+Either way the database is Neon and the files live in the school's Google Drive. Backups (`npm run backup:export` / `npm run backup:restore`), the restore drill, monitoring and the go-live checklist are in the same document; [docs/HANDOVER.md](docs/HANDOVER.md) is the administrator's guide to accounts, the academic year, importing students and what to do when something goes wrong.
 
 ---
 

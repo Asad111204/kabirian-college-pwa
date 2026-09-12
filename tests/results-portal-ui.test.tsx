@@ -107,7 +107,7 @@ const detail = (over: Record<string, unknown> = {}) =>
     ...row(over),
     examId: 'exam-1',
     fatherName: 'Raza Khan',
-    gradeScaleName: 'Kabirian College Scale',
+    gradeScaleName: 'Nova School Kamalia Scale',
     generatedAt: '2026-05-19T09:00:00.000Z',
     correctionReason: null,
     subjects: [subject()],
@@ -174,21 +174,22 @@ describe('the student result list', () => {
 
 describe('the official result card', () => {
   const card = (over: Record<string, unknown> = {}) => (
-    <ResultCard result={detail(over)} collegeName="Kabirian College" />
+    <ResultCard result={detail(over)} collegeName="Nova School Kamalia" />
   )
 
   it('uses the college’s own logo asset', () => {
     render(card())
-    const logo = screen.getByRole('img', { name: /Kabirian College logo/i }) as HTMLImageElement
-    expect(logo.getAttribute('src')).toBe('/brand/college-logo.jpeg')
+    const logo = screen.getByRole('img', { name: /Nova School Kamalia logo/i }) as HTMLImageElement
+    expect(logo.getAttribute('src')).toBe('/brand/logo-full.png')
     // Never lazy: a logo that has not loaded prints as a blank space.
     expect(logo.getAttribute('loading')).toBe('eager')
   })
 
   it('heads the card as an official document', () => {
     render(card())
-    expect(screen.getByRole('heading', { name: 'Kabirian College' })).toBeTruthy()
-    expect(screen.getByText('INSPIRING MINDS SHAPING FUTURE')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Nova School Kamalia' })).toBeTruthy()
+    // The strapline from the ribbon on the crest.
+    expect(screen.getByText('GLEAM OF KNOWLEDGE')).toBeTruthy()
     expect(screen.getByText('Result Card')).toBeTruthy()
   })
 
@@ -337,12 +338,12 @@ describe('the official result card', () => {
 
   it('renders the logo large, at a size no breakpoint can shrink', () => {
     render(card())
-    const logo = screen.getByRole('img', { name: /Kabirian College logo/i })
+    const logo = screen.getByRole('img', { name: /Nova School Kamalia logo/i })
     const cls = logo.getAttribute('class') ?? ''
-    // Fixed in millimetres: a 148mm box paints ~66mm of artwork on A4, inside
-    // the 55-75mm the college asked for.
-    expect(cls).toContain('w-full')
-    expect(cls).toContain('max-w-[148mm]')
+    // Fixed in millimetres: the crest is a portrait emblem, so it is set by
+    // height and keeps its own width.
+    expect(cls).toContain('h-[34mm]')
+    expect(cls).toContain('w-auto')
     // Nothing about the logo's size sits behind a breakpoint, so paper gets the
     // same logo whether or not the browser applies `sm:` to the page box.
     expect(cls).not.toMatch(/sm:(w-|h-|max-w-|aspect-)/)
@@ -350,14 +351,14 @@ describe('the official result card', () => {
 
   it('shows the official logo without redrawing or distorting it', () => {
     render(card())
-    const logo = screen.getByRole('img', { name: /Kabirian College logo/i })
-    expect(logo.getAttribute('src')).toBe('/brand/college-logo.jpeg')
+    const logo = screen.getByRole('img', { name: /Nova School Kamalia logo/i })
+    expect(logo.getAttribute('src')).toBe('/brand/logo-full.png')
     // The file's own pixel dimensions, so the browser scales by its true ratio.
-    expect(logo.getAttribute('width')).toBe('1280')
-    expect(logo.getAttribute('height')).toBe('960')
-    // `cover` scales proportionally and centres: the artwork keeps its shape and
-    // only the blank canvas margin around it goes unpainted.
-    expect(logo.getAttribute('class')).toContain('object-cover')
+    expect(logo.getAttribute('width')).toBe('495')
+    expect(logo.getAttribute('height')).toBe('640')
+    // `contain` scales proportionally: the crest keeps its shape and is never
+    // cropped.
+    expect(logo.getAttribute('class')).toContain('object-contain')
   })
 
   it('keeps every control off the printed area', () => {

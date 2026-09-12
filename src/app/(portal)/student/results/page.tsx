@@ -30,7 +30,7 @@ export default async function StudentResultsPage() {
         <>
           <PageHeader title="My Results" />
           <Alert variant="warning" title="Your account is not linked to a student record">
-            The college office needs to connect this login to your student record before your
+            The school office needs to connect this login to your student record before your
             results appear here.
           </Alert>
         </>

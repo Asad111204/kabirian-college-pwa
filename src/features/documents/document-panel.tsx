@@ -172,8 +172,8 @@ export function DocumentPanel({
 
         {selfService && !canManage ? (
           <Alert variant="info" title="You can hand in a document once">
-            You may upload anything the college is still missing. Once it is in, it cannot be
-            changed or removed from here — if something needs correcting, please contact the college
+            You may upload anything the school is still missing. Once it is in, it cannot be
+            changed or removed from here — if something needs correcting, please contact the school
             office.
           </Alert>
         ) : null}
@@ -206,7 +206,7 @@ export function DocumentPanel({
         >
           <Alert variant="warning" title="This cannot be undone">
             Once you submit this, you cannot change it or remove it yourself. If you upload the
-            wrong file, or it needs replacing later, you will have to ask the college office to do
+            wrong file, or it needs replacing later, you will have to ask the school office to do
             it for you.
           </Alert>
           <p className="mt-3 text-sm text-foreground-muted">

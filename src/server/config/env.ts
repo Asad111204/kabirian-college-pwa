@@ -15,7 +15,7 @@ const envSchema = z.object({
   // Application
   APP_URL: z.url().default('http://localhost:3000'),
   APP_TIMEZONE: z.string().min(1).default('Asia/Karachi'),
-  APP_COLLEGE_NAME: z.string().min(1).default('Kabirian College'),
+  APP_COLLEGE_NAME: z.string().min(1).default('Nova School Kamalia'),
   SESSION_MAX_AGE_DAYS: z.coerce.number().int().min(1).max(365).default(30),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 

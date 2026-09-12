@@ -11,6 +11,7 @@ import {
   UserCog,
   Users,
 } from 'lucide-react'
+import { env } from '@/server/config/env'
 import { requirePortalAccess } from '@/server/auth/context'
 import { getAdminDashboard } from '@/server/services/dashboard.service'
 import { formatDate } from '@/lib/format'
@@ -56,8 +57,8 @@ export default async function AdminDashboardPage() {
         title={`Welcome back, ${ctx.fullName}`}
         description={
           currentSession
-            ? `Kabirian College · academic session ${currentSession.name}`
-            : 'Kabirian College'
+            ? `${env.APP_COLLEGE_NAME} · academic session ${currentSession.name}`
+            : env.APP_COLLEGE_NAME
         }
         actions={<RefreshButton generatedAt={data.generatedAt.toISOString()} />}
       />

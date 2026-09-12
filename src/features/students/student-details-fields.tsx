@@ -297,7 +297,7 @@ export function StudentDetailsFields({
           <CardTitle>Previous education</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
-          <Field label="Previous school / college" htmlFor="previousInstitution" error={errors.previousInstitution}>
+          <Field label="Previous school" htmlFor="previousInstitution" error={errors.previousInstitution}>
             <Input
               id="previousInstitution"
               value={value.previousInstitution}

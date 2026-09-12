@@ -47,7 +47,7 @@ export default async function StaffResultsPage({
         <>
           <PageHeader title="Results" />
           <Alert variant="warning" title="Your account is not linked to a staff record">
-            The college office needs to connect this login to your staff record before your
+            The school office needs to connect this login to your staff record before your
             students&rsquo; results appear here.
           </Alert>
         </>

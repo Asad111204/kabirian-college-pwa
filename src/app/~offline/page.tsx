@@ -15,11 +15,11 @@ export const dynamic = 'force-dynamic'
 export default function OfflinePage() {
   return (
     <main className="flex min-h-dvh flex-col items-center justify-center bg-background px-4 py-10 text-center">
-      <LogoFull height={44} />
+      <LogoFull height={96} />
       <h1 className="mt-6 text-2xl font-semibold text-foreground">You are offline</h1>
       <p className="mt-2 max-w-sm text-sm text-foreground-muted">
         This page needs an internet connection. Attendance, marks, notices and every other record live on the
-        college server, so nothing is stored on this device. Check your connection and try again.
+        school server, so nothing is stored on this device. Check your connection and try again.
       </p>
       <RetryButton />
     </main>

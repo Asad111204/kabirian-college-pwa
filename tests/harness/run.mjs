@@ -113,7 +113,7 @@ try {
     [
       `APP_URL="${BASE}"`,
       'APP_TIMEZONE="Asia/Karachi"',
-      'APP_COLLEGE_NAME="Kabirian College"',
+      'APP_COLLEGE_NAME="Nova School Kamalia"',
       'LOG_LEVEL="warn"',
       `DATABASE_URL="${DB_URL}"`,
       'DATABASE_POOL_MAX="5"',

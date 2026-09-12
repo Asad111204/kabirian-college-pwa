@@ -8,7 +8,7 @@ async function loadEnv(vars: Record<string, string | undefined>) {
   vi.resetModules()
   const previous = { ...process.env }
   Object.assign(process.env, {
-    DATABASE_URL: 'postgresql://localhost:5432/kabirian_test',
+    DATABASE_URL: 'postgresql://localhost:5432/nova_school_test',
     APP_TIMEZONE: 'Asia/Karachi',
     APP_ENCRYPTION_KEY: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
     ...vars,
@@ -28,13 +28,13 @@ afterEach(() => {
 
 describe('the Google callback URL', () => {
   it('follows APP_URL when it is not set', async () => {
-    const env = await loadEnv({ APP_URL: 'https://kabiriancollegeapp.vercel.app', GOOGLE_OAUTH_REDIRECT_URI: undefined })
-    expect(env.GOOGLE_OAUTH_REDIRECT_URI).toBe('https://kabiriancollegeapp.vercel.app/api/v1/settings/google/callback')
+    const env = await loadEnv({ APP_URL: 'https://nova-school-kamalia.example.com', GOOGLE_OAUTH_REDIRECT_URI: undefined })
+    expect(env.GOOGLE_OAUTH_REDIRECT_URI).toBe('https://nova-school-kamalia.example.com/api/v1/settings/google/callback')
   })
 
   it('does not double the slash when APP_URL ends in one', async () => {
-    const env = await loadEnv({ APP_URL: 'https://kabiriancollegeapp.vercel.app/', GOOGLE_OAUTH_REDIRECT_URI: '' })
-    expect(env.GOOGLE_OAUTH_REDIRECT_URI).toBe('https://kabiriancollegeapp.vercel.app/api/v1/settings/google/callback')
+    const env = await loadEnv({ APP_URL: 'https://nova-school-kamalia.example.com/', GOOGLE_OAUTH_REDIRECT_URI: '' })
+    expect(env.GOOGLE_OAUTH_REDIRECT_URI).toBe('https://nova-school-kamalia.example.com/api/v1/settings/google/callback')
   })
 
   it('gives a laptop the localhost callback', async () => {
@@ -43,7 +43,7 @@ describe('the Google callback URL', () => {
   })
 
   it('never overrides one that was set explicitly', async () => {
-    const env = await loadEnv({ APP_URL: 'https://kabiriancollegeapp.vercel.app', GOOGLE_OAUTH_REDIRECT_URI: 'https://college.example.com/api/v1/settings/google/callback' })
+    const env = await loadEnv({ APP_URL: 'https://nova-school-kamalia.example.com', GOOGLE_OAUTH_REDIRECT_URI: 'https://college.example.com/api/v1/settings/google/callback' })
     expect(env.GOOGLE_OAUTH_REDIRECT_URI).toBe('https://college.example.com/api/v1/settings/google/callback')
   })
 })

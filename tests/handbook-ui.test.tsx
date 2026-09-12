@@ -19,7 +19,7 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-const render_ = () => render(<HandbookDocument collegeName="Kabirian College" sessionName="2026-27" />)
+const render_ = () => render(<HandbookDocument collegeName="Nova School Kamalia" sessionName="2026-27" />)
 
 describe('the cover', () => {
   it('carries the college’s own logo, its name and the year', () => {
@@ -31,7 +31,7 @@ describe('the cover', () => {
     // Next rewrites the path through its image optimiser, so the check is on
     // the file it points at rather than on a literal path.
     expect(logos.every((img) => (img.getAttribute('src') ?? '').includes('logo'))).toBe(true)
-    expect(screen.getAllByText('Kabirian College').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Nova School Kamalia').length).toBeGreaterThan(0)
     expect(screen.getByText('2026-27')).toBeTruthy()
   })
 
@@ -45,7 +45,7 @@ describe('the cover', () => {
   })
 
   it('says plainly when the college has no current session', () => {
-    render(<HandbookDocument collegeName="Kabirian College" sessionName={null} />)
+    render(<HandbookDocument collegeName="Nova School Kamalia" sessionName={null} />)
     expect(screen.getByText('Not set')).toBeTruthy()
   })
 })

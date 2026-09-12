@@ -10,7 +10,7 @@ import { isStaticAsset } from '@/lib/pwa/sw-rules'
  *
  * What it does — and, more importantly, what it does not (ADR-021, ADR-161):
  *
- *   precached      the stylesheet, the icons, the college logo and the
+ *   precached      the stylesheet, the icons, the school logo and the
  *                  offline page, so the app can launch with no network
  *   cache-first    `/_next/static/**` — hashed, immutable build files, kept
  *                  for a month and capped in number

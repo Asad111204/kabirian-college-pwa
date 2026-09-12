@@ -435,7 +435,7 @@ export function ResourceManager<T extends ResourceRecord>({
           ) : (
             <Alert variant="warning">
               Permanent deletion is only possible while nothing uses this {singular}. If it is
-              already part of the college&apos;s records, deactivate it instead — that hides it from
+              already part of the school&apos;s records, deactivate it instead — that hides it from
               new entries and keeps all history intact.
             </Alert>
           )}

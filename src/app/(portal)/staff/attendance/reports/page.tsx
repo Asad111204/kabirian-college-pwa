@@ -32,7 +32,7 @@ export default async function StaffAttendanceReportsPage() {
         <>
           <PageHeader title="My attendance reports" />
           <Alert variant="warning" title="Your account is not linked to a staff record">
-            The college office needs to connect this login to your staff record before your reports
+            The school office needs to connect this login to your staff record before your reports
             appear here.
           </Alert>
         </>

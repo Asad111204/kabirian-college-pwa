@@ -51,7 +51,7 @@ export function FeeRulesScreen({ rules, canManage }: { rules: FeeRules; canManag
       </CardHeader>
       <CardContent>
         <Alert variant="info" className="mb-4">
-          The college charges a fee for the whole year, and a family pays it in instalments whenever they can. A voucher only carries a due date
+          The school charges a fee for the whole year, and a family pays it in instalments whenever they can. A voucher only carries a due date
           if the office sets one when issuing it, and this fine only ever applies to those. Leave it at 0 to charge none at all.
         </Alert>
 

@@ -28,7 +28,7 @@ export function HandbookDocument({ collegeName, sessionName }: { collegeName: st
       <div className="print-hide mb-4">
         <Alert variant="info" className="mb-3" title="Saving this as a PDF">
           Press the button, then choose <strong>Save as PDF</strong> as the destination instead of a printer. Keep the paper size at A4 and leave
-          background graphics on, so the college&apos;s logo and the panels come out.
+          background graphics on, so the school&apos;s logo and the panels come out.
         </Alert>
         <div className="flex justify-end">
           <Button type="button" onClick={() => window.print()}>
@@ -55,7 +55,7 @@ export function HandbookDocument({ collegeName, sessionName }: { collegeName: st
 function Cover({ collegeName, sessionName, today }: { collegeName: string; sessionName: string | null; today: string }) {
   return (
     <section className="handbook-page flex flex-col items-center justify-center border border-black/15 px-10 py-16 text-center">
-      <LogoFull height={96} />
+      <LogoFull height={160} />
 
       {/* The page already has its own heading in the shell; the cover's title
           is the document's, so it is styled rather than nested as a second
@@ -159,7 +159,7 @@ function Part({ part, number, collegeName }: { part: HandbookPart; number: numbe
 function Closing({ collegeName, today }: { collegeName: string; today: string }) {
   return (
     <section className="handbook-page flex flex-col items-center justify-center border border-black/15 px-10 py-16 text-center">
-      <LogoFull height={64} />
+      <LogoFull height={112} />
       <p className="mt-8 max-w-md text-[12px] leading-relaxed text-black/70">
         This handbook describes {collegeName}&apos;s management system as it stood on {formatDate(today)}. It is generated from the system itself, so
         reprinting it after a change gives an accurate copy.

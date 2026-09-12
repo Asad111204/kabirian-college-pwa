@@ -1,11 +1,11 @@
 /**
- * Puts every account still on a temporary password onto the college's one
+ * Puts every account still on a temporary password onto the school's one
  * temporary password.
  *
- *   npx tsx scripts/reset-temporary-passwords.ts --url https://college.example.com
+ *   npx tsx scripts/reset-temporary-passwords.ts --url https://school.example.com
  *   …same again with --apply once the report reads correctly.
  *
- * The college asked for one password to hand out rather than a slip per
+ * The school asked for one password to hand out rather than a slip per
  * person. **It is not a secret**: anyone who knows it can sign into any
  * account still on it, and the only thing standing in the way is that each
  * person must set their own the first time they sign in. An account nobody has
@@ -124,7 +124,7 @@ async function main() {
   say('  Anyone who has already chosen their own password is not touched.')
 
   if (!apply) {
-    say(`${NEWLINE}Nothing has been changed. Add --apply to set them all to the college password.${NEWLINE}`)
+    say(`${NEWLINE}Nothing has been changed. Add --apply to set them all to the school password.${NEWLINE}`)
     writeReport(reportPath)
     return
   }
@@ -147,7 +147,7 @@ async function main() {
     }
   }
 
-  say(`${NEWLINE}  ${done} account${done === 1 ? '' : 's'} put on the college temporary password.`)
+  say(`${NEWLINE}  ${done} account${done === 1 ? '' : 's'} put on the school temporary password.`)
   say('  Each of them must set their own the first time they sign in.')
 
   if (problems.length > 0) {

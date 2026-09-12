@@ -25,7 +25,7 @@ export default async function StudentComplaintPage({ params }: { params: Promise
 
   return (
     <>
-      <PageHeader title="Your application" description="Only you and the college office can read this." />
+      <PageHeader title="Your application" description="Only you and the school office can read this." />
       <ComplaintThread complaint={complaint} />
     </>
   )

@@ -1,72 +1,55 @@
 /**
- * Turns the college's supplied logo into the two assets the app actually uses.
+ * Turns the school's logo into the two sizes the app actually serves.
  *
  *   npx tsx scripts/prepare-logo.ts
  *
- * The file the college sent (`public/brand/college-logo.jpeg`) is a wordmark
- * sitting in a wide white field. Used as-is it would show as a postage stamp
- * in a 32-pixel corner, so this trims the white away and writes two PNGs with
- * transparent backgrounds:
+ * The master file is `public/brand/logo.png`: Nova School Kamalia's crest — a
+ * portrait emblem on a transparent background (949×1164). Served as-is it
+ * would cost half a megabyte on every login screen, so this trims the blank
+ * margin and writes two optimised PNGs, both transparent:
  *
- *   brand/logo-wordmark.png  the shield and the words, for a page header
- *   brand/logo-mark.png      the shield alone, square, for small placements
+ *   brand/logo-full.png  the crest at 640px tall — login, handbook, result card
+ *   brand/logo-mark.png  the crest at 192px tall — the sidebar and small places
  *
- * Run it again if the college sends a new logo. Nothing else changes.
+ * It prints each file's pixel size: copy those into LOGO_WIDTH / LOGO_HEIGHT
+ * in components/layout/logo.tsx and features/results/result-card.tsx if they
+ * change. Run it again if the school sends a new logo; then run
+ * scripts/generate-icons.ts as well so the PWA icons match.
  */
 import sharp from 'sharp'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
 const BRAND_DIR = join(process.cwd(), 'public', 'brand')
-const SOURCE = join(BRAND_DIR, 'college-logo.jpeg')
+const SOURCE = join(BRAND_DIR, 'logo.png')
 
-/**
- * White becomes transparent.
- *
- * The source is a JPEG, so the "white" around the mark is not exactly
- * #ffffff — compression leaves it a few shades off. Anything above the
- * threshold on all three channels is treated as background.
- */
-async function toTransparent(input: Buffer, threshold = 235): Promise<Buffer> {
-  const image = sharp(input).ensureAlpha()
-  const { data, info } = await image.raw().toBuffer({ resolveWithObject: true })
-
-  for (let i = 0; i < data.length; i += info.channels) {
-    if (data[i]! >= threshold && data[i + 1]! >= threshold && data[i + 2]! >= threshold) {
-      data[i + 3] = 0
-    }
-  }
-
-  return sharp(data, { raw: { width: info.width, height: info.height, channels: info.channels as 4 } })
-    .png()
-    .toBuffer()
-}
+const OUTPUTS = [
+  { file: 'logo-full.png', height: 640 },
+  { file: 'logo-mark.png', height: 192 },
+]
 
 async function main() {
-  console.log('\nKabirian College — logo assets')
+  console.log('\nNova School Kamalia — logo assets')
 
-  const source = await sharp(SOURCE).toBuffer()
-  const transparent = await toTransparent(source)
+  if (!existsSync(SOURCE)) {
+    console.error(`\n  ${SOURCE} does not exist.\n  Save the official logo there first (a PNG with a transparent background), then run this again.\n`)
+    process.exit(1)
+  }
 
-  // The wordmark: everything the college drew, with the white field removed.
-  const wordmark = await sharp(transparent).trim().png().toBuffer()
-  const wordmarkMeta = await sharp(wordmark).metadata()
-  await sharp(wordmark).toFile(join(BRAND_DIR, 'logo-wordmark.png'))
-  console.log(`  wordmark  ${wordmarkMeta.width}×${wordmarkMeta.height}  brand/logo-wordmark.png`)
+  // Trim the transparent margin once, so every size is cut from the same crest.
+  const crest = await sharp(SOURCE).ensureAlpha().trim().png().toBuffer()
+  const crestMeta = await sharp(crest).metadata()
+  console.log(`  source    ${crestMeta.width}×${crestMeta.height} after trimming  brand/logo.png`)
 
-  // The mark alone: the shield sits at the left of the wordmark, a little
-  // narrower than it is tall. Cut inside the gap before the "K" of KABIRIAN
-  // and let `trim` tighten the edges from there.
-  const height = wordmarkMeta.height ?? 0
-  const mark = await sharp(wordmark)
-    .extract({ left: 0, top: 0, width: Math.round(height * 0.8), height })
-    .trim()
-    .png()
-    .toBuffer()
-  const markMeta = await sharp(mark).metadata()
-  await sharp(mark).toFile(join(BRAND_DIR, 'logo-mark.png'))
-  console.log(`  mark      ${markMeta.width}×${markMeta.height}  brand/logo-mark.png`)
+  for (const out of OUTPUTS) {
+    const png = await sharp(crest).resize({ height: out.height }).png({ compressionLevel: 9 }).toBuffer()
+    const meta = await sharp(png).metadata()
+    await sharp(png).toFile(join(BRAND_DIR, out.file))
+    console.log(`  ${out.file.padEnd(14)} ${meta.width}×${meta.height}  ${(png.length / 1024).toFixed(1)} KB`)
+  }
 
-  console.log('\nDone. Both are transparent PNGs and safe on any background.\n')
+  console.log('\nDone. Both are transparent PNGs and safe on any background.')
+  console.log('If a size printed above changed, update LOGO_WIDTH / LOGO_HEIGHT in logo.tsx and result-card.tsx.\n')
 }
 
 main().catch((error) => {

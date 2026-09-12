@@ -269,7 +269,7 @@ export function decidePeriodAllowed(period: number, periods: readonly CollegePer
     return {
       allowed: false,
       code: 'NOT_A_PERIOD',
-      reason: 'That is not a period of the college day.',
+      reason: 'That is not a period of the school day.',
     }
   }
 

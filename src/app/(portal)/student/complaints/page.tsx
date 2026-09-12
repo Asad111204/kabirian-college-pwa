@@ -20,7 +20,7 @@ export default async function StudentComplaintsPage({ searchParams }: { searchPa
 
   return (
     <>
-      <PageHeader title="Write to the office" description="Applications you have sent to the college office, and what they said back." />
+      <PageHeader title="Write to the office" description="Applications you have sent to the school office, and what they said back." />
       <ComplaintList page={page} mine basePath="/student/complaints" />
     </>
   )

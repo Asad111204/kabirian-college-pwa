@@ -43,7 +43,7 @@ export function assertNotProduction(scriptName: string) {
   if (process.env.NODE_ENV === 'production') {
     console.error(
       `\nRefusing to run "${scriptName}" with NODE_ENV=production.\n` +
-        `This script creates demonstration data and must never touch a live college database.\n`,
+        `This script creates demonstration data and must never touch a live school database.\n`,
     )
     process.exit(1)
   }

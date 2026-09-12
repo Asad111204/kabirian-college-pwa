@@ -45,7 +45,7 @@ export default async function EditStudentPage({ params }: { params: Promise<{ id
 
       <PageHeader
         title={`Edit ${student.fullName}`}
-        description={`${student.studentCode} · every detail the college holds about this student`}
+        description={`${student.studentCode} · every detail the school holds about this student`}
       />
 
       <EditStudentForm
